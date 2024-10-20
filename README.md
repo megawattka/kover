@@ -30,6 +30,7 @@ ill be happy if someone can help me implement missing features.
 - pymongo 4.10.1 (latest for now) or later.
 - python 3.10.6
 - im using MongoDB 7.0 but it should also work on MongoDB 6.0
+- attrs 24.2.0 or later
 
 # Features
 the driver designed to be almost same as pymongo's while its fully async. btw supported auth types are SCRAM-SHA1 and SCRAM-SHA256
