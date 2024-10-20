@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import sys
 import itertools
+if sys.version_info < (3, 11):
+    from typing_extensions import Self
+else:
+    from typing import Self
 from collections import deque
 from typing import TYPE_CHECKING, Optional, List
 
@@ -32,33 +37,33 @@ class Cursor:
         self._second_iteration: bool = False
         self._docs: deque[xJsonT] = deque()
     
-    async def __aenter__(self) -> 'Cursor':
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *exc) -> None:
         await self.close()
 
-    def sort(self, mapping: xJsonT):
+    def sort(self, mapping: xJsonT) -> Self:
         self._sort = mapping
         return self
 
-    def skip(self, value: int):
+    def skip(self, value: int) -> Self:
         self._skip = value
         return self
     
-    def limit(self, value: int):
+    def limit(self, value: int) -> Self:
         self._limit = value
         return self
     
-    def batch_size(self, value: int):
+    def batch_size(self, value: int) -> Self:
         self._batch_size = value
         return self
     
-    def projection(self, mapping: xJsonT):
+    def projection(self, mapping: xJsonT) -> Self:
         self._projection = mapping
         return self
     
-    def comment(self, comment: str):
+    def comment(self, comment: str) -> Self:
         self._comment = comment
         return self
     
@@ -75,7 +80,7 @@ class Cursor:
         }
         return {k: v for k, v in command.items() if v is not None}
     
-    def __aiter__(self):
+    def __aiter__(self) -> Self:
         return self
 
     async def __anext__(self) -> xJsonT:

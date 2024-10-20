@@ -1,6 +1,18 @@
+from __future__ import annotations
+
+import sys
 import datetime
 from typing import get_origin, Union, List, Any, Protocol
-from types import UnionType
+
+if sys.version_info < (3, 10):
+    UnionType = Union
+else:
+    from types import UnionType
+    
+if sys.version_info < (3, 11):
+    from typing_extensions import Self
+else:
+    from typing import Self
 
 from attrs import define, field, fields, asdict, Attribute, has
 
@@ -164,5 +176,5 @@ class Document(_DocumentLike):
         return payload
     
     @classmethod
-    def from_document(cls, document: xJsonT):
+    def from_document(cls, document: xJsonT) -> Self:
         return cls(**document)

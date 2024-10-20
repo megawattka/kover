@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import time
+import sys
+if sys.version_info < (3, 11):
+    from typing_extensions import Self
+else:
+    from typing import Self
 from enum import Enum
-from typing import TYPE_CHECKING, TypeVar, Optional, List, Literal, Type
+from typing import TYPE_CHECKING, TypeVar, Optional, Literal, Type
 from types import TracebackType
 
-from bson import Int64, Binary
-from attrs import define, field
+from bson import Int64
 
 from .typings import xJsonT
 
@@ -62,7 +66,7 @@ class Transaction:
         self.end(_TxnState.ABORTED)
         return r["ok"] == 1.0
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Self:
         if not self.is_active:
             if self.is_ended:
                 raise Exception("Cannot use transaction context twice")
