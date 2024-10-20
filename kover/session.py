@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from enum import Enum
-from typing import TYPE_CHECKING, TypeVar, Optional, List, Self, Literal, Type
+from typing import TYPE_CHECKING, TypeVar, Optional, List, Literal, Type
 from types import TracebackType
 
 from bson import Int64, Binary
