@@ -62,7 +62,7 @@ class Transaction:
         self.end(_TxnState.ABORTED)
         return r["ok"] == 1.0
 
-    async def __aenter__(self) -> Self:
+    async def __aenter__(self):
         if not self.is_active:
             if self.is_ended:
                 raise Exception("Cannot use transaction context twice")

@@ -1,5 +1,5 @@
 import datetime
-from typing import get_origin, Union, List, Any, Protocol, Self
+from typing import get_origin, Union, List, Any, Protocol
 from types import UnionType
 
 from attrs import define, field, fields, asdict, Attribute, has
@@ -164,5 +164,5 @@ class Document(_DocumentLike):
         return payload
     
     @classmethod
-    def from_document(cls, document: xJsonT) -> Self:
+    def from_document(cls, document: xJsonT):
         return cls(**document)

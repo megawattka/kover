@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import itertools
 from collections import deque
-from typing import TYPE_CHECKING, Optional, Self, List
+from typing import TYPE_CHECKING, Optional, List
 
 from bson import Int64
 
@@ -38,27 +38,27 @@ class Cursor:
     async def __aexit__(self, *exc) -> None:
         await self.close()
 
-    def sort(self, mapping: xJsonT) -> Self:
+    def sort(self, mapping: xJsonT):
         self._sort = mapping
         return self
 
-    def skip(self, value: int) -> Self:
+    def skip(self, value: int):
         self._skip = value
         return self
     
-    def limit(self, value: int) -> Self:
+    def limit(self, value: int):
         self._limit = value
         return self
     
-    def batch_size(self, value: int) -> Self:
+    def batch_size(self, value: int):
         self._batch_size = value
         return self
     
-    def projection(self, mapping: xJsonT) -> Self:
+    def projection(self, mapping: xJsonT):
         self._projection = mapping
         return self
     
-    def comment(self, comment: str) -> Self:
+    def comment(self, comment: str):
         self._comment = comment
         return self
     
@@ -75,7 +75,7 @@ class Cursor:
         }
         return {k: v for k, v in command.items() if v is not None}
     
-    def __aiter__(self) -> Self:
+    def __aiter__(self):
         return self
 
     async def __anext__(self) -> xJsonT:
