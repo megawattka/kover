@@ -3,7 +3,8 @@ kover is a simple fully typehinted mongodb driver supporting local mongod and re
 ```py
 import asyncio
 
-from kover import AuthCredentials, Kover
+from kover.client import Kover
+from kover.auth import AuthCredentials
 
 async def main():
     credentials = AuthCredentials(username="username", password="password") # if your db requires auth
@@ -55,7 +56,7 @@ from enum import Enum
 
 from attrs import define, field
 
-from kover import Kover
+from kover.client import Kover
 from kover.schema import SchemaGenerator, Document
 
 class UserType(Enum): 
@@ -67,7 +68,7 @@ class UserType(Enum):
 class User(Document): # and subclassed from kover.schema.Document
     name: str = field(metadata={"description": "must be a string and is required"})
     age: int = field(metadata={"min": 18, "description": "age must be int and more that 18"})
-    user_type: UserType = field(metadata={"description": "can only be one of the enum values and is not required", "fieldName": "userType"})
+    user_type: UserType = field(metadata={"description": "can only be one of the enum values and is required", "fieldName": "userType"})
 
 @define # subdocument
 class Friend: # must not subclassed from kover.schema.Document
@@ -104,7 +105,7 @@ import asyncio
 
 from bson import ObjectId
 
-from kover import Kover
+from kover.client import Kover
 from kover.session import Transaction
 
 async def main():

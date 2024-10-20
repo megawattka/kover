@@ -3,7 +3,7 @@ from enum import Enum
 
 from attrs import define, field
 
-from kover import Kover
+from kover.client import Kover
 from kover.schema import SchemaGenerator, Document
 
 class UserType(Enum): 

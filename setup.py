@@ -2,8 +2,8 @@ from setuptools import setup
 
 setup(
     name="kover",
-    version="0.3.2",
-    install_requires=["pymongo", "attrs"],
+    version="0.7.1",
+    install_requires=["pymongo", "attrs", "typing-extensions"],
     packages=['kover'],
     description="fully async mongodb driver for mongod and replica set",
     author="oMegaPB",

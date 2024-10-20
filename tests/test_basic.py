@@ -6,7 +6,7 @@ from bson import ObjectId
 from attrs import define
 
 from kover.auth import AuthCredentials
-from kover import Kover
+from kover.client import Kover
 from kover.schema import SchemaGenerator, Document
 
 CREDENTIALS: AuthCredentials = AuthCredentials(username="main_m1", password="incunaby!")
@@ -71,12 +71,12 @@ async def test_find_count_documents_and_delete():
     user = User("dima", 18)
     document = user.to_dict()
 
-    count = await collection.count_documents()
+    count = await collection.count()
     assert count == 0
 
     obj_id = await collection.add_one(document)
     assert isinstance(obj_id, ObjectId)
-    count = await collection.count_documents()
+    count = await collection.count()
     assert count == 1
 
     resp = await collection.find({"name": "dima"}).to_list()

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
+import pathlib
 import sys
 import os
 import asyncio
-import warnings
-from typing import List, Union, Optional
+from typing import List, Union, Optional, NoReturn
 
 from .serializer import Serializer
 from .typings import xJsonT, DocumentT, COMPRESSION_T
@@ -14,6 +15,8 @@ from .models import HelloResult
 
 class MongoSocket:
     def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        with pathlib.Path(__file__).parent.joinpath("codes.json").open("r") as fp:
+            self.codes = json.load(fp)
         self.reader = reader
         self.writer = writer
         self.serializer = Serializer()
@@ -31,11 +34,11 @@ class MongoSocket:
     async def recv(self, size: int) -> bytes:
         return await self.reader.readexactly(size) # ... 13.05.2024 # https://stackoverflow.com/a/29068174
 
-    def get_hello_payload(self) -> xJsonT:
+    def get_hello_payload(self, compression: Optional[COMPRESSION_T]) -> xJsonT:
         uname = os.uname() # TODO: Windows
         impl = sys.implementation
         platform = impl.name + " " + ".".join(map(str, impl.version))
-        return {
+        payload = {
             "hello": 1.0, 
             "client": {
                 "driver": {
@@ -49,9 +52,23 @@ class MongoSocket:
                     "version": uname.release
                 }, 
                 "platform": platform
-            },
-            "$db": "admin"
+            }
         }
+        if compression is not None:
+            payload["compression"] = compression
+        return payload
+    
+    def _raise_exception(self, reply: xJsonT) -> NoReturn:
+        write_errors = False
+        if "writeErrors" in reply:
+            write_errors = True
+            reply = reply["writeErrors"][0]
+        if "code" in reply:
+            exc_name = self.codes[str(reply["code"])]
+            error = reply["errmsg"] if not write_errors else reply
+            exception = type(exc_name, (Exception,), {"__module__": "kover.exceptions"})
+            raise exception(error)
+        raise Exception(reply)
     
     async def request(
         self,
@@ -68,28 +85,24 @@ class MongoSocket:
             await self.send(msg)
             header = await self.recv(16)
             length, op_code = self.serializer.verify_rid(header, rid)
-            xJsonT = await self.recv(length - 16) # exclude header
-            reply = self.serializer.get_reply(xJsonT, op_code)
+            data = await self.recv(length - 16) # exclude header
+            reply = self.serializer.get_reply(data, op_code)
         if reply.get("ok") != 1.0 or reply.get("writeErrors") is not None:
             if transaction is not None:
                 transaction.end(_TxnState.ABORTED)
-            raise Exception(reply)
+            self._raise_exception(reply)
         return reply
 
-    async def hello(
+    async def _hello(
         self,
         compression: Optional[COMPRESSION_T] = None, # TODO
         credentials: Optional[AuthCredentials] = None
     ) -> HelloResult:
-        payload = self.get_hello_payload()
+        payload = self.get_hello_payload(compression)
+        if credentials is not None:
+            credentials.apply_to(payload)
 
-        if compression:
-            payload["compression"] = compression
-        if credentials:
-            payload["saslSupportedMechs"] = f"{credentials.db_name}.{credentials.username}"
-        
         hello = await self.request(payload)
-        
         return HelloResult(
             mechanisms=hello.get("saslSupportedMechs", []),
             local_time=hello["localTime"],
@@ -97,43 +110,3 @@ class MongoSocket:
             read_only=hello["readOnly"],
             compression=hello.get("compression", [])
         )
-
-    async def create_user(
-        self,
-        username: str,
-        password: str,
-        roles: List[Union[xJsonT, str]],
-        db_name: str = "admin",
-        mechanisms: List[str] = ["SCRAM-SHA-1", "SCRAM-SHA-256"]
-    ) -> bool:
-        command = {
-            "createUser": username, 
-            "pwd": password, 
-            "roles": roles, 
-            "mechanisms": mechanisms
-        }
-        request = await self.request(command, db_name=db_name)
-        return request["ok"] == 1.0
-
-    async def drop_user(self, username: str, db_name: str) -> bool:
-        req = await self.request({"dropUser": username}, db_name=db_name)
-        return req["ok"] == 1.0
-
-    async def drop_database(self, db_name: str) -> bool:
-        request = await self.request({"dropDatabase": 1.0}, db_name=db_name)
-        return request["ok"] == 1.0
-
-    async def list_database_names(self) -> List[str]:
-        command = {"listDatabases": 1.0, "nameOnly": True}
-        request = await self.request(command)
-        return [x["name"] for x in request["databases"]]
-
-    async def grant_roles_to_user(self, username: str, roles: List[Union[str, xJsonT]]) -> bool:
-        command = {"grantRolesToUser": username, "roles": roles}
-        request = await self.request(command)
-        return request["ok"] == 1.0
-
-    async def list_users(self) -> List[xJsonT]:
-        params = {"find": "system.users", "filter": {}}
-        request = await self.request(params)
-        return [x for x in request["cursor"]["firstBatch"]]

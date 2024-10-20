@@ -2,7 +2,7 @@ import asyncio
 
 from bson import ObjectId
 
-from kover import Kover
+from kover.client import Kover
 from kover.session import Transaction
 
 async def main():

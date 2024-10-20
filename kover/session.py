@@ -15,7 +15,7 @@ from bson import Int64
 from .typings import xJsonT
 
 if TYPE_CHECKING:
-    from .kover import MongoSocket
+    from .client import MongoSocket
 
 F = TypeVar("F")
 
@@ -26,7 +26,11 @@ class _TxnState(Enum):
     COMMITED = "COMMITED"
 
 class Transaction:
-    def __init__(self, socket: MongoSocket, session_document: xJsonT) -> None:
+    def __init__(
+        self, 
+        socket: MongoSocket, 
+        session_document: xJsonT
+    ) -> None:
         self.socket: MongoSocket = socket
         self.session_document: xJsonT = session_document
         self.id: Int64 = Int64(-1)
@@ -96,7 +100,6 @@ class Transaction:
             "lsid": self.session_document
         })
         self.action_count += 1
-
     
 class Session:
     def __init__(self, document: xJsonT, socket: MongoSocket) -> None:

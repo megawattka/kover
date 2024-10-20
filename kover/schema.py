@@ -1,4 +1,4 @@
-from __future__ import annotations
+# dont paste future annotations here. if so, dont forget to eval annotations when generating
 
 import sys
 import datetime
@@ -8,18 +8,18 @@ if sys.version_info < (3, 10):
     UnionType = Union
 else:
     from types import UnionType
-    
 if sys.version_info < (3, 11):
     from typing_extensions import Self
 else:
     from typing import Self
+from enum import Enum
 
 from attrs import define, field, fields, asdict, Attribute, has
 
-from kover import xJsonT
-from enum import Enum
 from uuid import UUID
 from bson import Binary, ObjectId, Timestamp
+
+from .typings import xJsonT
 
 TYPE_MAP: dict[type, str] = {
     str: "string",

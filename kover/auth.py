@@ -10,8 +10,10 @@ from attrs import define, field
 from bson import Binary
 from pymongo.saslprep import saslprep
 
+from .typings import xJsonT
+
 if TYPE_CHECKING:
-    from .kover import MongoSocket
+    from .client import MongoSocket
 
 @define(frozen=True)
 class AuthCredentials:
@@ -22,6 +24,9 @@ class AuthCredentials:
     def md5_hash(self) -> bytes:
         hash = hashlib.md5(f"{self.username}:mongo:{self.password}".encode())
         return hash.hexdigest().encode("u8")
+    
+    def apply_to(self, document: xJsonT) -> None:
+        document["saslSupportedMechs"] = f"{self.db_name}.{self.username}"
 
 class Auth:
     def __init__(self, socket: MongoSocket) -> None:
