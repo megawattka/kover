@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 class AuthCredentials:
     username: str
     password: str = field(repr=False)
-    db_name: str = field(default="admin")
+    db_name: str = field(default='admin')
 
     def md5_hash(self) -> bytes:
         hash = hashlib.md5(f"{self.username}:mongo:{self.password}".encode())
