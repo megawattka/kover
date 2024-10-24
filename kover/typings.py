@@ -1,5 +1,11 @@
 import sys
-from typing import Dict, Any, Union, Literal, List
+from typing import (
+    Dict, 
+    Any, 
+    Union, 
+    Literal, 
+    List
+)
 
 from bson import SON
 

@@ -1,7 +1,15 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import TYPE_CHECKING, Optional, List, Generic, TypeVar, cast, Type
+from typing import (
+    TYPE_CHECKING, 
+    Optional, 
+    List, 
+    Generic, 
+    TypeVar, 
+    cast, 
+    Type
+)
 
 from bson import Int64
 

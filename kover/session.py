@@ -2,18 +2,15 @@ from __future__ import annotations
 
 import time
 from enum import Enum
-from typing import TYPE_CHECKING, TypeVar, Optional, Literal, Type, Union
+from typing import TYPE_CHECKING, Optional, Type
 from types import TracebackType
 
 from bson import Int64
 
 from .typings import xJsonT, Self
 
-
 if TYPE_CHECKING:
     from .client import MongoSocket
-
-F = TypeVar("F")
 
 class _TxnState(Enum):
     NONE = "NONE"

@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from typing import List, Optional, TYPE_CHECKING, Union, Sequence
+from typing import (
+    List, 
+    Optional, 
+    TYPE_CHECKING, 
+    Union, 
+    Sequence
+)
 
 from .collection import Collection
 from .typings import xJsonT

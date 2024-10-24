@@ -2,12 +2,27 @@
 
 import inspect
 import datetime
-from typing import get_origin, Union, List, Any, dataclass_transform, Optional, Final, Type, Literal
 from enum import Enum
 from uuid import UUID
+from typing import (
+    get_origin, 
+    Union, 
+    List, 
+    Any, 
+    dataclass_transform, 
+    Optional, 
+    Final, 
+    Type, 
+    Literal
+)
 
-from attrs import field as _field, define, make_class, NOTHING
 from bson import Binary, ObjectId, Timestamp
+from attrs import (
+    field as _field, 
+    define, 
+    make_class, 
+    NOTHING
+)
 
 from .typings import xJsonT, Self, UnionType
 

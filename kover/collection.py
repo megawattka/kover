@@ -1,6 +1,16 @@
 from __future__ import annotations
 
-from typing import List, Optional, TYPE_CHECKING, Any, Type, overload, TypeVar, Union, Sequence
+from typing import (
+    List, 
+    Optional, 
+    TYPE_CHECKING, 
+    Any, 
+    Type, 
+    overload, 
+    TypeVar, 
+    Union, 
+    Sequence
+)
 
 from bson import ObjectId
 
