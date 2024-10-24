@@ -1,24 +1,12 @@
 from __future__ import annotations
 
 import datetime
-from typing import Generic, List, TypeVar, Literal
+from typing import List, Literal
 
 from bson import Binary
 from attrs import field, define
 
 from .typings import COMPRESSION_T, xJsonT
-
-T = TypeVar("T")
-
-@define
-class Response(Generic[T]):
-    value: T = field(repr=False)
-    n_documents: int = field(init=False, default=0)
-
-    def __attrs_post_init__(self) -> None:
-        if self.value is None or not isinstance(self.value, (dict | list)): 
-            return
-        self.n_documents = len(self.value) if isinstance(self.value, list) else 1
 
 @define
 class HelloResult:

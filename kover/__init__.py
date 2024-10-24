@@ -19,14 +19,8 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-try:
-    import uvloop
-except ModuleNotFoundError:
-    pass
-else:
-    uvloop.install()
 
-__version__ = "0.3.2"
+__version__ = "0.8.0"
 __author__ = "oMegaPB"
 __license__ = "MIT"
 __copyright__ = "Copyright (C) 2024-present oMegaPB <https://github.com/oMegaPB>"

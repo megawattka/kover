@@ -1,32 +1,30 @@
 from __future__ import annotations
 
-import sys
-import itertools
-if sys.version_info < (3, 11):
-    from typing_extensions import Self
-else:
-    from typing import Self
 from collections import deque
-from typing import TYPE_CHECKING, Optional, List
+from typing import TYPE_CHECKING, Optional, List, Generic, TypeVar, cast, Type
 
 from bson import Int64
 
-from .typings import xJsonT
+from .typings import xJsonT, Self
+from .schema import filter_non_null
 
 if TYPE_CHECKING:
     from .collection import Collection
 
-class Cursor:
+T = TypeVar("T")
+
+class Cursor(Generic[T]):
     def __init__(
         self, 
         filter: xJsonT,
-        collection: Collection
+        collection: Collection,
+        entity_cls: Optional[Type] = None
     ) -> None:
         self._id: Optional[Int64] = None
         self._collection = collection
         self._limit = 0
         self._filter = filter
-        self._projection: xJsonT = {"_id": 0} # remove _id
+        self._projection: Optional[xJsonT] = None
         self._sort: Optional[xJsonT] = None
         self._skip: int = 0
         self._limit: int = 0
@@ -35,7 +33,8 @@ class Cursor:
         self._retrieved: int = 0
         self._killed: bool = False
         self._second_iteration: bool = False
-        self._docs: deque[xJsonT] = deque()
+        self._docs: deque[T] = deque()
+        self._entity_cls = entity_cls
     
     async def __aenter__(self) -> Self:
         return self
@@ -68,7 +67,7 @@ class Cursor:
         return self
     
     def get_query(self) -> xJsonT:
-        command = {
+        return filter_non_null({
             "find": self._collection.name,
             "filter": self._filter, 
             "skip": self._skip, 
@@ -77,13 +76,17 @@ class Cursor:
             "sort": self._sort,
             "batchSize": self._batch_size,
             "comment": self._comment
-        }
-        return {k: v for k, v in command.items() if v is not None}
+        })
+    
+    def _map_docs(self, documents: List[xJsonT]) -> List[T]:
+        if self._entity_cls is not None:
+            return [self._entity_cls.from_document(doc) for doc in documents]
+        return cast(List[T], documents)
     
     def __aiter__(self) -> Self:
         return self
-
-    async def __anext__(self) -> xJsonT:
+    
+    async def __anext__(self) -> T:
         if self._docs:
             return self._docs.popleft()
         if self._id is None:
@@ -92,7 +95,7 @@ class Cursor:
             docs = request["cursor"]["firstBatch"]
             self._retrieved += len(docs)
             self._id = request["cursor"]["id"]
-            self._docs.extend(docs)
+            self._docs.extend(self._map_docs(docs))
         else:
             if int(self._id) == 0 or self._second_iteration:
                 await self.close()
@@ -105,7 +108,7 @@ class Cursor:
             request = await self._collection.database.command(command)
             docs = request["cursor"]["nextBatch"]
             self._retrieved += len(docs)
-            self._docs.extend(docs)
+            self._docs.extend(self._map_docs(docs))
         if self._docs:
             return self._docs.popleft()
         raise StopAsyncIteration
@@ -118,6 +121,6 @@ class Cursor:
                 await self._collection.database.command(command)
             self._docs.clear()
 
-    async def to_list(self) -> List[xJsonT]:
+    async def to_list(self) -> List[T]:
         return [doc async for doc in self]
         

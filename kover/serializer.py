@@ -36,13 +36,14 @@ class Serializer:
 
     def _op_msg_impl(
         self,
-        command: Mapping[str, Any]
+        command: Mapping[str, Any],
+        flags: int = 0
     ) -> bytes:
         # https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/#op_msg
         # https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/#kind-0--body
         encoded = bson.encode(command, False, DEFAULT_CODEC_OPTIONS)
         return b"".join([
-            Int32(0), # flags
+            Int32(flags),
             Char(0, signed=False), # section id 0 corresponds to single bson object
             encoded # doc itself
         ])

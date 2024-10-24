@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import random
 from typing import Optional, List
 
 from .auth import AuthCredentials, Auth
-from .typings import xJsonT
+from .typings import xJsonT, Self
 from .session import Session
 from .socket import MongoSocket
 from .database import Database
@@ -15,23 +16,34 @@ class Kover:
         self.socket: MongoSocket = socket
         self.signature = signature
 
+    async def __aenter__(self) -> Self:
+        return self
+    
+    async def __aexit__(self, *exc) -> bool:
+        if self.signature is not None:
+            await self.logout()
+        await self.close()
+        return True
+
+    async def close(self) -> None:
+        self.socket.writer.close()
+        await self.socket.writer.wait_closed()
+
     def get_database(self, name: str) -> Database:
         return Database(name=name, client=self)
     
     def __getattr__(self, name: str) -> Database:
         return self.get_database(name=name)
     
-    def _filter_document_values(self, doc: xJsonT) -> xJsonT:
-        return {k: v for k, v in doc.items() if v is not None}
-    
     @classmethod
     async def make_client(
         cls,
         host: str = "127.0.0.1",
         port: int = 27017,
-        credentials: Optional[AuthCredentials] = None
+        credentials: Optional[AuthCredentials] = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None
     ) -> Kover:
-        socket = await MongoSocket.make(host, port)
+        socket = await MongoSocket.make(host, port, loop=loop)
         hello = await socket._hello(credentials=credentials)
         if hello.requires_auth and credentials:
             mechanism = random.choice(hello.mechanisms)
@@ -73,3 +85,6 @@ class Kover:
         command = {"listDatabases": 1.0, "nameOnly": True}
         request = await self.socket.request(command)
         return [x["name"] for x in request["databases"]]
+    
+    async def drop_database(self, name: str) -> None:
+        await self.socket.request({"dropDatabase": 1.0}, db_name=name)

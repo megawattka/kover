@@ -10,7 +10,7 @@ from attrs import define, field
 from bson import Binary
 from pymongo.saslprep import saslprep
 
-from .typings import xJsonT
+from .typings import xJsonT, Self
 
 if TYPE_CHECKING:
     from .client import MongoSocket
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 class AuthCredentials:
     username: str
     password: str = field(repr=False)
-    db_name: str = field(default='admin')
+    db_name: str = field(default="admin")
 
     def md5_hash(self) -> bytes:
         hash = hashlib.md5(f"{self.username}:mongo:{self.password}".encode())
@@ -27,6 +27,13 @@ class AuthCredentials:
     
     def apply_to(self, document: xJsonT) -> None:
         document["saslSupportedMechs"] = f"{self.db_name}.{self.username}"
+    
+    @classmethod
+    def from_environ(cls) -> Self:
+        user, password = os.environ.get("MONGO_USER"), os.environ.get("MONGO_PASSWORD")
+        if user is None or password is None:
+            raise Exception("MONGO_PASSWORD or MONGO_USER environment variables are empty.")
+        return cls(user, password)
 
 class Auth:
     def __init__(self, socket: MongoSocket) -> None:

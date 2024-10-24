@@ -5,13 +5,15 @@ import pathlib
 import sys
 import os
 import asyncio
-from typing import List, Union, Optional, NoReturn
+from typing import Optional, Type
 
+from . import __version__
 from .serializer import Serializer
 from .typings import xJsonT, DocumentT, COMPRESSION_T
 from .session import _TxnState, Transaction
 from .auth import AuthCredentials
 from .models import HelloResult
+from .exceptions import OperationFailure
 
 class MongoSocket:
     def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -23,8 +25,18 @@ class MongoSocket:
         self.lock = asyncio.Lock()
 
     @classmethod
-    async def make(cls, host: str, port: int) -> MongoSocket:
-        reader, writer = await asyncio.open_connection(host, port)
+    async def make(
+        cls, 
+        host: str, 
+        port: int,
+        loop: Optional[asyncio.AbstractEventLoop] = None
+    ) -> MongoSocket:
+        if loop is None:
+            loop = asyncio.get_running_loop()
+        reader = asyncio.StreamReader(limit=2 ** 16, loop=loop)
+        protocol = asyncio.StreamReaderProtocol(reader, loop=loop)
+        transport, _ = await loop.create_connection(lambda: protocol, host, port)
+        writer = asyncio.StreamWriter(transport, protocol, reader, loop)
         return cls(reader, writer)
 
     async def send(self, msg: bytes) -> None:
@@ -42,8 +54,8 @@ class MongoSocket:
             "hello": 1.0, 
             "client": {
                 "driver": {
-                    "name": "amongo", 
-                    "version": "0.3.2"
+                    "name": "Kover", 
+                    "version": __version__
                 }, 
                 "os": {
                     "type": os.name, 
@@ -58,17 +70,28 @@ class MongoSocket:
             payload["compression"] = compression
         return payload
     
-    def _raise_exception(self, reply: xJsonT) -> NoReturn:
+    def _has_error_label(self, label: str, reply: xJsonT) -> bool:
+        return label in reply.get("errorLabels", [])
+    
+    def _construct_exception(self, name: str) -> Type[OperationFailure]:
+        return type(name, (OperationFailure,), {"__module__": "kover.exceptions"})
+    
+    def _get_exception(self, reply: xJsonT) -> OperationFailure:
         write_errors = False
         if "writeErrors" in reply:
             write_errors = True
             reply = reply["writeErrors"][0]
         if "code" in reply:
-            exc_name = self.codes[str(reply["code"])]
-            error = reply["errmsg"] if not write_errors else reply
-            exception = type(exc_name, (Exception,), {"__module__": "kover.exceptions"})
-            raise exception(error)
-        raise Exception(reply)
+            code = str(reply["code"])
+            if code in self.codes:
+                exc_name = self.codes[code]
+                error = reply["errmsg"] if not write_errors else reply
+                exception = self._construct_exception(exc_name)
+                return exception(reply["code"], error)
+        if self._has_error_label('TransientTransactionError', reply=reply):
+            exception = self._construct_exception(reply["codeName"])
+            return exception(reply["code"], reply["errmsg"])
+        return OperationFailure(-1, reply)
     
     async def request(
         self,
@@ -88,14 +111,17 @@ class MongoSocket:
             data = await self.recv(length - 16) # exclude header
             reply = self.serializer.get_reply(data, op_code)
         if reply.get("ok") != 1.0 or reply.get("writeErrors") is not None:
+            exc_value = self._get_exception(reply=reply)
             if transaction is not None:
-                transaction.end(_TxnState.ABORTED)
-            self._raise_exception(reply)
+                transaction.end(_TxnState.ABORTED, exc_value=exc_value)
+            raise exc_value
+        if transaction is not None:
+            transaction.action_count += 1
         return reply
 
     async def _hello(
         self,
-        compression: Optional[COMPRESSION_T] = None, # TODO
+        compression: Optional[COMPRESSION_T] = None, # TODO: implement
         credentials: Optional[AuthCredentials] = None
     ) -> HelloResult:
         payload = self.get_hello_payload(compression)

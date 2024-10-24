@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import List, Optional, TYPE_CHECKING, Union, Sequence
 
-from .models import User
 from .collection import Collection
 from .typings import xJsonT
 from .session import Transaction
+from .models import User
+from .schema import filter_non_null
 
 if TYPE_CHECKING:
     from client import Kover
@@ -20,13 +21,17 @@ class Database:
     
     def __getattr__(self, name: str) -> Collection:
         return self.get_collection(name=name)
-    
-    async def drop(self) -> None:
-        await self.command({"dropDatabase": 1.0})
 
-    async def collection_names(self) -> List[str]:
-        request = await self.command({"listCollections": 1.0})
-        return [x["name"] for x in request["cursor"]["firstBatch"]]
+    async def list_collections(self, filter: Optional[xJsonT] = None) -> List[Collection]:
+        if filter is None:
+            filter = {}
+        request = await self.command({"listCollections": 1.0, "filter": {}})
+        return [Collection(
+            name=x["name"], 
+            database=self, 
+            options=x["options"], 
+            info=x["info"]
+        ) for x in request["cursor"]["firstBatch"]]
 
     async def create_collection(self, name: str, params: Optional[xJsonT] = None) -> Collection:
         await self.command({"create": name, **(params or {})})
@@ -54,7 +59,7 @@ class Database:
             ]
         if roles is None:
             raise Exception("You need to specify user roles.")
-        command = self.client._filter_document_values({
+        command = filter_non_null({
             "createUser": name,
             "pwd": password,
             "mechanisms": mechanisms,
@@ -78,7 +83,7 @@ class Database:
     ) -> List[User]:
         if query is None:
             query = 1.0
-        command = self.client._filter_document_values({
+        command = filter_non_null({
             "usersInfo": query,
             "showCredentials": show_credentials,
             "showCustomData": show_custom_data,
@@ -95,7 +100,7 @@ class Database:
         name: str, 
         comment: Optional[str] = None
     ) -> None:
-        command = self.client._filter_document_values({
+        command = filter_non_null({
             "dropUser": name,
             "comment": comment
         })

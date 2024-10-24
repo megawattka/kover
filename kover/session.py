@@ -1,18 +1,14 @@
 from __future__ import annotations
 
 import time
-import sys
-if sys.version_info < (3, 11):
-    from typing_extensions import Self
-else:
-    from typing import Self
 from enum import Enum
-from typing import TYPE_CHECKING, TypeVar, Optional, Literal, Type
+from typing import TYPE_CHECKING, TypeVar, Optional, Literal, Type, Union
 from types import TracebackType
 
 from bson import Int64
 
-from .typings import xJsonT
+from .typings import xJsonT, Self
+
 
 if TYPE_CHECKING:
     from .client import MongoSocket
@@ -51,24 +47,22 @@ class Transaction:
         self.state = _TxnState.STARTED
         self.id = Int64(timestamp)
     
-    def end(self, state: Literal[_TxnState.ABORTED, _TxnState.COMMITED]) -> None:
-        self.state = state
+    def end(self, state: _TxnState, exc_value: Optional[BaseException]) -> None:
+        if not self.is_ended:
+            self.state = state
+            self.exception = exc_value
 
-    async def commit(self) -> bool:
+    async def commit(self) -> None:
         if not self.is_active:
-            return False
+            return
         command = {"commitTransaction": 1.0, "lsid": self.session_document, 'txnNumber': self.id, 'autocommit': False}
-        r = await self.socket.request(command)
-        self.end(_TxnState.COMMITED)
-        return r["ok"] == 1.0
+        await self.socket.request(command)
     
-    async def abort(self) -> bool:
+    async def abort(self) -> None:
         if not self.is_active:
-            return False
+            return
         command = {"abortTransaction": 1.0, "lsid": self.session_document, 'txnNumber': self.id, 'autocommit': False}
-        r = await self.socket.request(command)
-        self.end(_TxnState.ABORTED)
-        return r["ok"] == 1.0
+        await self.socket.request(command)
 
     async def __aenter__(self) -> Self:
         if not self.is_active:
@@ -84,11 +78,14 @@ class Transaction:
         exc_value: Optional[BaseException], 
         exc_trace: Optional[TracebackType]
     ) -> bool:
-        if exc_type is None:
-            await self.commit()
-        else:
-            await self.abort()
-        self.exception = exc_value
+        state = [_TxnState.ABORTED, _TxnState.COMMITED][exc_type is None]
+        if self.action_count != 0:
+            func = {
+                _TxnState.ABORTED: self.abort, 
+                _TxnState.COMMITED: self.commit
+            }[state]
+            await func()
+        self.end(state=state, exc_value=exc_value)
         return True
     
     def apply_to(self, command: xJsonT) -> None:
@@ -99,7 +96,6 @@ class Transaction:
             "autocommit": False,
             "lsid": self.session_document
         })
-        self.action_count += 1
     
 class Session:
     def __init__(self, document: xJsonT, socket: MongoSocket) -> None:
@@ -111,3 +107,6 @@ class Session:
             socket=self.socket, 
             session_document=self.document
         )
+    
+    def __repr__(self) -> str:
+        return f"Session({self.document})"
