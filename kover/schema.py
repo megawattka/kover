@@ -18,7 +18,7 @@ __all__ = [
     "Document"
 ]
 
-TYPE_MAP: dict[type, str] = {
+TYPE_MAP: Final[dict[type, str]] = {
     str: "string",
     bytes: "binData",
     float: "double",
@@ -67,8 +67,8 @@ def _as_dict_helper(obj: Any) -> xJsonT:
     payload = {x: getattr(obj, x) for x in names}
     for k, v in payload.items():
         cls = _cls_to_baseclass_from_mro(v.__class__)
-        if cls in _converters:
-            payload[k] = _converters[cls]["to"](v)
+        if cls in _CONVERTERS:
+            payload[k] = _CONVERTERS[cls]["to"](v)
     return payload
 
 def _get_names(obj: Any) -> list[str]:
@@ -196,12 +196,12 @@ class SchemaGenerator:
         metadata = _get_metadata(cls, attr_name) # TODO: add more options
         unsupported: List[str] = [FIELD_NAME]
         return {
-            _metadata_keys.get(k, k): v for k, v in metadata.items() if k not in unsupported
+            _METADATA_KEYS.get(k, k): v for k, v in metadata.items() if k not in unsupported
         }
 
 _cls_cache_map: dict[int, type] = {}
 
-_metadata_keys: dict[str, str] = {
+_METADATA_KEYS: Final[dict[str, str]] = {
     "min": "minimum",
     "max": "maximum",
     "minlen": "minLength",
@@ -291,8 +291,8 @@ class Document:
         for name, attr in mro.items():
             field_name = attr.metadata.get(FIELD_NAME, name)
             annotation = _cls_to_baseclass_from_mro(annotations[name])
-            if annotation in _converters:
-                converter = _converters[annotation]["from"]
+            if annotation in _CONVERTERS:
+                converter = _CONVERTERS[annotation]["from"]
                 payload[name] = converter(annotations[name], document[field_name])
             else:
                 payload[name] = document[field_name] # TODO: fix dict ordering
@@ -302,7 +302,7 @@ class Document:
         self._id = _id
         return self
 
-_converters = {
+_CONVERTERS: Final = {
     UUID: {
         "to": lambda uuid: Binary.from_uuid(uuid), 
         "from": lambda _, value: value.as_uuid()
