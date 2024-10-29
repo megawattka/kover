@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-import pathlib
 import sys
 import os
 import asyncio
@@ -14,6 +12,7 @@ from .session import TxnState, Transaction
 from .auth import AuthCredentials
 from .models import HelloResult
 from .exceptions import OperationFailure
+from .codes import codes
 
 
 class MongoSocket:
@@ -22,9 +21,6 @@ class MongoSocket:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter
     ) -> None:
-        cwd = pathlib.Path(__file__).parent
-        with cwd.joinpath("codes.json").open("r") as fp:
-            self.codes = json.load(fp)
         self.reader = reader
         self.writer = writer
         self.serializer = Serializer()
@@ -95,9 +91,9 @@ class MongoSocket:
             write_errors = True
             reply = reply["writeErrors"][0]
         if "code" in reply:
-            code = str(reply["code"])
-            if code in self.codes:
-                exc_name = self.codes[code]
+            code = reply["code"]
+            if code in codes:
+                exc_name = codes[code]
                 error = reply["errmsg"] if not write_errors else reply
                 exception = self._construct_exception(exc_name)
                 return exception(reply["code"], error)

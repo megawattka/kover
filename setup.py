@@ -7,7 +7,7 @@ setup(
     version=__version__,
     install_requires=["pymongo", "attrs", "typing-extensions"],
     packages=['kover'],
-    description="fully async mongodb driver for mongod and replica set",
+    description="fully async mongodb driver for mongod and replica sets",
     author="oMegaPB",
-    url="https://github.com/oMegaPB/kover",
+    url="https://github.com/oMegaPB/kover"
 )
