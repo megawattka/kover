@@ -9,7 +9,7 @@ from typing import (
     overload,
     TypeVar,
     Union,
-    Sequence
+    Sequence,
 )
 
 from bson import ObjectId
@@ -109,7 +109,7 @@ class Collection:
         upsert: bool = False,
         transaction: Optional[Transaction] = None
     ) -> int:
-        command = {
+        command: xJsonT = {
             "update": self.name,
             "ordered": True,
             "updates": [{
@@ -131,7 +131,7 @@ class Collection:
         upsert: bool = False,
         transaction: Optional[Transaction] = None
     ) -> int:
-        params = {
+        params: xJsonT = {
             "update": self.name,
             "ordered": True,
             "updates": [{
@@ -151,7 +151,7 @@ class Collection:
         filter: Optional[xJsonT] = None,
         transaction: Optional[Transaction] = None
     ) -> bool:
-        params = {
+        params: xJsonT = {
             "delete": self.name,
             "ordered": True,
             "deletes": [{
@@ -168,7 +168,7 @@ class Collection:
         limit: int = 0,
         transaction: Optional[Transaction] = None
     ) -> int:
-        params = {
+        params: xJsonT = {
             "delete": self.name,
             "ordered": True,
             "deletes": [{
@@ -182,8 +182,8 @@ class Collection:
     @overload
     async def find_one(
         self,
-        filter: Optional[xJsonT],
-        cls: None
+        filter: Optional[xJsonT] = None,
+        cls: None = None
     ) -> Optional[xJsonT]:
         ...
 
@@ -195,11 +195,19 @@ class Collection:
     ) -> Optional[T]:
         ...
 
+    @overload
+    async def find_one(
+        self,
+        filter: Optional[xJsonT] = None,
+        cls: Type[T] = ...
+    ) -> Optional[T]:
+        ...
+
     async def find_one(
         self,
         filter: Optional[xJsonT] = None,
         cls: Optional[Type[T]] = None
-    ) -> Optional[Union[T, xJsonT]]:
+    ) -> Union[Optional[T], Optional[xJsonT]]:
         documents = await self.find(filter=filter, cls=cls).limit(1).to_list()
         if documents:
             return documents[0]
@@ -208,17 +216,17 @@ class Collection:
     @overload
     def find(
         self,
-        filter: Optional[xJsonT] = None,
-        cls: None = ...
-    ) -> Cursor[xJsonT]:
+        filter: Optional[xJsonT],
+        cls: Type[T]
+    ) -> Cursor[T]:
         ...
 
     @overload
     def find(
         self,
         filter: Optional[xJsonT] = None,
-        cls: Optional[Type[T]] = None
-    ) -> Cursor[T]:
+        cls: None = None
+    ) -> Cursor[xJsonT]:
         ...
 
     def find(
@@ -233,7 +241,11 @@ class Collection:
         pipeline: List[xJsonT],
         transaction: Optional[Transaction] = None
     ) -> List[Any]:
-        cmd = {"aggregate": self.name, "pipeline": pipeline, "cursor": {}}
+        cmd: xJsonT = {
+            "aggregate": self.name,
+            "pipeline": pipeline,
+            "cursor": {}
+        }
         request = await self.database.command(cmd, transaction=transaction)
         return request["cursor"]["firstBatch"]
 

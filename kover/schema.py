@@ -13,7 +13,8 @@ from typing import (
     Optional,
     Final,
     Literal,
-    overload
+    overload,
+    Callable
 )
 
 from bson import Binary, ObjectId, Timestamp
@@ -66,7 +67,7 @@ def _collect_mro(cls: type, /, *, include_annotations: bool = False) -> xJsonT:
     works with subclasses.
     pass `include_annotations=True` to include annotations into return value
     """
-    these = {}
+    these: xJsonT = {}
     if not issubclass(cls, Document):
         raise Exception("is not a Document subclass")
     # respect subclasses order and exclude object and Document
@@ -92,7 +93,7 @@ def _cls_to_baseclass_from_mro(cls: type, /) -> type:
     return cls
 
 
-def _get_metadata(cls: type, name: str, /) -> dict:
+def _get_metadata(cls: type, name: str, /) -> xJsonT:
     attr = getattr(cls, name, None)
     # handle non-field attrs
     if attr is not None and attr.__class__.__name__ == "_CountingAttr":
@@ -116,7 +117,8 @@ def _maybe_convert(
     `internal use only`
 
     """
-    converter = _CONVERTERS.get(cls, {}).get("to")
+    converter: Optional[Callable[[Any], Any]] = _CONVERTERS.get(cls, {})\
+        .get("to")
     if converter is not None:
         payload[key] = converter(value)
     if FIELD_NAME in metadata:  # replace keys
@@ -190,7 +192,7 @@ class SchemaGenerator:
 
     def _get_type_data(
         self,
-        attr_t: type,
+        attr_t: Any,
         attr_name: str,
         is_optional: bool = False
     ) -> xJsonT:
@@ -218,8 +220,8 @@ class SchemaGenerator:
                     }
                 }
             if not isinstance(attr_t, type):
-                args = attr_t.__class__, attr_t
-                raise Exception("Unsupported annotation found: %s, %s" % args)
+                _args = attr_t.__class__, attr_t
+                raise Exception("Unsupported annotation found: %s, %s" % _args)
 
             if issubclass(attr_t, Enum):
                 values = [z.value for z in attr_t]
@@ -259,20 +261,20 @@ class SchemaGenerator:
             ) for cls in args]
             return self._merge_payloads(payloads=payloads)
 
-    def _lookup_type(self, attr_t: type) -> str:
+    def _lookup_type(self, attr_t: Any) -> str:
         try:
             return TYPE_MAP[attr_t]
         except KeyError:
             raise Exception(f"Unsupported annotation: {attr_t}")
 
-    def _is_object(self, attr_t: type) -> bool:
+    def _is_object(self, attr_t: Any) -> bool:
         return isinstance(attr_t, type) and issubclass(attr_t, Document)
 
-    def _is_enum(self, attr_t: type) -> bool:
+    def _is_enum(self, attr_t: Any) -> bool:
         return isinstance(attr_t, type) and issubclass(attr_t, Enum)
 
     def _merge_payloads(self, payloads: List[xJsonT]) -> xJsonT:
-        data = {"bsonType": []}
+        data: xJsonT = {"bsonType": []}
         for payload in payloads:
             data["bsonType"].extend(payload.pop("bsonType"))
             data.update(payload)
@@ -352,7 +354,7 @@ class Document:
     """
     _id: ObjectId
 
-    def __new__(cls, *args, **kwargs) -> Self:
+    def __new__(cls, *args: tuple[Any], **kwargs: xJsonT) -> Self:
         if id(cls) in _cls_cache_map:
             injected = _cls_cache_map[id(cls)]
         else:
@@ -378,7 +380,8 @@ class Document:
     @classmethod
     def from_document(cls, document: xJsonT, /) -> Self:
         document = document.copy()
-        mro, payload = _collect_mro(cls, include_annotations=True), {}
+        mro = _collect_mro(cls, include_annotations=True)
+        payload: xJsonT = {}
         annotations = mro.pop("__annotations__")
         for name, attr in mro.items():
             field_name = attr.metadata.get(FIELD_NAME, name)
@@ -390,10 +393,11 @@ class Document:
                 )
             else:
                 payload[name] = document[field_name]  # TODO: fix dict ordering
-        return cls(**payload).id(document.get("_id", ObjectId()))
+        _id: ObjectId = document.get("_id", ObjectId())
+        return cls(**payload).id(_id)
 
     @overload
-    def id(self, _id: None = None, /) -> ObjectId:
+    def id(self, _id: None, /) -> ObjectId:
         ...
 
     @overload
@@ -407,17 +411,17 @@ class Document:
         return self
 
 
-_CONVERTERS: Final = {
+_CONVERTERS: Final[dict[type, xJsonT]] = {
     UUID: {
-        "to": lambda uuid: Binary.from_uuid(uuid),
-        "from": lambda _, value: value.as_uuid()
+        "to": lambda uuid: Binary.from_uuid(uuid),  # type: ignore
+        "from": lambda _, value: value.as_uuid()  # type: ignore
     },
     Enum: {
-        "to": lambda enm: enm.value,
-        "from": lambda cls, value: cls(value)
+        "to": lambda enm: enm.value,  # type: ignore
+        "from": lambda cls, value: cls(value)  # type: ignore
     },
     Document: {
-        "to": lambda doc: doc.to_dict(),
-        "from": lambda cls, value: cls.from_document(value)
+        "to": lambda doc: doc.to_dict(),  # type: ignore
+        "from": lambda cls, value: cls.from_document(value)  # type: ignore
     }
 }

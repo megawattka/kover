@@ -66,7 +66,7 @@ class Auth:
         user = self._clear_username(username.encode("u8"))
         nonce = base64.b64encode(os.urandom(32))
         first_bare = b"n=" + user + b",r=" + nonce
-        command = {
+        command: xJsonT = {
             "saslStart": 1.0,
             "mechanism": mechanism,
             "payload": Binary(b"n,," + first_bare),
@@ -124,7 +124,7 @@ class Auth:
         server_sig = base64.b64encode(
             HMAC(server_key, auth_msg, digestmod).digest()
         )
-        cmd = {
+        cmd: xJsonT = {
             "saslContinue": 1.0,
             "conversationId": cid,
             "payload": Binary(client_final)

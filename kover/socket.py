@@ -10,7 +10,7 @@ from typing import Optional, Type
 from . import __version__
 from .serializer import Serializer
 from .typings import xJsonT, DocumentT, COMPRESSION_T
-from .session import _TxnState, Transaction
+from .session import TxnState, Transaction
 from .auth import AuthCredentials
 from .models import HelloResult
 from .exceptions import OperationFailure
@@ -61,7 +61,7 @@ class MongoSocket:
         uname = os.uname()  # TODO: Windows
         impl = sys.implementation
         platform = impl.name + " " + ".".join(map(str, impl.version))
-        payload = {
+        payload: xJsonT = {
             "hello": 1.0,
             "client": {
                 "driver": {
@@ -126,13 +126,13 @@ class MongoSocket:
         if reply.get("ok") != 1.0 or reply.get("writeErrors") is not None:
             exc_value = self._get_exception(reply=reply)
             if transaction is not None:
-                transaction.end(_TxnState.ABORTED, exc_value=exc_value)
+                transaction.end(TxnState.ABORTED, exc_value=exc_value)
             raise exc_value
         if transaction is not None:
             transaction.action_count += 1
         return reply
 
-    async def _hello(
+    async def hello(
         self,
         compression: Optional[COMPRESSION_T] = None,  # TODO: implement
         credentials: Optional[AuthCredentials] = None

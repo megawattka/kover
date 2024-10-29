@@ -33,7 +33,7 @@ class Serializer:
         )
         return b"".join([
             Int32(0),  # flags
-            bson._make_c_string(f"{collection}.$cmd"),  # collection name
+            bson._make_c_string(f"{collection}.$cmd"),  # type: ignore
             Int32(0),  # to_skip
             Int32(-1),  # to_return (all)
             encoded,  # doc itself
@@ -69,7 +69,7 @@ class Serializer:
             message = msg[5:]
         else:
             raise Exception(f"Unsupported op_code from server: {op_code}")
-        return bson._decode_all_selective(
+        return bson._decode_all_selective(  # type: ignore
             message,
             codec_options=DEFAULT_CODEC_OPTIONS,
             fields=None
@@ -83,7 +83,7 @@ class Serializer:
 
     def verify_rid(self, data: bytes, rid: int) -> tuple[int, int]:
         # https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/#standard-message-header
-        length, request_id, response_to, op_code = struct.unpack("<iiii", data)
+        length, _, response_to, op_code = struct.unpack("<iiii", data)
         if response_to != rid:
             exc_t = f"wrong r_id. expected ({rid}) but found ({response_to})"
             raise Exception(exc_t)

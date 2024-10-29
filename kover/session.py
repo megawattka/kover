@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from .client import MongoSocket
 
 
-class _TxnState(Enum):
+class TxnState(Enum):
     NONE = "NONE"
     STARTED = "STARTED"
     ABORTED = "ABORTED"
@@ -29,26 +29,26 @@ class Transaction:
         self.socket: MongoSocket = socket
         self.session_document: xJsonT = session_document
         self.id: Int64 = Int64(-1)
-        self.state: _TxnState = _TxnState.NONE
+        self.state: TxnState = TxnState.NONE
         self.action_count: int = 0
         self.exception: Optional[BaseException] = None
 
     @property
     def is_active(self) -> bool:
-        return self.state is _TxnState.STARTED
+        return self.state is TxnState.STARTED
 
     @property
     def is_ended(self) -> bool:
-        return self.state in (_TxnState.COMMITED, _TxnState.ABORTED)
+        return self.state in (TxnState.COMMITED, TxnState.ABORTED)
 
     def start(self) -> None:
         timestamp = int(time.time())
-        self.state = _TxnState.STARTED
+        self.state = TxnState.STARTED
         self.id = Int64(timestamp)
 
     def end(
         self,
-        state: _TxnState,
+        state: TxnState,
         exc_value: Optional[BaseException]
     ) -> None:
         if not self.is_ended:
@@ -58,7 +58,7 @@ class Transaction:
     async def commit(self) -> None:
         if not self.is_active:
             return
-        command = {
+        command: xJsonT = {
             "commitTransaction": 1.0,
             "lsid": self.session_document,
             'txnNumber': self.id,
@@ -69,7 +69,7 @@ class Transaction:
     async def abort(self) -> None:
         if not self.is_active:
             return
-        command = {
+        command: xJsonT = {
             "abortTransaction": 1.0,
             "lsid": self.session_document,
             'txnNumber': self.id,
@@ -91,11 +91,11 @@ class Transaction:
         exc_value: Optional[BaseException],
         exc_trace: Optional[TracebackType]
     ) -> bool:
-        state = [_TxnState.ABORTED, _TxnState.COMMITED][exc_type is None]
+        state = [TxnState.ABORTED, TxnState.COMMITED][exc_type is None]
         if self.action_count != 0:
             func = {
-                _TxnState.ABORTED: self.abort,
-                _TxnState.COMMITED: self.commit
+                TxnState.ABORTED: self.abort,
+                TxnState.COMMITED: self.commit
             }[state]
             await func()
         self.end(state=state, exc_value=exc_value)

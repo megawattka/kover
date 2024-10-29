@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 from bson import Binary
 from attrs import field, define
@@ -14,7 +14,7 @@ class HelloResult:
     local_time: datetime.datetime
     connection_id: int
     read_only: bool
-    mechanisms: List[str] = field(default=None)
+    mechanisms: Optional[List[str]] = field(default=None)
     compression: COMPRESSION_T = field(default=None)
     requires_auth: bool = field(init=False, repr=False)
 

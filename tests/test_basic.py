@@ -10,6 +10,7 @@ from bson import ObjectId, Binary  # noqa: E402
 from kover.auth import AuthCredentials  # noqa: E402
 from kover.client import Kover  # noqa: E402
 from kover.schema import SchemaGenerator, Document  # noqa: E402
+from kover.typings import xJsonT  # noqa: E402
 
 
 class User(Document):
@@ -28,7 +29,7 @@ class Subclass(User):
 
 
 class AsyncTestExample(unittest.IsolatedAsyncioTestCase):
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: str, **kwargs: xJsonT) -> None:
         super().__init__(*args, **kwargs)
         self.schema_generator = SchemaGenerator()
         self.test_collection_name: str = "test"
@@ -97,7 +98,7 @@ class AsyncTestExample(unittest.IsolatedAsyncioTestCase):
         resp = await collection.find().to_list()
         assert isinstance(resp[0], dict)
 
-        resp = await collection.find(cls=User).to_list()
+        resp = await collection.find({}, cls=User).to_list()
         assert isinstance(resp[0], User)
         assert resp[0].name == "dima" and resp[0].age == 18
         assert not await collection.delete_one({"name": "drake"})
@@ -106,7 +107,7 @@ class AsyncTestExample(unittest.IsolatedAsyncioTestCase):
     async def test_documents(self) -> None:
         assert issubclass(User, Document)
         user = User("john", 16)
-        assert user._id is not None
+        assert user.id is not None
         document = user.to_dict(exclude_id=False)
         assert "_id" in document
         document = user.to_dict()

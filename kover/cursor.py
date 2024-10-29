@@ -8,7 +8,8 @@ from typing import (
     Generic,
     TypeVar,
     Type,
-    cast
+    cast,
+    Any
 )
 
 from bson import Int64
@@ -49,7 +50,7 @@ class Cursor(Generic[T]):
     async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, *exc) -> None:
+    async def __aexit__(self, *args: tuple[Any]) -> None:
         await self.close()
 
     def sort(self, mapping: xJsonT) -> Self:
@@ -116,7 +117,7 @@ class Cursor(Generic[T]):
                 await self.close()
                 raise StopAsyncIteration
             self._second_iteration = True
-            command = {
+            command: xJsonT = {
                 "getMore": Int64(self._id),
                 "collection": self._collection.name
             }
@@ -132,7 +133,7 @@ class Cursor(Generic[T]):
         if not self._killed:
             self._killed = True
             if self._id is not None and int(self._id) > 0 and self._limit != 0:
-                command = {
+                command: xJsonT = {
                     "killCursors": self._collection.name, "cursors": [self._id]
                 }
                 await self._collection.database.command(command)

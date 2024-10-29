@@ -7,6 +7,7 @@ import asyncio
 from kover.client import Kover
 from kover.auth import AuthCredentials
 
+
 async def main():
     # or AuthCredentials.from_environ()
     # (requires MONGO_USER and MONGO_PASSWORD environment variables)
@@ -59,9 +60,11 @@ class User(Document):
     name: str
     age: int
 
-async with db.test.find(entity_cls=User).limit(1000) as cursor:
+
+async with db.test.find({}, cls=User).limit(1000) as cursor:
     async for item in cursor:
         print(item) # its now User
+
 ```
 
 ### Schema Validation
@@ -74,22 +77,32 @@ from typing import Optional
 from kover.client import Kover
 from kover.schema import SchemaGenerator, Document, field
 
-class UserType(Enum): 
+
+class UserType(Enum):
     ADMIN = "ADMIN"
     USER = "USER"
     CREATOR = "CREATOR"
 
+
 # can be used as annotation too
 class Friend(Document):
     name: str
-    age: int = field(min=18) # minimum age is 18. less will raise ValidationError
+    age: int = field(min=18)  # minimum age is 18. less will error
 
-# note field_name kwarg in user_type field. it'll be name of that key when using .to_dict()
+
+# note field_name kwarg in user_type field.
+# it'll be name of that key when using .to_dict()
 class User(Document):
     name: str = field(description="must be a string")
-    age: int = field(description="age must be int and more that 18", min=18)
-    user_type: UserType = field(description="can only be one of the enum values", field_name="userType")
+    age: int = field(
+        description="age must be int and more that 18", min=18
+    )
+    user_type: UserType = field(
+        description="can only be one of the enum values",
+        field_name="userType"
+    )
     friend: Optional[Friend]
+
 
 async def main():
     kover = await Kover.make_client()
@@ -98,21 +111,30 @@ async def main():
     schema = generator.generate(User)
 
     collections = await kover.db.list_collections({"name": "test"})
-    if not collections: # create if not exists
+    if not collections:  # create if not exists
         collection = await kover.db.create_collection("test")
     else:
         collection = collections[0]
     await collection.set_validator(schema)
 
     valid_user = User("John Doe", 20, UserType.USER, friend=Friend("dima", 18))
-    object_id = await collection.add_one(valid_user) # specify either model or model.to_dict()
+
+    # function accepts either valid_user or valid_user.to_dict()
+    object_id = await collection.add_one(valid_user)
     print(object_id, "added!")
 
-    invalid_user = User("Rick", age=15, user_type=UserType.ADMIN, friend=Friend("roma", 25))
-    await collection.add_one(invalid_user) # kover.exceptions.ErrDocumentValidationFailure: Rick's age is less than 18
+    invalid_user = User(
+        "Rick",
+        age=15,
+        user_type=UserType.ADMIN,
+        friend=Friend("roma", 25)
+    )
+    # kover.exceptions.ErrDocumentValidationFailure: Rick's age is less than 18
+    await collection.add_one(invalid_user)
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 ```
 
 ### Transactions
@@ -124,25 +146,31 @@ from bson import ObjectId
 
 from kover.client import Kover
 from kover.session import Transaction
+from kover.typings import xJsonT
+
 
 async def main():
     kover = await Kover.make_client()
     session = await kover.start_session()
-    doc = {"_id": ObjectId(), "name": "John", "age": 30} # specify _id directly
-    
+
+    # specify _id directly
+    doc: xJsonT = {"_id": ObjectId(), "name": "John", "age": 30}
+
     transaction: Transaction
     async with session.start_transaction() as transaction:
         await kover.db.test.add_one(doc, transaction=transaction)
-        await kover.db.test.add_one(doc, transaction=transaction) # it should error with duplicate key
-    
-    print(transaction.exception, type(transaction.exception)) # if exist
+        # it should error with duplicate key now
+        await kover.db.test.add_one(doc, transaction=transaction)
+
+    print(transaction.exception, type(transaction.exception))  # if exist
     print(transaction.state)
 
     found = await kover.db.test.find().to_list()
-    print(found) # no documents found due to transaction abort
+    print(found)  # no documents found due to transaction abort
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 ```
 
 # Tests/Benchmarks

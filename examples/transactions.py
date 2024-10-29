@@ -4,6 +4,7 @@ from bson import ObjectId
 
 from kover.client import Kover
 from kover.session import Transaction
+from kover.typings import xJsonT
 
 
 async def main():
@@ -11,7 +12,7 @@ async def main():
     session = await kover.start_session()
 
     # specify _id directly
-    doc = {"_id": ObjectId(), "name": "John", "age": 30}
+    doc: xJsonT = {"_id": ObjectId(), "name": "John", "age": 30}
 
     transaction: Transaction
     async with session.start_transaction() as transaction:

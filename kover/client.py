@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import random
-from typing import Optional, List
+from typing import Optional, List, Any
 
 from .auth import AuthCredentials, Auth
 from .typings import xJsonT, Self
@@ -24,7 +24,7 @@ class Kover:
     async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, *exc) -> bool:
+    async def __aexit__(self, *exc: tuple[Any]) -> bool:
         if self.signature is not None:
             await self.logout()
         await self.close()
@@ -49,9 +49,9 @@ class Kover:
         loop: Optional[asyncio.AbstractEventLoop] = None
     ) -> Kover:
         socket = await MongoSocket.make(host, port, loop=loop)
-        hello = await socket._hello(credentials=credentials)
+        hello = await socket.hello(credentials=credentials)
         if hello.requires_auth and credentials:
-            mechanism = random.choice(hello.mechanisms)
+            mechanism = random.choice(hello.mechanisms or [])
             signature = await Auth(socket).create(mechanism, credentials)
         else:
             signature = None
@@ -87,7 +87,7 @@ class Kover:
         await self.socket.request({"logout": 1.0})
 
     async def list_database_names(self) -> List[str]:
-        command = {"listDatabases": 1.0, "nameOnly": True}
+        command: xJsonT = {"listDatabases": 1.0, "nameOnly": True}
         request = await self.socket.request(command)
         return [x["name"] for x in request["databases"]]
 
