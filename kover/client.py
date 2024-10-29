@@ -87,7 +87,10 @@ class Kover:
         await self.socket.request({"logout": 1.0})
 
     async def list_database_names(self) -> List[str]:
-        command: xJsonT = {"listDatabases": 1.0, "nameOnly": True}
+        command: xJsonT = {
+            "listDatabases": 1.0,
+            "nameOnly": True
+        }
         request = await self.socket.request(command)
         return [x["name"] for x in request["databases"]]
 

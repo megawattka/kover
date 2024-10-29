@@ -107,7 +107,7 @@ class AsyncTestExample(unittest.IsolatedAsyncioTestCase):
     async def test_documents(self) -> None:
         assert issubclass(User, Document)
         user = User("john", 16)
-        assert user.id is not None
+        assert user.id() is not None
         document = user.to_dict(exclude_id=False)
         assert "_id" in document
         document = user.to_dict()

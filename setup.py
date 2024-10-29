@@ -1,6 +1,6 @@
 from kover import __version__
 
-from setuptools import setup
+from setuptools import setup  # type: ignore
 
 setup(
     name="kover",

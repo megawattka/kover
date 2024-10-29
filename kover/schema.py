@@ -397,11 +397,11 @@ class Document:
         return cls(**payload).id(_id)
 
     @overload
-    def id(self, _id: None, /) -> ObjectId:
+    def id(self, _id: None = None, /) -> ObjectId:
         ...
 
     @overload
-    def id(self, _id: ObjectId = ..., /) -> Self:
+    def id(self, _id: ObjectId, /) -> Self:
         ...
 
     def id(self, _id: Optional[ObjectId] = None, /) -> Union[ObjectId, Self]:
