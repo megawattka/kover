@@ -1,47 +1,58 @@
-__import__("sys").path.append(str(__import__("pathlib").Path(__file__).parent.parent)) # be able to import stuff
+__import__("sys").path.append(
+    str(__import__("pathlib").Path(__file__).parent.parent))
+# be able to import stuff
 
-import unittest
-from uuid import uuid4, UUID
+import unittest  # noqa: E402
+from uuid import uuid4, UUID  # noqa: E402
 
-from bson import ObjectId, Binary
+from bson import ObjectId, Binary  # noqa: E402
 
-from kover.auth import AuthCredentials
-from kover.client import Kover
-from kover.schema import SchemaGenerator, Document
+from kover.auth import AuthCredentials  # noqa: E402
+from kover.client import Kover  # noqa: E402
+from kover.schema import SchemaGenerator, Document  # noqa: E402
+
 
 class User(Document):
     name: str
     age: int
 
+
 class SubDocument(Document):
     a: int
     b: str
 
+
 class Subclass(User):
     uuid: UUID
     subdocument: SubDocument
+
 
 class AsyncTestExample(unittest.IsolatedAsyncioTestCase):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.schema_generator = SchemaGenerator()
         self.test_collection_name: str = "test"
-        self.credentials = AuthCredentials(username="main_m1", password="incunaby!")
+        self.credentials = AuthCredentials(
+            username="main_m1",
+            password="incunaby!"
+        )
 
     async def asyncSetUp(self) -> None:
         self.client = await Kover.make_client(credentials=self.credentials)
         assert self.client.signature is not None
         self.addAsyncCleanup(self.client.close)
-    
+
     async def asyncTearDown(self) -> None:
         await self.client.db.drop_collection(self.test_collection_name)
-    
-    async def test_credentials(self) -> None:
+
+    async def test_credentials_md5(self) -> None:
         hashed = self.credentials.md5_hash()
         assert hashed == b'f79a93932f4e10c3654be025a576398c'
 
     async def test_cursor(self) -> None:
-        collection = await self.client.db.create_collection(self.test_collection_name)
+        collection = await self.client.db.create_collection(
+            self.test_collection_name
+        )
         assert await collection.count() == 0
 
         users = [User("josh", age=50)] * 1000
@@ -57,17 +68,22 @@ class AsyncTestExample(unittest.IsolatedAsyncioTestCase):
         cs = await collection.find().batch_size(50).to_list()
         assert len(cs) == 75
 
-        cs = await collection.find({"test": "test"}).to_list()
+        cs = await collection.find({"test": "nonexistent"}).to_list()
         assert len(cs) == 0
 
         await collection.delete_many()
 
     async def test_collection_create(self):
-        collection = await self.client.db.create_collection(self.test_collection_name)
-        assert collection.name == self.test_collection_name and collection.database.name == "db"
-    
+        collection = await self.client.db.create_collection(
+            self.test_collection_name
+        )
+        assert collection.name == self.test_collection_name and \
+            collection.database.name == "db"
+
     async def test_basic_operations(self):
-        collection = await self.client.db.create_collection(self.test_collection_name)
+        collection = await self.client.db.create_collection(
+            self.test_collection_name
+        )
 
         user = User(name="dima", age=18)
         document = user.to_dict()
@@ -81,12 +97,14 @@ class AsyncTestExample(unittest.IsolatedAsyncioTestCase):
         resp = await collection.find().to_list()
         assert isinstance(resp[0], dict)
 
-        resp = await collection.find({"name": "dima"}, entity_cls=User).to_list()
+        resp = await collection.find({
+            "name": "dima"
+        }, entity_cls=User).to_list()
         assert isinstance(resp[0], User)
         assert resp[0].name == "dima" and resp[0].age == 18
         assert not await collection.delete_one({"name": "drake"})
         assert await collection.delete_one({"name": "dima"})
-    
+
     async def test_documents(self) -> None:
         assert issubclass(User, Document)
         user = User("john", 16)
@@ -95,7 +113,7 @@ class AsyncTestExample(unittest.IsolatedAsyncioTestCase):
         assert "_id" in document
         document = user.to_dict()
         assert "_id" not in document
-        serialized = User.from_document(document=document)
+        serialized = User.from_document(document)
         assert serialized.name == "john" and serialized.age == 16
         assert isinstance(serialized, User) and serialized == user
 
@@ -105,29 +123,32 @@ class AsyncTestExample(unittest.IsolatedAsyncioTestCase):
         assert isinstance(deserialized["uuid"], Binary)
         assert issubclass(Subclass, User) and issubclass(Subclass, Document)
         serialized = Subclass.from_document(deserialized)
-        assert isinstance(serialized.uuid, UUID) and isinstance(serialized.subdocument, SubDocument)
-        assert serialized.subdocument.a == 1 and serialized.subdocument.b == "5"
+        assert isinstance(serialized.uuid, UUID) and \
+            isinstance(serialized.subdocument, SubDocument)
+        assert serialized.subdocument.a == 1 and \
+            serialized.subdocument.b == "5"
 
     async def test_base_schema(self) -> None:
         schema = self.schema_generator.generate(User)
         self.assertEqual(schema, {
             '$jsonSchema': {
-                'additionalProperties': False, 
-                'bsonType': ['object'], 
+                'additionalProperties': False,
+                'bsonType': ['object'],
                 'properties': {
                     '_id': {
                         'bsonType': ['objectId']
-                    }, 
+                    },
                     'age': {
                         'bsonType': ['int']
-                    }, 
+                    },
                     'name': {
                         'bsonType': ['string']
                     }
-                }, 
+                },
                 'required': ['name', 'age', '_id']
             }
         })
+
 
 if __name__ == "__main__":
     unittest.main()

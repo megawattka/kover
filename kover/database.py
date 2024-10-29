@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from typing import (
-    List, 
-    Optional, 
-    TYPE_CHECKING, 
-    Union, 
+    List,
+    Optional,
+    TYPE_CHECKING,
+    Union,
     Sequence
 )
 
@@ -17,6 +17,7 @@ from .schema import filter_non_null
 if TYPE_CHECKING:
     from client import Kover
 
+
 class Database:
     def __init__(self, name: str, client: Kover) -> None:
         self.name = name
@@ -24,32 +25,42 @@ class Database:
 
     def get_collection(self, name: str) -> Collection:
         return Collection(name=name, database=self)
-    
+
     def __getattr__(self, name: str) -> Collection:
         return self.get_collection(name=name)
 
-    async def list_collections(self, filter: Optional[xJsonT] = None) -> List[Collection]:
-        if filter is None:
-            filter = {}
-        request = await self.command({"listCollections": 1.0, "filter": {}})
+    async def list_collections(
+        self,
+        filter: Optional[xJsonT] = None
+    ) -> List[Collection]:
+        request = await self.command({
+            "listCollections": 1.0,
+            "filter": filter or {}
+        })
         return [Collection(
-            name=x["name"], 
-            database=self, 
-            options=x["options"], 
+            name=x["name"],
+            database=self,
+            options=x["options"],
             info=x["info"]
         ) for x in request["cursor"]["firstBatch"]]
 
-    async def create_collection(self, name: str, params: Optional[xJsonT] = None) -> Collection:
-        await self.command({"create": name, **(params or {})})
+    async def create_collection(
+        self,
+        name: str,
+        params: Optional[xJsonT] = None
+    ) -> Collection:
+        await self.command({
+            "create": name, **(params or {})
+        })
         return self.get_collection(name)
 
     async def drop_collection(self, name: str) -> None:
         await self.command({"drop": name})
-    
+
     # https://gist.github.com/xandout/61d25df23a77236ab28236650f84ce6b
     async def create_user(
-        self, 
-        name: str, 
+        self,
+        name: str,
         password: str,
         roles: Optional[Sequence[Union[xJsonT, str]]] = None,
         custom_data: Optional[xJsonT] = None,
@@ -59,8 +70,8 @@ class Database:
     ) -> User:
         if root is True and roles is None:
             roles = [
-                {'role': 'userAdminAnyDatabase', 'db': self.name}, 
-                {'role': 'root', 'db': self.name}, 
+                {'role': 'userAdminAnyDatabase', 'db': self.name},
+                {'role': 'root', 'db': self.name},
                 {'role': 'readWriteAnyDatabase', 'db': self.name}
             ]
         if roles is None:
@@ -74,9 +85,14 @@ class Database:
             "comment": comment
         })
         await self.command(command)
-        found = await self.users_info(query=name, show_credentials=True, show_custom_data=True, show_privileges=True)
+        found = await self.users_info(
+            query=name,
+            show_credentials=True,
+            show_custom_data=True,
+            show_privileges=True
+        )
         return found[0]
-    
+
     async def users_info(
         self,
         query: Optional[Union[str, float, xJsonT, List[xJsonT]]] = None,
@@ -102,8 +118,8 @@ class Database:
         return [User.from_json(x) for x in request["users"]]
 
     async def drop_user(
-        self, 
-        name: str, 
+        self,
+        name: str,
         comment: Optional[str] = None
     ) -> None:
         command = filter_non_null({
@@ -112,11 +128,23 @@ class Database:
         })
         await self.command(command)
 
-    async def grant_roles_to_user(self, username: str, roles: List[Union[str, xJsonT]]) -> None:
+    async def grant_roles_to_user(
+        self,
+        username: str,
+        roles: List[Union[str, xJsonT]]
+    ) -> None:
         await self.command({
-            "grantRolesToUser": username, 
+            "grantRolesToUser": username,
             "roles": roles
         })
 
-    async def command(self, doc: xJsonT, transaction: Optional[Transaction] = None) -> xJsonT:
-        return await self.client.socket.request(doc=doc, transaction=transaction, db_name=self.name)
+    async def command(
+        self,
+        doc: xJsonT,
+        transaction: Optional[Transaction] = None
+    ) -> xJsonT:
+        return await self.client.socket.request(
+            doc=doc,
+            transaction=transaction,
+            db_name=self.name
+        )

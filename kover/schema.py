@@ -5,35 +5,34 @@ import datetime
 from enum import Enum
 from uuid import UUID
 from typing import (
-    get_origin, 
-    Union, 
-    List, 
-    Any, 
-    dataclass_transform, 
-    Optional, 
-    Final, 
-    Type, 
-    Literal
+    get_origin,
+    Union,
+    List,
+    Any,
+    dataclass_transform,
+    Optional,
+    Final,
+    Literal,
+    overload
 )
 
 from bson import Binary, ObjectId, Timestamp
 from attrs import (
-    field as _field, 
-    define, 
-    make_class, 
+    field as _field,
+    define,
+    make_class,
     NOTHING
 )
 
 from .typings import xJsonT, Self, UnionType
 
 __all__ = [
-    "TYPE_MAP",
     "SchemaGenerator",
     "field",
     "Document"
 ]
 
-TYPE_MAP: Final[dict[type, str]] = {
+TYPE_MAP: dict[type, str] = {
     str: "string",
     bytes: "binData",
     float: "double",
@@ -50,44 +49,99 @@ TYPE_MAP: Final[dict[type, str]] = {
 
 FIELD_NAME: Final[str] = "field_name"
 
-def _collect_mro(cls: type, include_annotations: bool = False) -> xJsonT:
+_METADATA_KEYS: dict[str, str] = {
+    "min": "minimum",
+    "max": "maximum",
+    "minlen": "minLength",
+    "maxlen": "maxLength",
+    "min_items": "minItems",
+    "max_items": "maxItems",
+    "unique_items": "uniqueItems"
+}
+
+
+def _collect_mro(cls: type, /, *, include_annotations: bool = False) -> xJsonT:
+    """
+    this collects all fields from class as _CountingAttr from attrs.
+    works with subclasses.
+    pass `include_annotations=True` to include annotations into return value
+    """
     these = {}
     if not issubclass(cls, Document):
         raise Exception("is not a Document subclass")
-    for x in cls.mro()[:-2][::-1]: # respect subclasses order and exclude object and Document
+    # respect subclasses order and exclude object and Document
+    for x in cls.mro()[:-2][::-1]:
         for k, v in x.__annotations__.items():
-            value = getattr(x, k, _field(type=v)) # just annotation
-            if value.__class__.__name__ != "_CountingAttr": # check for field
-                value = _field(default=value, type=v) # if its just annotation with value
+            # fallback if its just annotation
+            value = getattr(x, k, _field(type=v))
+            # check for field
+            if value.__class__.__name__ != "_CountingAttr":
+                # if its just annotation with value
+                value = _field(default=value, type=v)
             these[k] = value
         if include_annotations:
             these.setdefault("__annotations__", {}).update(x.__annotations__)
     return these
 
-def _cls_to_baseclass_from_mro(cls: type) -> type:
+
+def _cls_to_baseclass_from_mro(cls: type, /) -> type:
     # needed for enums
     # <MyEnum foo: bar> will return <class 'Enum'>
-    if hasattr(cls, "mro"): # not all annotations have mro (e.g Literal)
-        return cls.mro()[-2] # at this position sits base class
-    return cls #
+    if hasattr(cls, "mro"):  # not all annotations have mro (e.g Literal)
+        return cls.mro()[-2]  # at this position sits base class
+    return cls
 
-def _get_metadata(cls, name: str) -> dict:
+
+def _get_metadata(cls: type, name: str, /) -> dict:
     attr = getattr(cls, name, None)
-    if attr is not None and attr.__class__.__name__ == "_CountingAttr": # handle non-field attrs
-        return attr.metadata 
+    # handle non-field attrs
+    if attr is not None and attr.__class__.__name__ == "_CountingAttr":
+        return attr.metadata
     return {}
 
-def _as_dict_helper(obj: Any) -> xJsonT:
-    names = _get_names(obj)
-    payload = {x: getattr(obj, x) for x in names}
-    for k, v in payload.items():
-        cls = _cls_to_baseclass_from_mro(v.__class__)
-        if cls in _CONVERTERS:
-            payload[k] = _CONVERTERS[cls]["to"](v)
+
+def _maybe_convert(
+    payload: xJsonT,
+    cls: type,
+    key: str,
+    value: Any,
+    *,
+    metadata: xJsonT
+) -> None:
+    """
+    converts `value` by `cls` if `cls` in available convertes
+    and replacing it in `payload`.
+    also changes key according to metadata's `field_name`
+
+    `internal use only`
+
+    """
+    converter = _CONVERTERS.get(cls, {}).get("to")
+    if converter is not None:
+        payload[key] = converter(value)
+    if FIELD_NAME in metadata:  # replace keys
+        payload[metadata[FIELD_NAME]] = payload.pop(key)
+
+
+def _as_dict_helper(obj: "Document", /) -> xJsonT:
+    """
+    internal helper for `.to_dict()`
+    """
+    payload = {x: getattr(obj, x) for x in _get_parameter_names(obj)}
+    for key, value in {**payload}.items():  # prevent dict keys change
+        # handle subclasses correctly
+        cls = _cls_to_baseclass_from_mro(value.__class__)
+        metadata = _get_metadata(obj.__class__, key)
+        _maybe_convert(payload, cls, key, value, metadata=metadata)
     return payload
 
-def _get_names(obj: Any) -> list[str]:
+
+def _get_parameter_names(obj: Any, /) -> list[str]:
+    """
+    return list of parameter names from `obj` `__init__` signature
+    """
     return [*inspect.signature(obj.__init__).parameters.keys()]
+
 
 class SchemaGenerator:
     def __init__(self, additional_properties: bool = False) -> None:
@@ -106,8 +160,8 @@ class SchemaGenerator:
             "bsonType": ["objectId"]
         }
         return payload
-    
-    def generate(self, cls: type, child: bool = False) -> xJsonT:
+
+    def generate(self, cls: type, /, *, child: bool = False) -> xJsonT:
         if not issubclass(cls, Document):
             raise Exception("class must be inherited from Document")
         mro = _collect_mro(cls, include_annotations=True)
@@ -115,7 +169,7 @@ class SchemaGenerator:
         required = [self._get_field_name(k, cls) for k in mro.keys()]
         payload: xJsonT = {
             "bsonType": ["object"],
-            "required": required, # make all fields required
+            "required": required,  # make all fields required
             "properties": {},
             "additionalProperties": self.additional_properties,
         }
@@ -133,18 +187,26 @@ class SchemaGenerator:
                 }
             })
         return payload
-        
-    def _get_type_data(self, attr_t: type, attr_name: str, is_optional: bool = False) -> xJsonT:
+
+    def _get_type_data(
+        self,
+        attr_t: type,
+        attr_name: str,
+        is_optional: bool = False
+    ) -> xJsonT:
         if attr_t is None:
             return {"bsonType": ["null"]}
         origin = get_origin(attr_t)
         is_union: bool = origin in [UnionType, Union]
         if not is_union:
-            if origin is Literal: # like extended enum
-                args = [x.value if issubclass(type(x), Enum) else x for x in attr_t.__args__]
+            if origin is Literal:  # like extended enum
+                args = [
+                    x.value if issubclass(type(x), Enum)
+                    else x for x in attr_t.__args__
+                ]
                 dtypes = [self._lookup_type(type(val)) for val in args]
                 return {
-                    "enum": args + ([None] if is_optional else []), 
+                    "enum": args + ([None] if is_optional else []),
                     "bsonType": list(set(dtypes))
                 }
             elif origin is list:
@@ -156,35 +218,45 @@ class SchemaGenerator:
                     }
                 }
             if not isinstance(attr_t, type):
-                raise Exception(f"Unsupported annotation found: {attr_t.__class__}, {attr_t}")
-            
+                args = attr_t.__class__, attr_t
+                raise Exception("Unsupported annotation found: %s, %s" % args)
+
             if issubclass(attr_t, Enum):
                 values = [z.value for z in attr_t]
                 dtypes = [self._lookup_type(type(val)) for val in values]
                 return {
-                    "enum": values + ([None] if is_optional else []), 
-                    "bsonType": list(set(dtypes)) + (["null"] if is_optional else [])
+                    "enum": values + ([None] if is_optional else []),
+                    "bsonType": list(set(dtypes)) + (
+                        ["null"] if is_optional else []
+                    )
                 }
-            
+
             elif self._is_object(attr_t):
                 return self.generate(attr_t, child=True)
-            
+
             else:
-                dtype = [self._lookup_type(attr_t)] + (["null"] if is_optional else [])
+                dtype = [self._lookup_type(attr_t)] + (
+                    ["null"] if is_optional else []
+                )
                 return {"bsonType": dtype}
-        else: 
+        else:
             args: List[type] = list(attr_t.__args__)
             is_optional = type(None) in args
 
             is_object: bool = any(self._is_object(cls) for cls in args)
             if is_object and len(args) != (1 + is_optional):
-                raise Exception("Cannot specify other annotations with Document subclass")
-            
+                exc_text = "Cannot specify other annotations with Document"
+                raise Exception(exc_text)
+
             is_enum: bool = any(self._is_enum(cls) for cls in args)
             if is_enum and len(args) != (1 + is_optional):
                 raise Exception("Cannot specify other annotations with Enum")
 
-            payloads = [self._get_type_data(cls, attr_name=attr_name, is_optional=is_optional) for cls in args]
+            payloads = [self._get_type_data(
+                cls,
+                attr_name=attr_name,
+                is_optional=is_optional
+            ) for cls in args]
             return self._merge_payloads(payloads=payloads)
 
     def _lookup_type(self, attr_t: type) -> str:
@@ -192,10 +264,10 @@ class SchemaGenerator:
             return TYPE_MAP[attr_t]
         except KeyError:
             raise Exception(f"Unsupported annotation: {attr_t}")
-    
+
     def _is_object(self, attr_t: type) -> bool:
         return isinstance(attr_t, type) and issubclass(attr_t, Document)
-    
+
     def _is_enum(self, attr_t: type) -> bool:
         return isinstance(attr_t, type) and issubclass(attr_t, Enum)
 
@@ -208,26 +280,18 @@ class SchemaGenerator:
         return data
 
     def _generate_fixed_metadata(self, cls: type, attr_name: str) -> xJsonT:
-        metadata = _get_metadata(cls, attr_name) # TODO: add more options
+        metadata = _get_metadata(cls, attr_name)  # TODO: add more options
         unsupported: List[str] = [FIELD_NAME]
         return {
-            _METADATA_KEYS.get(k, k): v for k, v in metadata.items() if k not in unsupported
+            _METADATA_KEYS.get(k, k): v
+            for k, v in metadata.items()
+            if k not in unsupported
         }
 
-_cls_cache_map: dict[int, type] = {}
-
-_METADATA_KEYS: Final[dict[str, str]] = {
-    "min": "minimum",
-    "max": "maximum",
-    "minlen": "minLength",
-    "maxlen": "maxLength",
-    "min_items": "minItems",
-    "maxItems": "maxItems",
-    "unique_items": "uniqueItems"
-}
 
 def filter_non_null(doc: xJsonT) -> xJsonT:
     return {k: v for k, v in doc.items() if v is not None}
+
 
 # https://www.mongodb.com/docs/manual/reference/operator/query/jsonSchema/#available-keywords
 # TODO: implement other?
@@ -249,57 +313,70 @@ def field(
 ) -> Any:
     metadata = metadata or {}
     not_needed: list[str] = ["metadata", "default", "not_needed"]
-    payload = {**{k: v for k, v in locals().items() if k not in not_needed}, **metadata} # remove other
+    payload = {
+        **{k: v for k, v in locals().items() if k not in not_needed},
+        **metadata
+    }  # remove other
     if unique_items is False:
         del payload["unique_items"]
     metadata = filter_non_null(payload)
     return _field(default=default, metadata=metadata)
 
+
+_cls_cache_map: dict[int, type] = {}
+
+
 @dataclass_transform(field_specifiers=(field,))
 class Document:
     """
-    this is `magic` class that makes subclasses act like `attrs-defined` classes when initialization
+    this is `magic` class that makes subclasses
+    act like `attrs-defined` classes when initialization
     but not converting them to dataclasses instantly.
-    `Document` is hooking child's `__new__` method changing its cls to `attrs-defined` one (cached).
-    new instance has `__class__` attribute same as original one. (e.g for `isinstance()`)
-    because subclassed classes are NOT being transformed into dataclasses instantly
-    you cant use `fields()` or its friends from `attrs`. this library provides private api for that.
-    i've decided to make its that way, because i didn't want to use `@define` and subclass from other class
+    `Document` is hooking child's `__new__` method
+    changing its cls to `attrs-defined` one (cached).
+    new instance has `__class__` attribute same as
+    original one. (e.g for `isinstance()`)
+    because subclassed classes are NOT being
+    transformed into dataclasses instantly
+    you cant use `fields()` or its friends from `attrs`.
+    this library provides private api for that.
+    i've decided to make its that way, because i didn't want
+    to use `@define` and subclass from other class
     at the same time like
     >>>    @define # decorator
     >>>    class User(Document) # and Document
-    >>>        ... 
-    using decorator and subclass together looks ugly, so i've implemented one class.
+    >>>        ...
+
+    Using decorator and subclass together looks ugly,
+    so i've implemented this class.
     """
     _id: ObjectId
 
     def __new__(cls, *args, **kwargs) -> Self:
-        injected: Type[Self]
         if id(cls) in _cls_cache_map:
             injected = _cls_cache_map[id(cls)]
         else:
             injected = make_class(
-                cls.__name__, # create a class with cls name
-                _collect_mro(cls), # attrs needed for class 
-                bases=(define(cls),), # make cls be a dataclass
-                class_body={"__class__": cls} # trick for isinstance
+                cls.__name__,  # create a class with cls name
+                _collect_mro(cls),  # attrs needed for class
+                bases=(define(cls),),  # make cls be a dataclass
+                class_body={"__class__": cls}  # trick for isinstance
             )
             _cls_cache_map[id(cls)] = injected
-        obj: Self = object.__new__(injected)
+        obj = super().__new__(injected)
         obj.__init__(*args, **kwargs)
-        return obj.set_id(ObjectId())
+        return obj.id(ObjectId())
 
-    def to_dict(self, exclude_id: bool = True) -> xJsonT:
-        _id_payload = {"_id": self._id} if not exclude_id and self._id is not None else {}
-        payload = {**_as_dict_helper(self), **_id_payload}
-        for name in _get_names(self):
-            metadata = _get_metadata(self.__class__, name)
-            if FIELD_NAME in metadata:
-                payload[metadata[FIELD_NAME]] = payload.pop(name)
-        return payload
-    
+    def to_dict(self, *, exclude_id: bool = True) -> xJsonT:
+        id_payload = {"_id": self._id} if not exclude_id else {}
+        payload = _as_dict_helper(self)
+        return {
+            **payload,
+            **id_payload
+        }
+
     @classmethod
-    def from_document(cls, document: xJsonT) -> Self:
+    def from_document(cls, document: xJsonT, /) -> Self:
         document = document.copy()
         mro, payload = _collect_mro(cls, include_annotations=True), {}
         annotations = mro.pop("__annotations__")
@@ -308,26 +385,39 @@ class Document:
             annotation = _cls_to_baseclass_from_mro(annotations[name])
             if annotation in _CONVERTERS:
                 converter = _CONVERTERS[annotation]["from"]
-                payload[name] = converter(annotations[name], document[field_name])
+                payload[name] = converter(
+                    annotations[name], document[field_name]
+                )
             else:
-                payload[name] = document[field_name] # TODO: fix dict ordering
-        return cls(**payload).set_id(document.get("_id", ObjectId()))
-        
-    def set_id(self, _id) -> Self:
+                payload[name] = document[field_name]  # TODO: fix dict ordering
+        return cls(**payload).id(document.get("_id", ObjectId()))
+
+    @overload
+    def id(self, _id: None = None, /) -> ObjectId:
+        ...
+
+    @overload
+    def id(self, _id: ObjectId = ..., /) -> Self:
+        ...
+
+    def id(self, _id: Optional[ObjectId] = None, /) -> Union[ObjectId, Self]:
+        if _id is None:
+            return self._id
         self._id = _id
         return self
 
+
 _CONVERTERS: Final = {
     UUID: {
-        "to": lambda uuid: Binary.from_uuid(uuid), 
+        "to": lambda uuid: Binary.from_uuid(uuid),
         "from": lambda _, value: value.as_uuid()
     },
     Enum: {
-        "to": lambda enm: enm.value, 
+        "to": lambda enm: enm.value,
         "from": lambda cls, value: cls(value)
     },
     Document: {
-        "to": lambda doc: doc.to_dict(), 
+        "to": lambda doc: doc.to_dict(),
         "from": lambda cls, value: cls.from_document(value)
     }
 }

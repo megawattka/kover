@@ -9,7 +9,7 @@
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
 
-# The above copyright notice and this permission notice shall be included in all
+# The above copyright notice and this permission notice shall be included in all # noqa: E501
 # copies or substantial portions of the Software.
 
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
@@ -23,4 +23,4 @@
 __version__ = "0.8.0"
 __author__ = "oMegaPB"
 __license__ = "MIT"
-__copyright__ = "Copyright (C) 2024-present oMegaPB <https://github.com/oMegaPB>"
+__copyright__ = "Copyright (C) 2024-present oMegaPB <https://github.com/oMegaPB>"  # noqa: E501

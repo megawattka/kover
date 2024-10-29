@@ -71,7 +71,6 @@ import asyncio
 from enum import Enum
 from typing import Optional
 
-from kover.auth import AuthCredentials
 from kover.client import Kover
 from kover.schema import SchemaGenerator, Document, field
 
@@ -103,14 +102,14 @@ async def main():
         collection = await kover.db.create_collection("test")
     else:
         collection = collections[0]
-    await kover.db.test.set_validator(schema)
+    await collection.set_validator(schema)
 
     valid_user = User("John Doe", 20, UserType.USER, friend=Friend("dima", 18))
-    object_id = await kover.db.test.add_one(valid_user) # specify either model or model.to_dict()
+    object_id = await collection.add_one(valid_user) # specify either model or model.to_dict()
     print(object_id, "added!")
 
     invalid_user = User("Rick", age=15, user_type=UserType.ADMIN, friend=Friend("roma", 25))
-    await kover.db.test.add_one(invalid_user) # kover.exceptions.ErrDocumentValidationFailure: Rick's age is less than 18
+    await collection.add_one(invalid_user) # kover.exceptions.ErrDocumentValidationFailure: Rick's age is less than 18
 
 if __name__ == "__main__":
     asyncio.run(main())

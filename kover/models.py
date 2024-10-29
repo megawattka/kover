@@ -8,6 +8,7 @@ from attrs import field, define
 
 from .typings import COMPRESSION_T, xJsonT
 
+
 @define
 class HelloResult:
     local_time: datetime.datetime
@@ -16,9 +17,11 @@ class HelloResult:
     mechanisms: List[str] = field(default=None)
     compression: COMPRESSION_T = field(default=None)
     requires_auth: bool = field(init=False, repr=False)
-    
+
     def __attrs_post_init__(self) -> None:
-        self.requires_auth = self.mechanisms is not None and len(self.mechanisms) > 0
+        self.requires_auth = self.mechanisms is not None \
+            and len(self.mechanisms) > 0
+
 
 @define
 class BuildInfo:
@@ -32,12 +35,15 @@ class BuildInfo:
     max_bson_obj_size: int
     storage_engines: list[str]
 
+
 @define
 class User:
     user_id: Binary = field(repr=False)
     username: str
     db_name: str
-    mechanisms: List[Literal['SCRAM-SHA-1', 'SCRAM-SHA-256']] = field(repr=False)
+    mechanisms: List[
+        Literal['SCRAM-SHA-1', 'SCRAM-SHA-256']
+    ] = field(repr=False)
     credentials: xJsonT = field(repr=False)
     roles: List[xJsonT]
     auth_restrictions: List[xJsonT] = field(repr=False)

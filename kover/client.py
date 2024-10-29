@@ -11,14 +11,19 @@ from .socket import MongoSocket
 from .database import Database
 from .models import BuildInfo
 
+
 class Kover:
-    def __init__(self, socket: MongoSocket, signature: Optional[bytes]) -> None:
+    def __init__(
+        self,
+        socket: MongoSocket,
+        signature: Optional[bytes]
+    ) -> None:
         self.socket: MongoSocket = socket
         self.signature = signature
 
     async def __aenter__(self) -> Self:
         return self
-    
+
     async def __aexit__(self, *exc) -> bool:
         if self.signature is not None:
             await self.logout()
@@ -31,10 +36,10 @@ class Kover:
 
     def get_database(self, name: str) -> Database:
         return Database(name=name, client=self)
-    
+
     def __getattr__(self, name: str) -> Database:
         return self.get_database(name=name)
-    
+
     @classmethod
     async def make_client(
         cls,
@@ -63,7 +68,7 @@ class Kover:
     async def start_session(self) -> Session:
         req = await self.socket.request({"startSession": 1.0})
         return Session(document=req["id"], socket=self.socket)
-    
+
     async def build_info(self) -> BuildInfo:
         request = await self.socket.request({"buildInfo": 1.0})
         return BuildInfo(
@@ -77,7 +82,7 @@ class Kover:
             max_bson_obj_size=request["maxBsonObjectSize"],
             storage_engines=request["storageEngines"]
         )
-    
+
     async def logout(self):
         await self.socket.request({"logout": 1.0})
 
@@ -85,6 +90,6 @@ class Kover:
         command = {"listDatabases": 1.0, "nameOnly": True}
         request = await self.socket.request(command)
         return [x["name"] for x in request["databases"]]
-    
+
     async def drop_database(self, name: str) -> None:
         await self.socket.request({"dropDatabase": 1.0}, db_name=name)

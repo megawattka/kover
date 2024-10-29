@@ -15,9 +15,15 @@ from .auth import AuthCredentials
 from .models import HelloResult
 from .exceptions import OperationFailure
 
+
 class MongoSocket:
-    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        with pathlib.Path(__file__).parent.joinpath("codes.json").open("r") as fp:
+    def __init__(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter
+    ) -> None:
+        cwd = pathlib.Path(__file__).parent
+        with cwd.joinpath("codes.json").open("r") as fp:
             self.codes = json.load(fp)
         self.reader = reader
         self.writer = writer
@@ -26,16 +32,17 @@ class MongoSocket:
 
     @classmethod
     async def make(
-        cls, 
-        host: str, 
+        cls,
+        host: str,
         port: int,
         loop: Optional[asyncio.AbstractEventLoop] = None
     ) -> MongoSocket:
-        if loop is None:
-            loop = asyncio.get_running_loop()
+        loop = loop or asyncio.get_running_loop()
         reader = asyncio.StreamReader(limit=2 ** 16, loop=loop)
         protocol = asyncio.StreamReaderProtocol(reader, loop=loop)
-        transport, _ = await loop.create_connection(lambda: protocol, host, port)
+        transport, _ = await loop.create_connection(
+            lambda: protocol, host, port
+        )
         writer = asyncio.StreamWriter(transport, protocol, reader, loop)
         return cls(reader, writer)
 
@@ -44,38 +51,44 @@ class MongoSocket:
         await self.writer.drain()
 
     async def recv(self, size: int) -> bytes:
-        return await self.reader.readexactly(size) # ... 13.05.2024 # https://stackoverflow.com/a/29068174
+        # ... 13.05.2024 # https://stackoverflow.com/a/29068174
+        return await self.reader.readexactly(size)
 
-    def get_hello_payload(self, compression: Optional[COMPRESSION_T]) -> xJsonT:
-        uname = os.uname() # TODO: Windows
+    def get_hello_payload(
+        self,
+        compression: Optional[COMPRESSION_T]
+    ) -> xJsonT:
+        uname = os.uname()  # TODO: Windows
         impl = sys.implementation
         platform = impl.name + " " + ".".join(map(str, impl.version))
         payload = {
-            "hello": 1.0, 
+            "hello": 1.0,
             "client": {
                 "driver": {
-                    "name": "Kover", 
+                    "name": "Kover",
                     "version": __version__
-                }, 
+                },
                 "os": {
-                    "type": os.name, 
-                    "name": uname.sysname, 
-                    "architecture": uname.machine, 
+                    "type": os.name,
+                    "name": uname.sysname,
+                    "architecture": uname.machine,
                     "version": uname.release
-                }, 
+                },
                 "platform": platform
             }
         }
         if compression is not None:
             payload["compression"] = compression
         return payload
-    
+
     def _has_error_label(self, label: str, reply: xJsonT) -> bool:
         return label in reply.get("errorLabels", [])
-    
+
     def _construct_exception(self, name: str) -> Type[OperationFailure]:
-        return type(name, (OperationFailure,), {"__module__": "kover.exceptions"})
-    
+        return type(name, (OperationFailure,), {
+            "__module__": "kover.exceptions"
+        })
+
     def _get_exception(self, reply: xJsonT) -> OperationFailure:
         write_errors = False
         if "writeErrors" in reply:
@@ -92,7 +105,7 @@ class MongoSocket:
             exception = self._construct_exception(reply["codeName"])
             return exception(reply["code"], reply["errmsg"])
         return OperationFailure(-1, reply)
-    
+
     async def request(
         self,
         doc: DocumentT,
@@ -100,7 +113,7 @@ class MongoSocket:
         db_name: str = "admin",
         transaction: Optional[Transaction] = None
     ) -> xJsonT:
-        doc = doc.copy(); doc.setdefault("$db", db_name)
+        doc = {**doc, "$db": db_name}
         if transaction is not None and transaction.is_active:
             transaction.apply_to(doc)
         rid, msg = self.serializer.get_message(doc)
@@ -108,7 +121,7 @@ class MongoSocket:
             await self.send(msg)
             header = await self.recv(16)
             length, op_code = self.serializer.verify_rid(header, rid)
-            data = await self.recv(length - 16) # exclude header
+            data = await self.recv(length - 16)  # exclude header
             reply = self.serializer.get_reply(data, op_code)
         if reply.get("ok") != 1.0 or reply.get("writeErrors") is not None:
             exc_value = self._get_exception(reply=reply)
@@ -121,7 +134,7 @@ class MongoSocket:
 
     async def _hello(
         self,
-        compression: Optional[COMPRESSION_T] = None, # TODO: implement
+        compression: Optional[COMPRESSION_T] = None,  # TODO: implement
         credentials: Optional[AuthCredentials] = None
     ) -> HelloResult:
         payload = self.get_hello_payload(compression)
