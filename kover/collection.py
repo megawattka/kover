@@ -208,16 +208,16 @@ class Collection:
     @overload
     def find(
         self,
-        filter: Optional[xJsonT],
-        cls: None
+        filter: Optional[xJsonT] = None,
+        cls: None = ...
     ) -> Cursor[xJsonT]:
         ...
 
     @overload
     def find(
         self,
-        filter: Optional[xJsonT],
-        cls: Type[T]
+        filter: Optional[xJsonT] = None,
+        cls: Optional[Type[T]] = None
     ) -> Cursor[T]:
         ...
 

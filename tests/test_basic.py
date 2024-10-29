@@ -65,7 +65,7 @@ class AsyncTestExample(unittest.IsolatedAsyncioTestCase):
         assert len(cs) == 990
         await collection.delete_many()
         await collection.add_many([users[0]] * 75)
-        cs = await collection.find().batch_size(50).to_list()
+        cs = await collection.find(None).batch_size(50).to_list()
         assert len(cs) == 75
 
         cs = await collection.find({"test": "nonexistent"}).to_list()
@@ -97,9 +97,7 @@ class AsyncTestExample(unittest.IsolatedAsyncioTestCase):
         resp = await collection.find().to_list()
         assert isinstance(resp[0], dict)
 
-        resp = await collection.find({
-            "name": "dima"
-        }, entity_cls=User).to_list()
+        resp = await collection.find(cls=User).to_list()
         assert isinstance(resp[0], User)
         assert resp[0].name == "dima" and resp[0].age == 18
         assert not await collection.delete_one({"name": "drake"})
