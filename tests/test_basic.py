@@ -5,7 +5,7 @@ __import__("sys").path.append(
 import unittest  # noqa: E402
 from uuid import uuid4, UUID  # noqa: E402
 
-from bson import ObjectId, Binary  # noqa: E402
+from bson import ObjectId, Binary, Int64  # noqa: E402
 
 from kover.auth import AuthCredentials  # noqa: E402
 from kover.client import Kover  # noqa: E402
@@ -21,6 +21,7 @@ class User(Document):
 class SubDocument(Document):
     a: int
     b: str
+    uid: Int64
 
 
 class Subclass(User):
@@ -116,7 +117,9 @@ class AsyncTestExample(unittest.IsolatedAsyncioTestCase):
         assert serialized.name == "john" and serialized.age == 16
         assert isinstance(serialized, User) and serialized == user
 
-        sbcls = Subclass("jora", 20, uuid4(), subdocument=SubDocument(1, "5"))
+        subdocument = SubDocument(1, "5", Int64(2893912931299219912919129))
+        print(self.schema_generator.generate(subdocument.__class__))
+        sbcls = Subclass("jora", 20, uuid4(), subdocument=subdocument)
         deserialized = sbcls.to_dict()
         assert len(deserialized.keys()) == 4
         assert isinstance(deserialized["uuid"], Binary)

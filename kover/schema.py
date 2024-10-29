@@ -17,7 +17,7 @@ from typing import (
     Callable
 )
 
-from bson import Binary, ObjectId, Timestamp
+from bson import Binary, ObjectId, Timestamp, Int64
 from attrs import (
     field as _field,
     define,
@@ -45,7 +45,8 @@ TYPE_MAP: dict[type, str] = {
     datetime.datetime: "date",
     Binary: "binData",
     UUID: "binData",
-    Timestamp: "timestamp"
+    Timestamp: "timestamp",
+    Int64: "long"
 }
 
 FIELD_NAME: Final[str] = "field_name"

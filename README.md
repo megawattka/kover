@@ -31,7 +31,8 @@ but its already very cool! <br>
 ill be happy if someone can help me implement missing features.
 
 # Dependencies
-- Linux. it requires some small changes for other systems.
+- Should be available on all platforms.
+    (if not go create issue)
 - pymongo 4.10.1 (latest for now) or later.
 - python 3.10.6
 - im using MongoDB 7.0 but it should also work on MongoDB 6.0

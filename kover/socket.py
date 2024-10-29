@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import platform as sysinfo
 import sys
 import os
 import asyncio
@@ -54,7 +55,7 @@ class MongoSocket:
         self,
         compression: Optional[COMPRESSION_T]
     ) -> xJsonT:
-        uname = os.uname()  # TODO: Windows
+        uname = sysinfo.uname()
         impl = sys.implementation
         platform = impl.name + " " + ".".join(map(str, impl.version))
         payload: xJsonT = {
@@ -66,7 +67,7 @@ class MongoSocket:
                 },
                 "os": {
                     "type": os.name,
-                    "name": uname.sysname,
+                    "name": uname.system,
                     "architecture": uname.machine,
                     "version": uname.release
                 },
@@ -91,12 +92,12 @@ class MongoSocket:
             write_errors = True
             reply = reply["writeErrors"][0]
         if "code" in reply:
-            code = reply["code"]
+            code: int = reply["code"]
             if code in codes:
                 exc_name = codes[code]
                 error = reply["errmsg"] if not write_errors else reply
                 exception = self._construct_exception(exc_name)
-                return exception(reply["code"], error)
+                return exception(code, error)
         if self._has_error_label('TransientTransactionError', reply=reply):
             exception = self._construct_exception(reply["codeName"])
             return exception(reply["code"], reply["errmsg"])

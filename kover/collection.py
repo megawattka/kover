@@ -45,8 +45,8 @@ class Collection:
     async def with_options(self) -> Collection:
         infos = await self.database.list_collections({"name": self.name})
         if not infos:
-            exc_t = f'namespace "{self.name}" not \
-                found in database "{self.database.name}"'
+            db = self.database.name
+            exc_t = f'namespace "{self.name}" not found in database "{db}"'
             raise Exception(exc_t)
         return infos[0]
 
