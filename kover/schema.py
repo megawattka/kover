@@ -293,7 +293,7 @@ class SchemaGenerator:
             cls,
             attr_name,
             "metadata"
-        )
+        ) or {}
         unsupported: List[str] = [FIELD_NAME]
         return {
             _METADATA_KEYS.get(k, k): v
