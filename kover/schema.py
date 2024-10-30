@@ -103,10 +103,10 @@ def _get_field_property(
 ) -> Any:
     _field_obj: Any = getattr(cls, field_name, None)
     cls_name: str = _field_obj.__class__.__name__
-    # handle non-field attrs
+
+    # check if its actual field
     if _field_obj is not None and cls_name == "_CountingAttr":
         return getattr(_field_obj, property_name)  # raise error too
-    return {}  # fallback
 
 
 def _as_dict_helper(obj: "Document", /) -> xJsonT:
