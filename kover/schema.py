@@ -27,6 +27,8 @@ from attrs import (
 
 from .typings import xJsonT, Self, UnionType
 
+InternalConverterT = Optional[Callable[[Any], Any]]
+
 __all__ = [
     "SchemaGenerator",
     "field",
@@ -94,36 +96,17 @@ def _cls_to_baseclass_from_mro(cls: type, /) -> type:
     return cls
 
 
-def _get_metadata(cls: type, name: str, /) -> xJsonT:
-    attr = getattr(cls, name, None)
-    # handle non-field attrs
-    if attr is not None and attr.__class__.__name__ == "_CountingAttr":
-        return attr.metadata
-    return {}
-
-
-def _maybe_convert(
-    payload: xJsonT,
+def _get_field_property(
     cls: type,
-    key: str,
-    value: Any,
-    *,
-    metadata: xJsonT
-) -> None:
-    """
-    converts `value` by `cls` if `cls` in available convertes
-    and replacing it in `payload`.
-    also changes key according to metadata's `field_name`
-
-    `internal use only`
-
-    """
-    converter: Optional[Callable[[Any], Any]] = _CONVERTERS.get(cls, {})\
-        .get("to")
-    if converter is not None:
-        payload[key] = converter(value)
-    if FIELD_NAME in metadata:  # replace keys
-        payload[metadata[FIELD_NAME]] = payload.pop(key)
+    field_name: str,
+    property_name: str
+) -> Any:
+    _field_obj: Any = getattr(cls, field_name, None)
+    cls_name: str = _field_obj.__class__.__name__
+    # handle non-field attrs
+    if _field_obj is not None and cls_name == "_CountingAttr":
+        return getattr(_field_obj, property_name)  # raise error too
+    return {}  # fallback
 
 
 def _as_dict_helper(obj: "Document", /) -> xJsonT:
@@ -134,8 +117,31 @@ def _as_dict_helper(obj: "Document", /) -> xJsonT:
     for key, value in {**payload}.items():  # prevent dict keys change
         # handle subclasses correctly
         cls = _cls_to_baseclass_from_mro(value.__class__)
-        metadata = _get_metadata(obj.__class__, key)
-        _maybe_convert(payload, cls, key, value, metadata=metadata)
+        metadata: xJsonT = _get_field_property(
+            obj.__class__,
+            key,
+            "metadata"
+        ) or {}
+
+        # apply internal converter
+        internal_converter: InternalConverterT = _CONVERTERS.get(
+            cls, {}
+        ).get("to")
+        if internal_converter is not None:
+            payload[key] = internal_converter(value)
+
+        # apply field converter
+        field_converter = _get_field_property(
+            obj.__class__,
+            key,
+            "converter"
+        )
+        if field_converter is not None:
+            payload[key] = field_converter(value)
+
+        # replace keys according to metadata's `field_name` param
+        if FIELD_NAME in metadata:
+            payload[metadata[FIELD_NAME]] = payload.pop(key)
     return payload
 
 
@@ -147,14 +153,14 @@ def _get_parameter_names(obj: Any, /) -> list[str]:
 
 
 class SchemaGenerator:
-    def __init__(self, additional_properties: bool = False) -> None:
+    def __init__(self, *, additional_properties: bool = False) -> None:
         self.additional_properties: bool = additional_properties
 
-    def _get_field_name(self, name: str, cls: type) -> str:
-        metadata = _get_metadata(cls, name)
+    def _get_field_name(self, name: str, cls: type, /) -> str:
+        metadata: xJsonT = _get_field_property(cls, name, "metadata") or {}
         return metadata.get(FIELD_NAME, name)
 
-    def _maybe_add_object_id_signature(self, payload: xJsonT) -> xJsonT:
+    def _maybe_add_object_id_signature(self, payload: xJsonT, /) -> xJsonT:
         if self.additional_properties:
             return payload
         required: List[str] = payload["$jsonSchema"]["required"]
@@ -260,21 +266,21 @@ class SchemaGenerator:
                 attr_name=attr_name,
                 is_optional=is_optional
             ) for cls in args]
-            return self._merge_payloads(payloads=payloads)
+            return self._merge_payloads(payloads)
 
-    def _lookup_type(self, attr_t: Any) -> str:
+    def _lookup_type(self, attr_t: Any, /) -> str:
         try:
             return TYPE_MAP[attr_t]
         except KeyError:
             raise Exception(f"Unsupported annotation: {attr_t}")
 
-    def _is_object(self, attr_t: Any) -> bool:
+    def _is_object(self, attr_t: Any, /) -> bool:
         return isinstance(attr_t, type) and issubclass(attr_t, Document)
 
-    def _is_enum(self, attr_t: Any) -> bool:
+    def _is_enum(self, attr_t: Any, /) -> bool:
         return isinstance(attr_t, type) and issubclass(attr_t, Enum)
 
-    def _merge_payloads(self, payloads: List[xJsonT]) -> xJsonT:
+    def _merge_payloads(self, payloads: List[xJsonT], /) -> xJsonT:
         data: xJsonT = {"bsonType": []}
         for payload in payloads:
             data["bsonType"].extend(payload.pop("bsonType"))
@@ -283,7 +289,11 @@ class SchemaGenerator:
         return data
 
     def _generate_fixed_metadata(self, cls: type, attr_name: str) -> xJsonT:
-        metadata = _get_metadata(cls, attr_name)  # TODO: add more options
+        metadata: xJsonT = _get_field_property(
+            cls,
+            attr_name,
+            "metadata"
+        )
         unsupported: List[str] = [FIELD_NAME]
         return {
             _METADATA_KEYS.get(k, k): v
@@ -301,6 +311,7 @@ def filter_non_null(doc: xJsonT) -> xJsonT:
 def field(
     *,
     default: Any = NOTHING,
+    converter: Any = None,
     title: Optional[str] = None,
     description: Optional[str] = None,
     min: Optional[int] = None,
@@ -315,7 +326,7 @@ def field(
     metadata: Optional[xJsonT] = None
 ) -> Any:
     metadata = metadata or {}
-    not_needed: list[str] = ["metadata", "default", "not_needed"]
+    not_needed: list[str] = ["metadata", "default", "not_needed", "converter"]
     payload = {
         **{k: v for k, v in locals().items() if k not in not_needed},
         **metadata
@@ -323,7 +334,7 @@ def field(
     if unique_items is False:
         del payload["unique_items"]
     metadata = filter_non_null(payload)
-    return _field(default=default, metadata=metadata)
+    return _field(default=default, metadata=metadata, converter=converter)
 
 
 _cls_cache_map: dict[int, type] = {}

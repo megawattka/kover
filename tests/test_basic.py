@@ -118,7 +118,6 @@ class AsyncTestExample(unittest.IsolatedAsyncioTestCase):
         assert isinstance(serialized, User) and serialized == user
 
         subdocument = SubDocument(1, "5", Int64(2893912931299219912919129))
-        print(self.schema_generator.generate(subdocument.__class__))
         sbcls = Subclass("jora", 20, uuid4(), subdocument=subdocument)
         deserialized = sbcls.to_dict()
         assert len(deserialized.keys()) == 4
