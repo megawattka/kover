@@ -193,7 +193,6 @@ class SchemaGenerator:
         }
         for k in mro.keys():
             metadata: xJsonT = _get_field_property(cls, k, "metadata") or {}
-            print(metadata)
             annotation = metadata.get(FIELD_TYPE)
             if annotation is None:
                 annotation = annotations[k]
