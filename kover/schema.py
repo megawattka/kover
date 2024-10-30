@@ -106,7 +106,9 @@ def _get_field_property(
 
     # check if its actual field
     if _field_obj is not None and cls_name == "_CountingAttr":
-        return getattr(_field_obj, property_name)  # raise error too
+        prop = getattr(_field_obj, property_name)  # raise error too
+        if prop is not NOTHING:
+            return prop
 
 
 def _as_dict_helper(obj: "Document", /) -> xJsonT:
@@ -183,7 +185,9 @@ class SchemaGenerator:
             "additionalProperties": self.additional_properties,
         }
         for k in mro.keys():
-            annotation = annotations[k]
+            annotation = _get_field_property(cls, k, "type")
+            if annotation is None:
+                annotation = annotations[k]
             name = self._get_field_name(k, cls)
             payload["properties"][name] = {
                 **self._get_type_data(annotation, attr_name=k),
@@ -311,6 +315,7 @@ def filter_non_null(doc: xJsonT) -> xJsonT:
 def field(
     *,
     default: Any = NOTHING,
+    type: Any = NOTHING,  # for schema generating and stuff
     converter: Any = None,
     title: Optional[str] = None,
     description: Optional[str] = None,
@@ -326,7 +331,13 @@ def field(
     metadata: Optional[xJsonT] = None
 ) -> Any:
     metadata = metadata or {}
-    not_needed: list[str] = ["metadata", "default", "not_needed", "converter"]
+    not_needed: list[str] = [
+        "metadata",
+        "default",
+        "not_needed",
+        "converter",
+        "type"
+    ]
     payload = {
         **{k: v for k, v in locals().items() if k not in not_needed},
         **metadata
@@ -334,7 +345,12 @@ def field(
     if unique_items is False:
         del payload["unique_items"]
     metadata = filter_non_null(payload)
-    return _field(default=default, metadata=metadata, converter=converter)
+    return _field(
+        default=default,
+        metadata=metadata,
+        converter=converter,
+        type=type
+    )
 
 
 _cls_cache_map: dict[int, type] = {}
