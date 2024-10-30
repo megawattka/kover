@@ -22,7 +22,7 @@ from attrs import (
     field as _field,
     define,
     make_class,
-    NOTHING
+    NOTHING,
 )
 
 from .typings import xJsonT, Self, UnionType
@@ -52,6 +52,7 @@ TYPE_MAP: dict[type, str] = {
 }
 
 FIELD_NAME: Final[str] = "field_name"
+FIELD_TYPE: Final[str] = "field_type"
 
 _METADATA_KEYS: dict[str, str] = {
     "min": "minimum",
@@ -64,7 +65,12 @@ _METADATA_KEYS: dict[str, str] = {
 }
 
 
-def _collect_mro(cls: type, /, *, include_annotations: bool = False) -> xJsonT:
+def _collect_mro(
+    cls: type[Any],
+    /,
+    *,
+    include_annotations: bool = False
+) -> xJsonT:
     """
     this collects all fields from class as _CountingAttr from attrs.
     works with subclasses.
@@ -74,7 +80,8 @@ def _collect_mro(cls: type, /, *, include_annotations: bool = False) -> xJsonT:
     if not issubclass(cls, Document):
         raise Exception("is not a Document subclass")
     # respect subclasses order and exclude object and Document
-    for x in cls.mro()[:-2][::-1]:
+    mro: List[type[Any]] = cls.mro()[:-2][::-1]
+    for x in mro:
         for k, v in x.__annotations__.items():
             # fallback if its just annotation
             value = getattr(x, k, _field(type=v))
@@ -185,7 +192,9 @@ class SchemaGenerator:
             "additionalProperties": self.additional_properties,
         }
         for k in mro.keys():
-            annotation = _get_field_property(cls, k, "type")
+            metadata: xJsonT = _get_field_property(cls, k, "metadata") or {}
+            print(metadata)
+            annotation = metadata.get(FIELD_TYPE)
             if annotation is None:
                 annotation = annotations[k]
             name = self._get_field_name(k, cls)
@@ -298,7 +307,7 @@ class SchemaGenerator:
             attr_name,
             "metadata"
         ) or {}
-        unsupported: List[str] = [FIELD_NAME]
+        unsupported: List[str] = [FIELD_NAME, FIELD_TYPE]
         return {
             _METADATA_KEYS.get(k, k): v
             for k, v in metadata.items()
@@ -315,7 +324,7 @@ def filter_non_null(doc: xJsonT) -> xJsonT:
 def field(
     *,
     default: Any = NOTHING,
-    type: Any = NOTHING,  # for schema generating and stuff
+    field_type: Any = NOTHING,  # for schema generating and stuff
     converter: Any = None,
     title: Optional[str] = None,
     description: Optional[str] = None,
@@ -335,8 +344,7 @@ def field(
         "metadata",
         "default",
         "not_needed",
-        "converter",
-        "type"
+        "converter"
     ]
     payload = {
         **{k: v for k, v in locals().items() if k not in not_needed},
@@ -344,12 +352,13 @@ def field(
     }  # remove other
     if unique_items is False:
         del payload["unique_items"]
+    if field_type is NOTHING:
+        del payload["field_type"]
     metadata = filter_non_null(payload)
     return _field(
         default=default,
         metadata=metadata,
-        converter=converter,
-        type=type
+        converter=converter
     )
 
 
@@ -386,10 +395,11 @@ class Document:
         if id(cls) in _cls_cache_map:
             injected = _cls_cache_map[id(cls)]
         else:
+            mro_entries = _collect_mro(cls)
             injected = make_class(
                 cls.__name__,  # create a class with cls name
-                _collect_mro(cls),  # attrs needed for class
-                bases=(define(cls),),  # make cls be a dataclass
+                mro_entries,  # attrs needed for class
+                bases=(define(cls),),  # make cls be a attrs-defined class
                 class_body={"__class__": cls}  # trick for isinstance
             )
             _cls_cache_map[id(cls)] = injected
