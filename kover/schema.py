@@ -564,9 +564,5 @@ _CONVERTERS: Final[dict[type, xJsonT]] = {
     Document: {
         "to": lambda doc: doc.to_dict(),  # type: ignore
         "from": lambda cls, value: cls.from_document(value)  # type: ignore
-    },
-    Int64: {
-        "to": lambda val: int(val),  # type: ignore
-        "from": lambda cls, value: print(cls, value)  # type: ignore
     }
 }

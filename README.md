@@ -111,11 +111,7 @@ async def main():
     generator = SchemaGenerator()
     schema = generator.generate(User)
 
-    collections = await kover.db.list_collections({"name": "test"})
-    if not collections:  # create if not exists
-        collection = await kover.db.create_collection("test")
-    else:
-        collection = collections[0]
+    collection = await kover.db.test.create_if_not_exists()
     await collection.set_validator(schema)
 
     valid_user = User("John Doe", 20, UserType.USER, friend=Friend("dima", 18))
@@ -156,17 +152,18 @@ async def main():
 
     # specify _id directly
     doc: xJsonT = {"_id": ObjectId(), "name": "John", "age": 30}
+    collection = await kover.db.test.create_if_not_exists()
 
     transaction: Transaction
     async with session.start_transaction() as transaction:
-        await kover.db.test.add_one(doc, transaction=transaction)
+        await collection.add_one(doc, transaction=transaction)
         # it should error with duplicate key now
-        await kover.db.test.add_one(doc, transaction=transaction)
+        await collection.add_one(doc, transaction=transaction)
 
     print(transaction.exception, type(transaction.exception))  # if exist
     print(transaction.state)
 
-    found = await kover.db.test.find().to_list()
+    found = await collection.find().to_list()
     print(found)  # no documents found due to transaction abort
 
 if __name__ == "__main__":

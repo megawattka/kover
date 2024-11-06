@@ -38,11 +38,7 @@ async def main():
     generator = SchemaGenerator()
     schema = generator.generate(User)
 
-    collections = await kover.db.list_collections({"name": "test"})
-    if not collections:  # create if not exists
-        collection = await kover.db.create_collection("test")
-    else:
-        collection = collections[0]
+    collection = await kover.db.test.create_if_not_exists()
     await collection.set_validator(schema)
 
     valid_user = User("John Doe", 20, UserType.USER, friend=Friend("dima", 18))
