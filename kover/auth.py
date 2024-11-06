@@ -46,7 +46,10 @@ class Auth:
 
     def parse_scram_response(self, payload: bytes) -> Dict[str, bytes]:
         values = [item.split(b"=", 1) for item in payload.split(b",")]
-        return {k.decode(): v for k, v in values}
+        return {
+            k.decode(): v
+            for k, v in values
+        }
 
     def xor(self, fir: bytes, sec: bytes) -> bytes:
         """XOR two byte strings together."""

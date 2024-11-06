@@ -42,17 +42,25 @@ class Collection:
     def __repr__(self) -> str:
         return f"Collection(name={self.name})"
 
+    async def create_if_not_exists(self) -> Collection:
+        coll = await self.database.list_collections({"name": self.name})
+        if not coll:
+            return await self.database.create_collection(self.name)
+        return coll[0]
+
     async def with_options(self) -> Collection:
         infos = await self.database.list_collections({"name": self.name})
         if not infos:
             db = self.database.name
-            exc_t = f'namespace "{self.name}" not found in database "{db}"'
-            raise Exception(exc_t)
+            raise Exception(
+                f'namespace "{self.name}" not found in database "{db}"'
+            )
         return infos[0]
 
     async def coll_mod(self, params: xJsonT) -> None:
         await self.database.command({
-            "collMod": self.name, **params
+            "collMod": self.name,
+            **params
         })
 
     async def set_validator(
