@@ -112,7 +112,7 @@ def _collect_mro(
             # fallback if its just annotation
             value = getattr(x, k, _field(type=v))
             # check for field
-            if id(value.__class__) != CAID:
+            if not _is_counting_attr(value.__class__):
                 # if its just annotation with value
                 value = _field(default=value, type=v)
             # set the values
@@ -122,6 +122,10 @@ def _collect_mro(
     # cache result
     _mro_cache_map[id(cls)] = these
     return these
+
+
+def _is_counting_attr(attr_t: Any) -> bool:
+    return attr_t is _CountingAttr or isinstance(attr_t, _CountingAttr)
 
 
 def _cls_to_baseclass_from_mro(cls: type, /) -> type:
@@ -141,7 +145,7 @@ def _get_field_property(
     _field_obj: Any = getattr(cls, field_name, None)
 
     # check if its actual field
-    if id(_field_obj) == CAID:
+    if _is_counting_attr(_field_obj):
         prop = getattr(_field_obj, property_name)  # raise error too
         if prop is not NOTHING:
             return prop
@@ -164,15 +168,9 @@ def _as_dict_helper(obj: "Document", /) -> xJsonT:
         )
 
         # apply internal converter
-        if value.__class__ is Int64:
-            # check if its auto converted Long by library
-            vtype = obj.__class__.__annotations__.get(key)
-            if vtype is int:
-                payload[key] = int(payload[key])
-        else:
-            internal_converter = _CONVERTERS.get(cls, {}).get("to")
-            if internal_converter is not None:
-                payload[key] = internal_converter(value)
+        internal_converter = _CONVERTERS.get(cls, {}).get("to")
+        if internal_converter is not None:
+            payload[key] = internal_converter(value)
 
         # apply field converter
         field_converter = _get_field_property(
