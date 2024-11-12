@@ -3,9 +3,10 @@ from __future__ import annotations
 import asyncio
 import random
 from typing import Optional, List, Any
+from typing_extensions import Self
 
 from .auth import AuthCredentials, Auth
-from .typings import xJsonT, Self
+from .typings import xJsonT
 from .session import Session
 from .socket import MongoSocket
 from .database import Database

@@ -9,8 +9,9 @@ from typing import TYPE_CHECKING, Dict
 from attrs import define, field
 from bson import Binary
 from pymongo.saslprep import saslprep
+from typing_extensions import Self
 
-from .typings import xJsonT, Self
+from .typings import xJsonT
 
 if TYPE_CHECKING:
     from .client import MongoSocket

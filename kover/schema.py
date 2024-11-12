@@ -7,15 +7,12 @@ import datetime
 from enum import Enum
 from uuid import UUID
 from typing import (
-    get_origin,
     Union,
     List,
     Any,
-    dataclass_transform,
     Optional,
     Final,
     Literal,
-    overload,
     Iterable,
     TypeVar,
     Callable,
@@ -30,8 +27,15 @@ from attrs import (
     NOTHING,
 )
 from attr._make import _CountingAttr  # type: ignore
+from typing_extensions import (
+    overload,
+    dataclass_transform,
+    get_origin,
+    get_original_bases,
+    Self
+)
 
-from .typings import xJsonT, Self, UnionType
+from .typings import xJsonT, UnionType
 from .exceptions import SchemaGenerationException
 
 T = TypeVar("T")
@@ -128,14 +132,6 @@ def _is_counting_attr(attr_t: Any) -> bool:
     return attr_t is _CountingAttr or isinstance(attr_t, _CountingAttr)
 
 
-def _cls_to_baseclass_from_mro(cls: type, /) -> type:
-    # needed for enums and stuff
-    # <MyEnum foo: bar> will return <class 'Enum'>
-    if hasattr(cls, "mro"):  # not all annotations have mro (e.g Literal)
-        return cls.mro()[-2]  # at this position sits base class
-    return cls
-
-
 def _get_field_property(
     cls: type,
     field_name: str,
@@ -159,7 +155,7 @@ def _as_dict_helper(obj: "Document", /) -> xJsonT:
     payload = {x: getattr(obj, x) for x in _get_parameter_names(obj)}
     for key, value in {**payload}.items():  # prevent dict keys change
         # handle subclasses correctly
-        cls = _cls_to_baseclass_from_mro(value.__class__)
+        cls = get_original_bases(value.__class__)[0]
         metadata: xJsonT = _get_field_property(
             obj.__class__,
             field_name=key,
@@ -524,7 +520,7 @@ class Document:
         annotations = mro.pop("__annotations__")
         for name, attr in mro.items():
             field_name = attr.metadata.get(FIELD_NAME, name)
-            annotation = _cls_to_baseclass_from_mro(annotations[name])
+            annotation = get_original_bases(annotations[name])[0]
             if annotation in _CONVERTERS:
                 converter = _CONVERTERS[annotation]["from"]
                 payload[name] = converter(

@@ -4,10 +4,11 @@ import time
 from enum import Enum
 from typing import TYPE_CHECKING, Optional, Type
 from types import TracebackType
+from typing_extensions import Self
 
 from bson import Int64
 
-from .typings import xJsonT, Self
+from .typings import xJsonT
 
 if TYPE_CHECKING:
     from .client import MongoSocket

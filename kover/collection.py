@@ -6,13 +6,13 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Type,
-    overload,
     TypeVar,
     Union,
     Sequence,
 )
 
 from bson import ObjectId
+from typing_extensions import overload
 
 from .typings import xJsonT
 from .session import Transaction

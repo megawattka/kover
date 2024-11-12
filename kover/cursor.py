@@ -13,8 +13,9 @@ from typing import (
 )
 
 from bson import Int64
+from typing_extensions import Self
 
-from .typings import xJsonT, Self
+from .typings import xJsonT
 from .schema import filter_non_null
 
 if TYPE_CHECKING:
