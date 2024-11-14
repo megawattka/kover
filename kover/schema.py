@@ -520,7 +520,9 @@ class Document:
         annotations = mro.pop("__annotations__")
         for name, attr in mro.items():
             field_name = attr.metadata.get(FIELD_NAME, name)
-            annotation = get_original_bases(annotations[name])[0]
+            annotation = annotations[name]
+            if isinstance(annotation, type):
+                annotation = get_original_bases(annotations[name])[0]
             if annotation in _CONVERTERS:
                 converter = _CONVERTERS[annotation]["from"]
                 payload[name] = converter(
