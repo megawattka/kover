@@ -31,7 +31,6 @@ from typing_extensions import (
     overload,
     dataclass_transform,
     get_origin,
-    get_original_bases,
     Self
 )
 
@@ -128,6 +127,14 @@ def _collect_mro(
     return these
 
 
+def _cls_to_baseclass_from_mro(cls: type, /) -> type:
+    # needed for enums and stuff
+    # <MyEnum foo: bar> will return <class 'Enum'>
+    if hasattr(cls, "mro"):  # not all annotations have mro (e.g Literal)
+        return cls.mro()[-2]  # at this position sits base class
+    return cls
+
+
 def _is_counting_attr(attr_t: Any) -> bool:
     return attr_t is _CountingAttr or isinstance(attr_t, _CountingAttr)
 
@@ -155,7 +162,7 @@ def _as_dict_helper(obj: "Document", /) -> xJsonT:
     payload = {x: getattr(obj, x) for x in _get_parameter_names(obj)}
     for key, value in {**payload}.items():  # prevent dict keys change
         # handle subclasses correctly
-        cls = get_original_bases(value.__class__)[0]
+        cls = _cls_to_baseclass_from_mro(value.__class__)
         metadata: xJsonT = _get_field_property(
             obj.__class__,
             field_name=key,
@@ -520,9 +527,7 @@ class Document:
         annotations = mro.pop("__annotations__")
         for name, attr in mro.items():
             field_name = attr.metadata.get(FIELD_NAME, name)
-            annotation = annotations[name]
-            if isinstance(annotation, type):
-                annotation = get_original_bases(annotations[name])[0]
+            annotation = _cls_to_baseclass_from_mro(annotations[name])
             if annotation in _CONVERTERS:
                 converter = _CONVERTERS[annotation]["from"]
                 payload[name] = converter(
