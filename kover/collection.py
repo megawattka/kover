@@ -19,6 +19,7 @@ from .session import Transaction
 from .cursor import Cursor
 from .schema import Document, filter_non_null
 from .enums import ValidationLevel
+from .models import Index
 
 if TYPE_CHECKING:
     from .database import Database
@@ -108,7 +109,9 @@ class Collection:
             "documents": needed
         }
         await self.database.command(command, transaction=transaction)
-        return [doc["_id"] for doc in needed]
+        return [
+            doc["_id"] for doc in needed
+        ]
 
     async def update_one(
         self,
@@ -296,3 +299,61 @@ class Collection:
         })
         request = await self.database.command(command)
         return request["n"]
+
+    async def convert_to_capped(
+        self,
+        size: int,
+        comment: Optional[str] = None
+    ) -> None:
+        if size <= 0:
+            raise Exception("Cannot set size below zero.")
+        command = filter_non_null({
+            "convertToCapped": self.name,
+            "size": size,
+            "comment": comment
+        })
+        await self.database.command(command)
+
+    # https://www.mongodb.com/docs/manual/reference/command/createIndexes/
+    async def create_indexes(
+        self,
+        indexes: List[Index],
+        comment: Optional[str] = None
+    ) -> None:
+        if len(indexes) == 0:
+            raise Exception("Empty sequence of indexes")
+        command = filter_non_null({
+            "createIndexes": self.name,
+            "indexes": [
+                index.to_dict() for index in indexes
+            ],
+            "comment": comment
+        })
+        await self.database.command(command)
+
+    # https://www.mongodb.com/docs/manual/reference/command/listIndexes/#listindexes
+    async def list_indexes(self) -> List[Index]:
+        r = await self.database.command({"listIndexes": self.name})
+        info = r["cursor"]["firstBatch"]
+        return [Index(
+            name=idx["name"],
+            keys=list(idx["key"]),
+            unique=idx.get("unique", False),
+            hidden=idx.get("hidden", False)
+        ) for idx in info]
+
+    # https://www.mongodb.com/docs/manual/reference/command/reIndex/
+    async def re_index(self) -> None:
+        await self.database.command({"reIndex": self.name})
+
+    async def drop_indexes(
+        self,
+        indexes: Optional[Union[str, List[str]]] = None,
+        drop_all: bool = False
+    ) -> None:
+        if drop_all and indexes is None:
+            indexes = "*"
+        await self.database.command({
+            "dropIndexes": self.name,
+            "index": indexes
+        })

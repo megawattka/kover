@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import datetime
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Union
 
 from bson import Binary
-from attrs import field, define
+from attrs import field, define, asdict
 
 from .typings import COMPRESSION_T, xJsonT
+from .enums import IndexType, IndexDirection
 
 
 @define
@@ -63,3 +64,23 @@ class User:
             privileges=document.get("inheritedPrivileges", []),
             custom_data=document.get("customData", {})
         )
+
+
+# https://www.mongodb.com/docs/manual/reference/command/createIndexes/#example
+@define
+class Index:
+    name: str  # any index name e.g my_index
+    keys: list[str]  # keys that are being indexed
+    unique: bool = False
+    hidden: bool = False
+    index_strategy: Union[IndexDirection, IndexType] = field(
+        repr=False,
+        default=IndexDirection.ASCENDING
+    )
+
+    def to_dict(self) -> xJsonT:
+        payload = asdict(self)
+        payload["key"] = {
+            key: self.index_strategy.value for key in payload.pop("keys")
+        }
+        return payload

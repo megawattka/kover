@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 import asyncio
 import random
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Literal
 from typing_extensions import Self
 
 from .auth import AuthCredentials, Auth
@@ -11,6 +12,7 @@ from .session import Session
 from .socket import MongoSocket
 from .database import Database
 from .models import BuildInfo
+from .schema import filter_non_null
 
 
 class Kover:
@@ -97,3 +99,44 @@ class Kover:
 
     async def drop_database(self, name: str) -> None:
         await self.socket.request({"dropDatabase": 1.0}, db_name=name)
+
+    # https://www.mongodb.com/docs/manual/reference/command/replSetInitiate/
+    async def replica_set_initiate(
+        self,
+        config: Optional[xJsonT] = None
+    ) -> None:
+        await self.socket.request({"replSetInitiate": config or {}})
+
+    # https://www.mongodb.com/docs/manual/reference/command/replSetGetStatus/#mongodb-dbcommand-dbcmd.replSetGetStatus
+    async def get_replica_set_status(self) -> xJsonT:
+        return await self.socket.request({"replSetGetStatus": 1.0})
+
+    # https://www.mongodb.com/docs/manual/reference/command/shutdown/
+    async def shutdown(
+        self,
+        force: bool = False,
+        timeout: Optional[int] = None,
+        comment: Optional[str] = None
+    ) -> None:
+        command = filter_non_null({
+            "shutdown": 1.0,
+            "force": force,
+            "timeoutSecs": timeout,
+            "comment": comment
+        })
+        await self.socket.request(command, wait_response=False)
+
+    # https://www.mongodb.com/docs/manual/reference/command/getCmdLineOpts/#getcmdlineopts
+    async def get_commandline(self) -> list[str]:
+        r = await self.socket.request({"getCmdLineOpts": 1.0})
+        return r["argv"]
+
+    # https://www.mongodb.com/docs/manual/reference/command/getLog/#getlog
+    async def get_log(
+        self,
+        parameter: Literal["global", "startupWarnings"] = "startupWarnings"
+    ) -> List[xJsonT]:
+        r = await self.socket.request({"getLog": parameter})
+        return [
+            json.loads(info) for info in r["log"]
+        ]

@@ -8,7 +8,9 @@ import kover
 from kover import __version__, __author__
 
 if sys.version_info < (3, 10):
-    raise Exception(f"Unsupported python version: {sys.version_info}")
+    raise Exception(
+        f"Unsupported python version: {sys.version_info}. 3.10 is required."
+    )
 
 requirements = Path.cwd() / "requirements.txt"
 install_requires = [

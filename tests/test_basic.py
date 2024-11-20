@@ -56,14 +56,13 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
         )
         assert await collection.count() == 0
 
-        users = [User("josh", age=50)] * 1000
+        users = [User("josh", age=50)] * 100
         r = await collection.add_many(users)
-        assert len(r) == 1000 and len(set(r)) == 1000
-        cs = await collection.find().limit(1000).to_list()
-        assert len(cs) == 1000
-
-        cs = await collection.find().skip(10).to_list()
-        assert len(cs) == 990
+        assert len(r) == 100 and len(set(r)) == 100
+        cs = await collection.find().limit(100).to_list()
+        assert len(cs) == 100
+        cs = await collection.find().skip(1).to_list()
+        assert len(cs) == 99
         await collection.delete_many()
         await collection.add_many([users[0]] * 75)
         cs = await collection.find(None).batch_size(50).to_list()

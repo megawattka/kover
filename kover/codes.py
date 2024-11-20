@@ -6,6 +6,7 @@ codes: dict[int, str] = {
     14: "ErrTypeMismatch",
     18: "ErrAuthenticationFailed",
     20: "ErrIllegalOperation",
+    23: "AlreadyInitialized",
     26: "ErrNamespaceNotFound",
     27: "ErrIndexNotFound",
     28: "ErrUnsuitableValueType",

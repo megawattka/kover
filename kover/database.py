@@ -70,9 +70,9 @@ class Database:
     ) -> User:
         if root is True and roles is None:
             roles = [
-                {'role': 'userAdminAnyDatabase', 'db': self.name},
-                {'role': 'root', 'db': self.name},
-                {'role': 'readWriteAnyDatabase', 'db': self.name}
+                {'role': 'userAdminAnyDatabase', 'db': "admin"},
+                {'role': 'root', 'db': "admin"},
+                {'role': 'readWriteAnyDatabase', 'db': "admin"}
             ]
         if roles is None:
             raise Exception("You need to specify user roles.")
@@ -148,3 +148,7 @@ class Database:
             transaction=transaction,
             db_name=self.name
         )
+
+    async def ping(self) -> bool:
+        r = await self.command({"ping": 1.0})
+        return r["ok"] == 1.0

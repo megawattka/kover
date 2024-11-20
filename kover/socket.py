@@ -4,7 +4,7 @@ import platform as sysinfo
 import sys
 import os
 import asyncio
-from typing import Optional, Type
+from typing import Optional, Type, overload, Literal
 
 from . import __version__
 from .serializer import Serializer
@@ -103,23 +103,49 @@ class MongoSocket:
             return exception(reply["code"], reply["errmsg"])
         return OperationFailure(-1, reply)
 
+    @overload
     async def request(
         self,
         doc: DocumentT,
         *,
         db_name: str = "admin",
-        transaction: Optional[Transaction] = None
+        transaction: Optional[Transaction] = None,
+        wait_response: Literal[True] = True
     ) -> xJsonT:
+        ...
+
+    @overload
+    async def request(
+        self,
+        doc: DocumentT,
+        *,
+        db_name: str = "admin",
+        transaction: Optional[Transaction] = None,
+        wait_response: Literal[False] = False
+    ) -> None:
+        ...
+
+    async def request(
+        self,
+        doc: DocumentT,
+        *,
+        db_name: str = "admin",
+        transaction: Optional[Transaction] = None,
+        wait_response: bool = True
+    ) -> Optional[xJsonT]:
         doc = {**doc, "$db": db_name}
         if transaction is not None and transaction.is_active:
             transaction.apply_to(doc)
         rid, msg = self.serializer.get_message(doc)
         async with self.lock:
             await self.send(msg)
-            header = await self.recv(16)
-            length, op_code = self.serializer.verify_rid(header, rid)
-            data = await self.recv(length - 16)  # exclude header
-            reply = self.serializer.get_reply(data, op_code)
+            if wait_response:
+                header = await self.recv(16)
+                length, op_code = self.serializer.verify_rid(header, rid)
+                data = await self.recv(length - 16)  # exclude header
+                reply = self.serializer.get_reply(data, op_code)
+            else:
+                return
         if reply.get("ok") != 1.0 or reply.get("writeErrors") is not None:
             exc_value = self._get_exception(reply=reply)
             if transaction is not None:
