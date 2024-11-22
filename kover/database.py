@@ -153,5 +153,7 @@ class Database:
         )
 
     async def ping(self) -> bool:
-        r = await self.command({"ping": 1.0})
+        r = await self.command({
+            "ping": 1.0
+        })
         return r["ok"] == 1.0
