@@ -235,19 +235,19 @@ class Collection:
     @overload
     def find(
         self,
-        filter: Optional[xJsonT],
-        cls: Type[T],
-        transaction: Optional[Transaction]
-    ) -> Cursor[T]:
+        filter: Optional[xJsonT] = None,
+        cls: None = None,
+        transaction: Optional[Transaction] = None
+    ) -> Cursor[xJsonT]:
         ...
 
     @overload
     def find(
         self,
-        filter: Optional[xJsonT] = None,
-        cls: None = None,
+        filter: Optional[xJsonT],
+        cls: Type[T],
         transaction: Optional[Transaction] = None
-    ) -> Cursor[xJsonT]:
+    ) -> Cursor[T]:
         ...
 
     def find(
