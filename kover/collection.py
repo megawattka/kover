@@ -74,7 +74,7 @@ class Collection:
             "validationLevel": level.value.lower()
         })
 
-    async def add_one(
+    async def insert_one(
         self,
         doc: Union[xJsonT, Document],
         transaction: Optional[Transaction] = None
@@ -91,7 +91,7 @@ class Collection:
         await self.database.command(command, transaction=transaction)
         return doc["_id"]
 
-    async def add_many(
+    async def insert_many(
         self,
         docs: Sequence[Union[xJsonT, Document]],
         transaction: Optional[Transaction] = None
@@ -346,6 +346,7 @@ class Collection:
     async def re_index(self) -> None:
         await self.database.command({"reIndex": self.name})
 
+    # https://www.mongodb.com/docs/manual/reference/command/dropIndexes/#dropindexes
     async def drop_indexes(
         self,
         indexes: Optional[Union[str, List[str]]] = None,

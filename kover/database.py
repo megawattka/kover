@@ -31,7 +31,8 @@ class Database:
 
     async def list_collections(
         self,
-        filter: Optional[xJsonT] = None
+        filter: Optional[xJsonT] = None,
+        name_only: bool = False
     ) -> List[Collection]:
         request = await self.command({
             "listCollections": 1.0,
@@ -42,7 +43,9 @@ class Database:
             database=self,
             options=x["options"],
             info=x["info"]
-        ) for x in request["cursor"]["firstBatch"]]
+        ) if not name_only else x["name"]
+            for x in request["cursor"]["firstBatch"]
+        ]
 
     async def create_collection(
         self,

@@ -57,14 +57,14 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
         assert await collection.count() == 0
 
         users = [User("josh", age=50)] * 100
-        r = await collection.add_many(users)
+        r = await collection.insert_many(users)
         assert len(r) == 100 and len(set(r)) == 100
         cs = await collection.find().limit(100).to_list()
         assert len(cs) == 100
         cs = await collection.find().skip(1).to_list()
         assert len(cs) == 99
         await collection.delete_many()
-        await collection.add_many([users[0]] * 75)
+        await collection.insert_many([users[0]] * 75)
         cs = await collection.find(None).batch_size(50).to_list()
         assert len(cs) == 75
 
@@ -90,7 +90,7 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
         count = await collection.count()
         assert count == 0
 
-        obj_id = await collection.add_one(document)
+        obj_id = await collection.insert_one(document)
         assert isinstance(obj_id, ObjectId)
         count = await collection.count()
         assert count == 1

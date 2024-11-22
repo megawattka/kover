@@ -140,3 +140,49 @@ class Kover:
         return [
             json.loads(info) for info in r["log"]
         ]
+
+    # https://www.mongodb.com/docs/manual/reference/command/renameCollection/#renamecollection
+    async def rename_collection(
+        self,
+        target: str,
+        new_name: str,
+        drop_target: bool = False,
+        comment: Optional[str] = None
+    ) -> None:
+        command = filter_non_null({
+            "renameCollection": target,
+            "to": new_name,
+            "dropTarget": drop_target,
+            "comment": comment
+        })
+        await self.socket.request(command)
+
+    # https://www.mongodb.com/docs/manual/reference/command/setUserWriteBlockMode/#setuserwriteblockmode
+    async def set_user_write_block_mode(self, param: bool) -> None:
+        await self.socket.request({
+            "setUserWriteBlockMode": 1.0,
+            "global": param
+        })
+
+    # https://www.mongodb.com/docs/manual/reference/command/fsync/#fsync
+    async def fsync(
+        self,
+        timeout: int = 90000,
+        lock: bool = True,
+        comment: Optional[str] = None
+    ) -> None:
+        command = filter_non_null({
+            "fsync": 1.0,
+            "fsyncLockAcquisitionTimeoutMillis": timeout,
+            "lock": lock,
+            "comment": comment
+        })
+        await self.socket.request(command)
+
+    # https://www.mongodb.com/docs/manual/reference/command/fsyncUnlock/#fsyncunlock
+    async def fsync_unlock(self, comment: Optional[str] = None) -> None:
+        command = filter_non_null({
+            "fsyncUnlock": 1.0,
+            "comment": comment
+        })
+        await self.socket.request(command)
