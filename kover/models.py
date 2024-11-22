@@ -81,6 +81,7 @@ class Index:
     def to_dict(self) -> xJsonT:
         payload = asdict(self)
         payload["key"] = {
-            key: self.index_strategy.value for key in payload.pop("keys")
+            key: self.index_strategy.value
+            for key in payload.pop("keys")
         }
         return payload
