@@ -194,7 +194,8 @@ class Collection:
     async def find_one(
         self,
         filter: Optional[xJsonT] = None,
-        cls: None = None
+        cls: None = None,
+        transaction: Optional[Transaction] = None
     ) -> Optional[xJsonT]:
         ...
 
@@ -202,7 +203,8 @@ class Collection:
     async def find_one(
         self,
         filter: Optional[xJsonT],
-        cls: Type[T]
+        cls: Type[T],
+        transaction: Optional[Transaction]
     ) -> Optional[T]:
         ...
 
@@ -210,16 +212,22 @@ class Collection:
     async def find_one(
         self,
         filter: Optional[xJsonT] = None,
-        cls: Type[T] = ...
+        cls: Type[T] = ...,
+        transaction: Optional[Transaction] = ...
     ) -> Optional[T]:
         ...
 
     async def find_one(
         self,
         filter: Optional[xJsonT] = None,
-        cls: Optional[Type[T]] = None
+        cls: Optional[Type[T]] = None,
+        transaction: Optional[Transaction] = None
     ) -> Union[Optional[T], Optional[xJsonT]]:
-        documents = await self.find(filter=filter, cls=cls).limit(1).to_list()
+        documents = await self.find(
+            filter=filter,
+            cls=cls,
+            transaction=transaction
+        ).limit(1).to_list()
         if documents:
             return documents[0]
         return None
@@ -228,7 +236,8 @@ class Collection:
     def find(
         self,
         filter: Optional[xJsonT],
-        cls: Type[T]
+        cls: Type[T],
+        transaction: Optional[Transaction]
     ) -> Cursor[T]:
         ...
 
@@ -236,16 +245,23 @@ class Collection:
     def find(
         self,
         filter: Optional[xJsonT] = None,
-        cls: None = None
+        cls: None = None,
+        transaction: Optional[Transaction] = None
     ) -> Cursor[xJsonT]:
         ...
 
     def find(
         self,
         filter: Optional[xJsonT] = None,
-        cls: Optional[Type[T]] = None
+        cls: Optional[Type[T]] = None,
+        transaction: Optional[Transaction] = None
     ) -> Union[Cursor[T], Cursor[xJsonT]]:
-        return Cursor(filter=filter or {}, collection=self, cls=cls)
+        return Cursor(
+            filter=filter or {},
+            collection=self,
+            cls=cls,
+            transaction=transaction
+        )
 
     async def aggregate(
         self,
@@ -266,6 +282,7 @@ class Collection:
         filter: Optional[xJsonT] = None,
         collation: Optional[xJsonT] = None,
         comment: Optional[str] = None,
+        transaction: Optional[Transaction] = None
     ) -> List[Any]:
         command = filter_non_null({
             "distinct": self.name,
@@ -274,7 +291,7 @@ class Collection:
             "collation": collation,
             "comment": comment
         })
-        request = await self.database.command(command)
+        request = await self.database.command(command, transaction=transaction)
         return request["values"]
 
     async def count(
@@ -284,7 +301,8 @@ class Collection:
         skip: int = 0,
         hint: Optional[str] = None,
         collation: Optional[xJsonT] = None,
-        comment: Optional[str] = None
+        comment: Optional[str] = None,
+        transaction: Optional[Transaction] = None
     ) -> int:
         if not query:
             query = {}
@@ -297,7 +315,7 @@ class Collection:
             "collation": collation,
             "comment": comment
         })
-        request = await self.database.command(command)
+        request = await self.database.command(command, transaction=transaction)
         return request["n"]
 
     async def convert_to_capped(

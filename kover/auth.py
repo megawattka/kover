@@ -61,7 +61,7 @@ class Auth:
             username = username.replace(x, y)
         return username
 
-    async def _start_auth(
+    async def sasl_start(
         self,
         mechanism: str,
         username: str,
@@ -96,7 +96,7 @@ class Auth:
             digestmod = hashlib.sha256
             data = saslprep(credentials.password).encode()
 
-        nonce, server_first, first_bare, cid = await self._start_auth(
+        nonce, server_first, first_bare, cid = await self.sasl_start(
             mechanism,
             credentials.username,
             credentials.db_name

@@ -9,7 +9,3 @@ class OperationFailure(Exception):
 
 class SchemaGenerationException(Exception):
     pass
-
-
-class ClientClosedException(Exception):
-    pass

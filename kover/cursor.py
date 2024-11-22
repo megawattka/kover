@@ -17,6 +17,7 @@ from typing_extensions import Self
 
 from .typings import xJsonT
 from .schema import filter_non_null
+from .session import Transaction
 
 if TYPE_CHECKING:
     from .collection import Collection
@@ -30,7 +31,8 @@ class Cursor(Generic[T]):
         self,
         filter: xJsonT,
         collection: Collection,
-        cls: Optional[Type[Document]] = None
+        cls: Optional[Type[Document]] = None,
+        transaction: Optional[Transaction] = None
     ) -> None:
         self._id: Optional[Int64] = None
         self._collection = collection
@@ -47,6 +49,7 @@ class Cursor(Generic[T]):
         self._second_iteration: bool = False
         self._docs: deque[T] = deque()
         self._cls = cls
+        self._transaction = transaction
 
     async def __aenter__(self) -> Self:
         return self
@@ -108,7 +111,10 @@ class Cursor(Generic[T]):
             return self._docs.popleft()
         if self._id is None:
             query = self.get_query()
-            request = await self._collection.database.command(query)
+            request = await self._collection.database.command(
+                query,
+                transaction=self._transaction
+            )
             docs = request["cursor"]["firstBatch"]
             self._retrieved += len(docs)
             self._id = request["cursor"]["id"]
@@ -122,7 +128,10 @@ class Cursor(Generic[T]):
                 "getMore": Int64(self._id),
                 "collection": self._collection.name
             }
-            request = await self._collection.database.command(command)
+            request = await self._collection.database.command(
+                command,
+                transaction=self._transaction
+            )
             docs = request["cursor"]["nextBatch"]
             self._retrieved += len(docs)
             self._docs.extend(self._map_docs(docs))
