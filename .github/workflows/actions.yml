@@ -16,18 +16,18 @@ jobs:
         python-version: ["3.10"]
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python3 -m pip install --upgrade pip
-        python3 -m pip install attrs pyright flake8 pymongo typing-extensions
-    - name: Lint with pyright
-      run: |
-        python3 -m pyright ./
-    - name: flake8 lint
-      run: |
-        python3 -m flake8 ./
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install Dependencies
+        uses: py-actions/py-dependency-install@v4
+      - name: Lint with pyright
+        run: |
+          python3 -m pip install pyright
+          python3 -m pyright ./
+      - name: flake8 lint
+        run: |
+          python3 -m pip install flake8
+          python3 -m flake8 ./
