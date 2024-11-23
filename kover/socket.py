@@ -13,7 +13,7 @@ from .session import TxnState, Transaction
 from .auth import AuthCredentials
 from .models import HelloResult
 from .exceptions import OperationFailure
-from .codes import codes
+from .codes import codes_to_exc_name
 
 
 class MongoSocket:
@@ -93,8 +93,8 @@ class MongoSocket:
             reply = reply["writeErrors"][0]
         if "code" in reply:
             code: int = reply["code"]
-            if code in codes:
-                exc_name = codes[code]
+            if code in codes_to_exc_name:
+                exc_name = codes_to_exc_name[code]
                 error = reply["errmsg"] if not write_errors else reply
                 exception = self._construct_exception(exc_name)
                 return exception(code, error)

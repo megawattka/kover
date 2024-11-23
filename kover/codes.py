@@ -1,4 +1,4 @@
-codes: dict[int, str] = {
+codes_to_exc_name: dict[int, str] = {
     2: "ErrBadValue",
     9: "ErrFailedToParse",
     11: "ErrUserNotFound",
