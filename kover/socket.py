@@ -27,6 +27,11 @@ class MongoSocket:
         self.serializer = Serializer()
         self.lock = asyncio.Lock()
 
+    def __repr__(self) -> str:
+        # this can return None?
+        host, port = self.writer.get_extra_info("peername") or (None, None)
+        return f"<MongoSocket host={host} port={port}>"
+
     @classmethod
     async def make(
         cls,
@@ -165,6 +170,7 @@ class MongoSocket:
             credentials.apply_to(payload)
 
         hello = await self.request(payload)
+
         return HelloResult(
             mechanisms=hello.get("saslSupportedMechs", []),
             local_time=hello["localTime"],

@@ -4,10 +4,21 @@ import datetime
 from typing import List, Literal, Optional, Union
 
 from bson import Binary
-from attrs import field, define, asdict
+from attrs import field, define, fields
 
 from .typings import COMPRESSION_T, xJsonT
-from .enums import IndexType, IndexDirection
+from .enums import CollationStrength, IndexDirection, IndexType
+from .schema import filter_non_null, to_camel_case, maybe_enum_value
+
+
+class Serializable:
+    def to_dict(self) -> xJsonT:
+        return filter_non_null({
+            to_camel_case(attrib.name): maybe_enum_value(
+                getattr(self, attrib.name)
+            )
+            for attrib in fields(self.__class__)
+        })
 
 
 @define
@@ -25,7 +36,7 @@ class HelloResult:
 
 
 @define
-class BuildInfo:
+class BuildInfo(Serializable):
     version: str
     git_version: str
     allocator: str
@@ -38,7 +49,7 @@ class BuildInfo:
 
 
 @define
-class User:
+class User(Serializable):
     user_id: Binary = field(repr=False)
     username: str
     db_name: str
@@ -58,7 +69,7 @@ class User:
             username=document["user"],
             db_name=document["db"],
             mechanisms=document["mechanisms"],
-            credentials=document["credentials"],
+            credentials=document.get("credentials", {}),
             roles=document["roles"],
             auth_restrictions=document.get("authenticationRestrictions", []),
             privileges=document.get("inheritedPrivileges", []),
@@ -68,20 +79,58 @@ class User:
 
 # https://www.mongodb.com/docs/manual/reference/command/createIndexes/#example
 @define
-class Index:
+class Index(Serializable):
     name: str  # any index name e.g my_index
-    keys: list[str]  # keys that are being indexed
+    key: dict[
+        str,
+        Union[IndexType, IndexDirection]
+    ]
     unique: bool = False
     hidden: bool = False
-    index_strategy: Union[IndexDirection, IndexType] = field(
-        repr=False,
-        default=IndexDirection.ASCENDING
-    )
 
-    def to_dict(self) -> xJsonT:
-        payload = asdict(self)
-        payload["key"] = {
-            key: self.index_strategy.value
-            for key in payload.pop("keys")
-        }
-        return payload
+
+# https://www.mongodb.com/docs/manual/reference/collation/
+@define
+class Collation(Serializable):
+    locale: Optional[str] = None
+    case_level: bool = False
+    case_first: Literal["lower", "upper", "off"] = "off"
+    strength: CollationStrength = CollationStrength.TERTIARY
+    numeric_ordering: bool = False
+    alternate: Literal["non-ignorable", "shifted"] = "non-ignorable"
+    max_variable: Optional[Literal["punct", "space"]] = None
+    backwards: bool = False
+    normalization: bool = False
+
+
+# https://www.mongodb.com/docs/manual/reference/command/update/#syntax
+@define
+class Update(Serializable):
+    q: xJsonT
+    u: xJsonT
+    c: Optional[xJsonT] = None
+    upsert: bool = False
+    multi: bool = False
+    collation: Optional[Collation] = None
+    array_filters: Optional[xJsonT] = None
+    hint: Optional[str] = None
+
+
+# https://www.mongodb.com/docs/manual/reference/write-concern/
+@define
+class WriteConcern(Serializable):
+    w: Union[str, int] = "majority"
+    j: Optional[bool] = None
+    wtimeout: int = 0
+
+
+# https://www.mongodb.com/docs/manual/reference/read-concern/
+@define
+class ReadConcern(Serializable):
+    level: Literal[
+        "local",
+        "available",
+        "majority",
+        "linearizable",
+        "snapshot"
+    ] = "local"

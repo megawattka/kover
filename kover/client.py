@@ -33,6 +33,9 @@ class Kover:
         await self.close()
         return True
 
+    def __repr__(self) -> str:
+        return f"<Kover signature={self.signature} socket={self.socket}>"
+
     async def close(self) -> None:
         self.socket.writer.close()
         await self.socket.writer.wait_closed()
@@ -107,7 +110,7 @@ class Kover:
     ) -> None:
         await self.socket.request({"replSetInitiate": config or {}})
 
-    # https://www.mongodb.com/docs/manual/reference/command/replSetGetStatus/#mongodb-dbcommand-dbcmd.replSetGetStatus
+    # https://www.mongodb.com/docs/manual/reference/command/replSetGetStatus/
     async def get_replica_set_status(self) -> xJsonT:
         return await self.socket.request({"replSetGetStatus": 1.0})
 
@@ -126,7 +129,7 @@ class Kover:
         })
         await self.socket.request(command, wait_response=False)
 
-    # https://www.mongodb.com/docs/manual/reference/command/getCmdLineOpts/#getcmdlineopts
+    # https://www.mongodb.com/docs/manual/reference/command/getCmdLineOpts/
     async def get_commandline(self) -> list[str]:
         r = await self.socket.request({"getCmdLineOpts": 1.0})
         return r["argv"]
@@ -141,7 +144,7 @@ class Kover:
             json.loads(info) for info in r["log"]
         ]
 
-    # https://www.mongodb.com/docs/manual/reference/command/renameCollection/#renamecollection
+    # https://www.mongodb.com/docs/manual/reference/command/renameCollection/
     async def rename_collection(
         self,
         target: str,
@@ -157,14 +160,14 @@ class Kover:
         })
         await self.socket.request(command)
 
-    # https://www.mongodb.com/docs/manual/reference/command/setUserWriteBlockMode/#setuserwriteblockmode
+    # https://www.mongodb.com/docs/manual/reference/command/setUserWriteBlockMode/
     async def set_user_write_block_mode(self, param: bool) -> None:
         await self.socket.request({
             "setUserWriteBlockMode": 1.0,
             "global": param
         })
 
-    # https://www.mongodb.com/docs/manual/reference/command/fsync/#fsync
+    # https://www.mongodb.com/docs/manual/reference/command/fsync/
     async def fsync(
         self,
         timeout: int = 90000,
@@ -179,7 +182,7 @@ class Kover:
         })
         await self.socket.request(command)
 
-    # https://www.mongodb.com/docs/manual/reference/command/fsyncUnlock/#fsyncunlock
+    # https://www.mongodb.com/docs/manual/reference/command/fsyncUnlock/
     async def fsync_unlock(self, comment: Optional[str] = None) -> None:
         command = filter_non_null({
             "fsyncUnlock": 1.0,

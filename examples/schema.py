@@ -44,7 +44,7 @@ async def main():
     valid_user = User("John Doe", 20, UserType.USER, friend=Friend("dima", 18))
 
     # function accepts either valid_user or valid_user.to_dict()
-    object_id = await collection.insert_one(valid_user)
+    object_id = await collection.insert(valid_user)
     print(object_id, "added!")
 
     invalid_user = User(
@@ -54,7 +54,7 @@ async def main():
         friend=Friend("roma", 25)
     )
     # kover.exceptions.ErrDocumentValidationFailure: Rick's age is less than 18
-    await collection.insert_one(invalid_user)
+    await collection.insert(invalid_user)
 
 if __name__ == "__main__":
     asyncio.run(main())

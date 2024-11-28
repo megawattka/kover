@@ -17,9 +17,9 @@ async def main():
 
     transaction: Transaction
     async with session.start_transaction() as transaction:
-        await collection.insert_one(doc, transaction=transaction)
+        await collection.insert(doc, transaction=transaction)
         # it should error with duplicate key now
-        await collection.insert_one(doc, transaction=transaction)
+        await collection.insert(doc, transaction=transaction)
 
     print(transaction.exception, type(transaction.exception))  # if exist
     print(transaction.state)

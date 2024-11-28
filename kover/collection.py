@@ -9,6 +9,7 @@ from typing import (
     TypeVar,
     Union,
     Sequence,
+    Literal
 )
 
 from bson import ObjectId
@@ -17,14 +18,20 @@ from typing_extensions import overload
 from .typings import xJsonT
 from .session import Transaction
 from .cursor import Cursor
-from .schema import Document, filter_non_null
-from .enums import ValidationLevel
-from .models import Index
+from .enums import ValidationLevel, IndexDirection, IndexType
+from .models import Index, Collation, Update, ReadConcern, WriteConcern
+from .schema import (
+    Document,
+    filter_non_null,
+    ensure_document,
+    maybe_to_dict
+)
 
 if TYPE_CHECKING:
     from .database import Database
 
 T = TypeVar("T", bound=Document)
+MaybeDocument = Union[xJsonT, Document]
 
 
 class Collection:
@@ -58,6 +65,7 @@ class Collection:
             )
         return infos[0]
 
+    # https://www.mongodb.com/docs/manual/reference/command/collMod/
     async def coll_mod(self, params: xJsonT) -> None:
         await self.database.command({
             "collMod": self.name,
@@ -67,6 +75,7 @@ class Collection:
     async def set_validator(
         self,
         validator: xJsonT,
+        *,
         level: ValidationLevel = ValidationLevel.MODERATE
     ) -> None:
         await self.coll_mod({
@@ -74,127 +83,155 @@ class Collection:
             "validationLevel": level.value.lower()
         })
 
-    async def insert_one(
+    @overload
+    async def insert(
         self,
-        doc: Union[xJsonT, Document],
+        ivalue: MaybeDocument,
+        /,
+        *,
+        ordered: bool = True,
+        max_time_ms: int = 0,
+        bypass_document_validation: bool = False,
+        comment: Optional[str] = None,
         transaction: Optional[Transaction] = None
     ) -> ObjectId:
-        if isinstance(doc, Document):
-            doc = doc.to_dict()
-        doc = doc.copy()
-        doc.setdefault("_id", ObjectId())
-        command: xJsonT = {
-            "insert": self.name,
-            "ordered": True,
-            "documents": [doc]
-        }
-        await self.database.command(command, transaction=transaction)
-        return doc["_id"]
+        ...
 
-    async def insert_many(
+    @overload
+    async def insert(
         self,
-        docs: Sequence[Union[xJsonT, Document]],
+        ivalue: Sequence[MaybeDocument],
+        /,
+        *,
+        ordered: bool = True,
+        max_time_ms: int = 0,
+        bypass_document_validation: bool = False,
+        comment: Optional[str] = None,
         transaction: Optional[Transaction] = None
     ) -> List[ObjectId]:
-        assert len(docs) > 0, "Empty sequence of documents"
-        needed: List[xJsonT] = []
-        for doc in docs:
-            if isinstance(doc, Document):
-                doc = doc.to_dict()
-            doc.setdefault("_id", ObjectId())
-            needed.append(doc)
+        ...
+
+    # https://www.mongodb.com/docs/manual/reference/command/insert/
+    async def insert(
+        self,
+        ivalue: Union[MaybeDocument, Sequence[MaybeDocument]],
+        /,
+        *,
+        ordered: bool = True,
+        max_time_ms: int = 0,
+        bypass_document_validation: bool = False,
+        comment: Optional[str] = None,
+        transaction: Optional[Transaction] = None
+    ) -> Union[List[ObjectId], ObjectId]:
+        multi = isinstance(ivalue, Sequence)
+        if multi:
+            docs = [ensure_document(doc, add_id=True) for doc in ivalue]
+        else:
+            docs = [ensure_document(ivalue, add_id=True)]
         command: xJsonT = {
             "insert": self.name,
-            "ordered": True,
-            "documents": needed
+            "ordered": ordered,
+            "documents": docs,
+            "maxTimeMS": max_time_ms,
+            "bypassDocumentValidation": bypass_document_validation,
+            "comment": comment
         }
         await self.database.command(command, transaction=transaction)
-        return [
-            doc["_id"] for doc in needed
+        inserted = [
+            doc["_id"] for doc in docs
         ]
+        return inserted[0] if not multi else inserted
 
-    async def update_one(
+    # https://www.mongodb.com/docs/manual/reference/command/update/
+    async def update(
         self,
-        filter: xJsonT,
-        to_replace: xJsonT,
-        upsert: bool = False,
+        *updates: Update,
+        ordered: bool = True,
+        max_time_ms: int = 0,
+        bypass_document_validation: bool = False,
+        comment: Optional[str] = None,
+        let: Optional[xJsonT] = None,
         transaction: Optional[Transaction] = None
     ) -> int:
-        command: xJsonT = {
+        command = filter_non_null({
             "update": self.name,
-            "ordered": True,
-            "updates": [{
-                "q": filter,
-                "u": {
-                    "$set": to_replace
-                },
-                "multi": False,
-                "upsert": upsert
-            }]
-        }
-        request = await self.database.command(command, transaction=transaction)
+            "updates": [update.to_dict() for update in updates],
+            "ordered": ordered,
+            "maxTimeMS": max_time_ms,
+            "bypassDocumentValidation": bypass_document_validation,
+            "comment": comment,
+            "let": let
+        })
+
+        request = await self.database.command(
+            command,
+            transaction=transaction
+        )
         return request["nModified"]
 
-    async def update_many(
-        self,
-        filter: xJsonT,
-        to_replace: xJsonT,
-        upsert: bool = False,
-        transaction: Optional[Transaction] = None
-    ) -> int:
-        params: xJsonT = {
-            "update": self.name,
-            "ordered": True,
-            "updates": [{
-                "q": filter,
-                "u": {
-                    "$set": to_replace
-                },
-                "multi": True,
-                "upsert": upsert
-            }]
-        }
-        request = await self.database.command(params, transaction=transaction)
-        return request["nModified"]
-
+    # .delete_one and .delete_many were separated because a limit.
+    # Default is 0 but if you forget it youll lose all data
+    # in collection. Naming saves situation
     async def delete_one(
         self,
         filter: Optional[xJsonT] = None,
+        *,
+        collation: Optional[Collation] = None,
+        hint: Optional[Union[xJsonT, str]] = None,
+        comment: Optional[str] = None,
+        let: Optional[xJsonT] = None,
+        ordered: bool = True,
+        max_time_ms: int = 0,
         transaction: Optional[Transaction] = None
     ) -> bool:
-        params: xJsonT = {
-            "delete": self.name,
-            "ordered": True,
-            "deletes": [{
-                "q": filter or {},
-                "limit": 1
-            }]
-        }
-        request = await self.database.command(params, transaction=transaction)
-        return bool(request["n"])
+        result = await self.delete_many(
+            filter=filter,
+            limit=1,
+            collation=collation,
+            hint=hint,
+            comment=comment,
+            let=let,
+            ordered=ordered,
+            max_time_ms=max_time_ms,
+            transaction=transaction
+        )
+        return bool(result)
 
+    # https://www.mongodb.com/docs/manual/reference/command/delete/
     async def delete_many(
         self,
         filter: Optional[xJsonT] = None,
+        *,
         limit: int = 0,
+        collation: Optional[Collation] = None,
+        hint: Optional[Union[xJsonT, str]] = None,
+        comment: Optional[str] = None,
+        let: Optional[xJsonT] = None,
+        ordered: bool = True,
+        max_time_ms: int = 0,
         transaction: Optional[Transaction] = None
     ) -> int:
-        params: xJsonT = {
+        params = filter_non_null({
             "delete": self.name,
-            "ordered": True,
-            "deletes": [{
+            "ordered": ordered,
+            "deletes": [filter_non_null({
                 "q": filter or {},
-                "limit": limit
-            }]
-        }
+                "limit": limit,
+                "collation": maybe_to_dict(collation),
+                "hint": hint
+            })],
+            "comment": comment,
+            "let": let,
+            "maxTimeMS": max_time_ms
+        })
         request = await self.database.command(params, transaction=transaction)
         return request["n"]
 
     @overload
     async def find_one(
         self,
-        filter: Optional[xJsonT] = None,
-        cls: None = None,
+        filter: Optional[xJsonT],
+        cls: Literal[None],
         transaction: Optional[Transaction] = None
     ) -> Optional[xJsonT]:
         ...
@@ -202,21 +239,13 @@ class Collection:
     @overload
     async def find_one(
         self,
-        filter: Optional[xJsonT],
-        cls: Type[T],
-        transaction: Optional[Transaction]
-    ) -> Optional[T]:
-        ...
-
-    @overload
-    async def find_one(
-        self,
         filter: Optional[xJsonT] = None,
-        cls: Type[T] = ...,
-        transaction: Optional[Transaction] = ...
+        cls: Type[T] = Document,
+        transaction: Optional[Transaction] = None
     ) -> Optional[T]:
         ...
 
+    # same as .find but has implicit .to_list and limit 1
     async def find_one(
         self,
         filter: Optional[xJsonT] = None,
@@ -230,13 +259,12 @@ class Collection:
         ).limit(1).to_list()
         if documents:
             return documents[0]
-        return None
 
     @overload
     def find(
         self,
-        filter: Optional[xJsonT] = None,
-        cls: None = None,
+        filter: Optional[xJsonT],
+        cls: Literal[None],
         transaction: Optional[Transaction] = None
     ) -> Cursor[xJsonT]:
         ...
@@ -244,8 +272,8 @@ class Collection:
     @overload
     def find(
         self,
-        filter: Optional[xJsonT],
-        cls: Type[T],
+        filter: Optional[xJsonT] = None,
+        cls: Type[T] = Document,
         transaction: Optional[Transaction] = None
     ) -> Cursor[T]:
         ...
@@ -263,64 +291,103 @@ class Collection:
             transaction=transaction
         )
 
+    # https://www.mongodb.com/docs/manual/reference/command/aggregate/
     async def aggregate(
         self,
         pipeline: List[xJsonT],
+        *,
+        explain: bool = False,
+        allow_disk_use: bool = True,
+        cursor: Optional[xJsonT] = None,
+        max_time_ms: int = 0,
+        bypass_document_validation: bool = False,
+        read_concern: Optional[ReadConcern] = None,
+        collation: Optional[Collation] = None,
+        hint: Optional[str] = None,
+        comment: Optional[str] = None,
+        write_concern: Optional[WriteConcern] = None,
+        let: Optional[xJsonT] = None,
         transaction: Optional[Transaction] = None
     ) -> List[Any]:
-        cmd: xJsonT = {
+        command = filter_non_null({
             "aggregate": self.name,
             "pipeline": pipeline,
-            "cursor": {}
-        }
-        request = await self.database.command(cmd, transaction=transaction)
+            "cursor": cursor or {},
+            "explain": explain,
+            "allowDiskUse": allow_disk_use,
+            "maxTimeMS": max_time_ms,
+            "bypassDocumentValidation": bypass_document_validation,
+            "readConcern": maybe_to_dict(read_concern),
+            "collation": maybe_to_dict(collation),
+            "hint": hint,
+            "comment": comment,
+            "writeConcern": maybe_to_dict(write_concern),
+            "let": let
+        })
+        request = await self.database.command(
+            command,
+            transaction=transaction
+        )
         return request["cursor"]["firstBatch"]
 
+    # https://www.mongodb.com/docs/manual/reference/command/distinct/
     async def distinct(
         self,
         key: str,
-        filter: Optional[xJsonT] = None,
-        collation: Optional[xJsonT] = None,
+        query: Optional[xJsonT] = None,
+        collation: Optional[Collation] = None,
         comment: Optional[str] = None,
+        read_concern: Optional[ReadConcern] = None,
+        hint: Optional[str] = None,
         transaction: Optional[Transaction] = None
     ) -> List[Any]:
         command = filter_non_null({
             "distinct": self.name,
             "key": key,
-            "query": filter or {},
-            "collation": collation,
-            "comment": comment
+            "query": query or {},
+            "collation": maybe_to_dict(collation),
+            "comment": comment,
+            "readConcern": maybe_to_dict(read_concern),
+            "hint": hint
         })
-        request = await self.database.command(command, transaction=transaction)
+        request = await self.database.command(
+            command,
+            transaction=transaction
+        )
         return request["values"]
 
+    # https://www.mongodb.com/docs/manual/reference/command/count
     async def count(
         self,
         query: Optional[xJsonT] = None,
         limit: int = 0,
         skip: int = 0,
         hint: Optional[str] = None,
-        collation: Optional[xJsonT] = None,
+        collation: Optional[Collation] = None,
         comment: Optional[str] = None,
+        max_time_ms: int = 0,
+        read_concern: Optional[ReadConcern] = None,
         transaction: Optional[Transaction] = None
     ) -> int:
-        if not query:
-            query = {}
         command = filter_non_null({
             "count": self.name,
-            "query": query,
+            "query": query or {},
             "limit": limit,
+            "maxTimeMS": max_time_ms,
+            "readConcern": maybe_to_dict(read_concern),
             "skip": skip,
             "hint": hint,
-            "collation": collation,
+            "collation": maybe_to_dict(collation),
             "comment": comment
         })
         request = await self.database.command(command, transaction=transaction)
         return request["n"]
 
+    # https://www.mongodb.com/docs/manual/reference/command/convertToCapped/
     async def convert_to_capped(
         self,
         size: int,
+        write_concern: Optional[WriteConcern] = None,
         comment: Optional[str] = None
     ) -> None:
         if size <= 0:
@@ -328,14 +395,15 @@ class Collection:
         command = filter_non_null({
             "convertToCapped": self.name,
             "size": size,
-            "comment": comment
+            "comment": comment,
+            "writeConcern": maybe_to_dict(write_concern)
         })
         await self.database.command(command)
 
     # https://www.mongodb.com/docs/manual/reference/command/createIndexes/
     async def create_indexes(
         self,
-        indexes: List[Index],
+        *indexes: Index,
         comment: Optional[str] = None
     ) -> None:
         if len(indexes) == 0:
@@ -349,13 +417,16 @@ class Collection:
         })
         await self.database.command(command)
 
-    # https://www.mongodb.com/docs/manual/reference/command/listIndexes/#listindexes
+    # https://www.mongodb.com/docs/manual/reference/command/listIndexes/
     async def list_indexes(self) -> List[Index]:
         r = await self.database.command({"listIndexes": self.name})
         info = r["cursor"]["firstBatch"]
         return [Index(
             name=idx["name"],
-            keys=list(idx["key"]),
+            key={
+                k: IndexDirection(v) if isinstance(v, int) else IndexType(v)
+                for k, v in idx["key"].items()
+            },
             unique=idx.get("unique", False),
             hidden=idx.get("hidden", False)
         ) for idx in info]
@@ -364,10 +435,12 @@ class Collection:
     async def re_index(self) -> None:
         await self.database.command({"reIndex": self.name})
 
-    # https://www.mongodb.com/docs/manual/reference/command/dropIndexes/#dropindexes
+    # https://www.mongodb.com/docs/manual/reference/command/dropIndexes/
     async def drop_indexes(
         self,
-        indexes: Optional[Union[str, List[str]]] = None,
+        indexes: Optional[
+            Union[str, List[str]]
+        ] = None,
         drop_all: bool = False
     ) -> None:
         if drop_all and indexes is None:

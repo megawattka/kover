@@ -16,7 +16,9 @@ from typing import (
     Iterable,
     TypeVar,
     Callable,
-    ParamSpec
+    ParamSpec,
+    MutableMapping,
+    cast
 )
 
 from bson import Binary, ObjectId, Timestamp, Int64
@@ -35,7 +37,10 @@ from typing_extensions import (
 )
 
 from .typings import xJsonT, UnionType
-from .exceptions import SchemaGenerationException
+from .exceptions import (
+    SchemaGenerationException,
+    CorruptedDocument
+)
 
 T = TypeVar("T")
 P = ParamSpec('P')
@@ -421,7 +426,21 @@ def chain(iterable: Iterable[Iterable[T]]) -> List[T]:
 
 
 def filter_non_null(doc: xJsonT) -> xJsonT:
-    return {k: v for k, v in doc.items() if v is not None}
+    return {
+        k: v for k, v in doc.items() if v is not None
+    }
+
+
+def ensure_document(
+    doc: Union[xJsonT, "Document"],
+    add_id: bool = False
+) -> xJsonT:
+    if isinstance(doc, Document):
+        doc = doc.to_dict()
+    if add_id:
+        doc = doc.copy()
+        doc.setdefault("_id", ObjectId())
+    return doc
 
 
 # https://www.mongodb.com/docs/manual/reference/operator/query/jsonSchema/#available-keywords
@@ -527,6 +546,8 @@ class Document:
         annotations = mro.pop("__annotations__")
         for name, attr in mro.items():
             field_name = attr.metadata.get(FIELD_NAME, name)
+            if field_name not in document:
+                raise CorruptedDocument(field_name)
             annotation = _cls_to_baseclass_from_mro(annotations[name])
             if annotation in _CONVERTERS:
                 converter = _CONVERTERS[annotation]["from"]
@@ -567,3 +588,24 @@ _CONVERTERS: Final[dict[type, xJsonT]] = {
         "from": lambda cls, value: cls.from_document(value)  # type: ignore
     }
 }
+
+
+# https://stackoverflow.com/questions/19053707/converting-snake-case-to-lower-camel-case-lowercamelcase
+def to_camel_case(attr_name: str) -> str:
+    camel = "".join(x.capitalize() for x in attr_name.lower().split("_"))
+    return camel[0].lower() + camel[1:]
+
+
+def maybe_enum_value(val: Any) -> Any:
+    if isinstance(val, MutableMapping):
+        for k, v in val.items():  # type: ignore
+            val[k] = maybe_enum_value(v)
+    if isinstance(val, Enum):
+        return val.value
+    return cast(Any, val)
+
+
+def maybe_to_dict(obj: Any) -> Any:
+    if isinstance(obj, Document):
+        return obj.to_dict()
+    return obj

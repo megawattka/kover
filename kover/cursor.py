@@ -9,7 +9,8 @@ from typing import (
     TypeVar,
     Type,
     cast,
-    Any
+    Any,
+    Union
 )
 
 from bson import Int64
@@ -18,6 +19,7 @@ from typing_extensions import Self
 from .typings import xJsonT
 from .schema import filter_non_null
 from .session import Transaction
+from .models import Collation
 
 if TYPE_CHECKING:
     from .collection import Collection
@@ -42,6 +44,7 @@ class Cursor(Generic[T]):
         self._sort: Optional[xJsonT] = None
         self._skip: int = 0
         self._limit: int = 0
+        self._hint: Optional[Union[str, xJsonT]] = None
         self._batch_size: int = 101
         self._comment: Optional[str] = None
         self._retrieved: int = 0
@@ -50,6 +53,7 @@ class Cursor(Generic[T]):
         self._docs: deque[T] = deque()
         self._cls = cls
         self._transaction = transaction
+        self._collation: Optional[Collation] = None
 
     async def __aenter__(self) -> Self:
         return self
@@ -81,7 +85,12 @@ class Cursor(Generic[T]):
         self._comment = comment
         return self
 
+    def hint(self, hint: Union[str, xJsonT]) -> Self:
+        self._hint = hint
+        return self
+
     def get_query(self) -> xJsonT:
+        collation = self._collation.to_dict() if self._collation else None
         return filter_non_null({
             "find": self._collection.name,
             "filter": self._filter,
@@ -90,7 +99,9 @@ class Cursor(Generic[T]):
             "projection": self._projection,
             "sort": self._sort,
             "batchSize": self._batch_size,
-            "comment": self._comment
+            "comment": self._comment,
+            "collation": collation,
+            "hint": self._hint
         })
 
     def _map_docs(

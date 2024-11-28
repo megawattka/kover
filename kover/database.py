@@ -32,11 +32,16 @@ class Database:
     async def list_collections(
         self,
         filter: Optional[xJsonT] = None,
-        name_only: bool = False
+        name_only: bool = False,
+        authorized_collections: bool = False,
+        comment: Optional[str] = None
     ) -> List[Collection]:
         request = await self.command({
             "listCollections": 1.0,
-            "filter": filter or {}
+            "filter": filter or {},
+            "nameOnly": name_only,
+            "authorizedCollections": authorized_collections,
+            "comment": comment
         })
         return [Collection(
             name=x["name"],
@@ -58,7 +63,9 @@ class Database:
         return self.get_collection(name)
 
     async def drop_collection(self, name: str) -> None:
-        await self.command({"drop": name})
+        await self.command({
+            "drop": name
+        })
 
     # https://gist.github.com/xandout/61d25df23a77236ab28236650f84ce6b
     async def create_user(
@@ -98,7 +105,9 @@ class Database:
 
     async def users_info(
         self,
-        query: Optional[Union[str, float, xJsonT, List[xJsonT]]] = None,
+        query: Optional[
+            Union[str, xJsonT, List[xJsonT]]
+        ] = None,
         show_credentials: bool = False,
         show_custom_data: bool = False,
         show_privileges: bool = False,
@@ -107,7 +116,7 @@ class Database:
         comment: Optional[str] = None
     ) -> List[User]:
         if query is None:
-            query = 1.0
+            query = 1.0  # type: ignore
         command = filter_non_null({
             "usersInfo": query,
             "showCredentials": show_credentials,
@@ -118,7 +127,9 @@ class Database:
             "comment": comment
         })
         request = await self.command(command)
-        return [User.from_json(x) for x in request["users"]]
+        return [
+            User.from_json(x) for x in request["users"]
+        ]
 
     async def drop_user(
         self,
@@ -144,6 +155,8 @@ class Database:
     async def command(
         self,
         doc: xJsonT,
+        /,
+        *,
         transaction: Optional[Transaction] = None
     ) -> xJsonT:
         return await self.client.socket.request(
@@ -152,6 +165,7 @@ class Database:
             db_name=self.name
         )
 
+    # https://www.mongodb.com/docs/manual/reference/command/ping/
     async def ping(self) -> bool:
         r = await self.command({
             "ping": 1.0
