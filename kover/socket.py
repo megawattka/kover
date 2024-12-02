@@ -138,7 +138,10 @@ class MongoSocket:
         transaction: Optional[Transaction] = None,
         wait_response: bool = True
     ) -> Optional[xJsonT]:
-        doc = {**doc, "$db": db_name}
+        doc = {
+            **doc,
+            "$db": db_name
+        }
         if transaction is not None and transaction.is_active:
             transaction.apply_to(doc)
         rid, msg = self.serializer.get_message(doc)

@@ -72,7 +72,9 @@ class Database:
         self,
         name: str,
         password: str,
-        roles: Optional[Sequence[Union[xJsonT, str]]] = None,
+        roles: Optional[
+            Sequence[Union[xJsonT, str]]
+        ] = None,
         custom_data: Optional[xJsonT] = None,
         mechanisms: List[str] = ["SCRAM-SHA-1", "SCRAM-SHA-256"],
         comment: Optional[str] = None,

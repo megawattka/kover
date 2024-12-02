@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-__version__ = "1.5.2a"
+__version__ = "1.6.0b"
 __author__ = "oMegaPB"
 __license__ = "MIT"
 __copyright__ = "Copyright (C) 2024-present oMegaPB <https://github.com/oMegaPB>"  # noqa: E501

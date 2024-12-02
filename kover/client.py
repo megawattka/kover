@@ -89,7 +89,7 @@ class Kover:
             storage_engines=request["storageEngines"]
         )
 
-    async def logout(self):
+    async def logout(self) -> None:
         await self.socket.request({"logout": 1.0})
 
     async def list_database_names(self) -> List[str]:

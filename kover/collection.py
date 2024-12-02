@@ -50,6 +50,9 @@ class Collection:
     def __repr__(self) -> str:
         return f"Collection(name={self.name})"
 
+    def __getattr__(self, name: str) -> Collection:
+        return self.database.get_collection(f"{self.name}.{name}")
+
     async def create_if_not_exists(self) -> Collection:
         coll = await self.database.list_collections({"name": self.name})
         if not coll:

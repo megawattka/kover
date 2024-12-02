@@ -310,6 +310,10 @@ class SchemaGenerator:
                         **self._get_type_data(cls_, attr_name=attr_name)
                     }
                 }
+            elif origin is dict:
+                return {
+                    "bsonType": ["object"] + (["null"] if is_optional else []),
+                }
             if not isinstance(attr_t, type):
                 _args = attr_t.__class__, attr_t
                 raise SchemaGenerationException(
@@ -449,6 +453,7 @@ def field(
     *,
     default: Any = NOTHING,
     converter: Any = None,
+    repr: Any = True,
     title: Optional[str] = None,
     description: Optional[str] = None,
     min: Optional[int] = None,
@@ -468,7 +473,8 @@ def field(
         "metadata",
         "default",
         "not_needed",
-        "converter"
+        "converter",
+        "repr"
     ]
     payload = {
         **{k: v for k, v in locals().items() if k not in not_needed},
@@ -482,7 +488,8 @@ def field(
     return _field(
         default=default,
         metadata=metadata,
-        converter=converter
+        converter=converter,
+        repr=repr
     )
 
 

@@ -1,10 +1,13 @@
 import sys
+from pathlib import Path
 from typing import (
     Dict,
     Any,
     Union,
     Literal,
-    List
+    List,
+    BinaryIO,
+    TextIO
 )
 
 from bson import SON
@@ -19,3 +22,5 @@ if sys.version_info < (3, 10):
     UnionType = Union
 else:
     from types import UnionType # noqa: F401, E261 # type: ignore
+
+GridFSPayloadT = Union[bytes, str, BinaryIO, TextIO, Path]

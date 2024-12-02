@@ -1,3 +1,12 @@
+<img src="https://img.shields.io/github/actions/workflow/status/oMegaPB/kover/actions.yml"/>
+<img src="https://img.shields.io/github/license/oMegaPB/kover"/>
+<img src="https://img.shields.io/badge/python-3.10.6+-blue"/>
+<img src="https://img.shields.io/pypi/status/kover"/>
+<img src="https://img.shields.io/github/last-commit/oMegaPB/kover"/>
+<img src="https://img.shields.io/badge/MongoDB-6.0+-green"/>
+
+# kover v1.6.0b
+
 **Kover** is a object-orientied fully typed mongodb driver supporting local mongod and replica sets. Battle tests are still required*<br>
 this library was inspired by <a href=https://github.com/sakal/aiomongo>this project</a> i like it very much. Though its 8 years old.
 
@@ -23,10 +32,11 @@ if __name__ == "__main__":
 ```
 
 The main reason why i created this project is that Motor - official async wrapper for mongodb, uses ThreadPool executor and it's just a wrapper around pymongo. In general thats slower than clear asyncio and looks more dirty.
+- 02.12.24 UPDATE: pymongo added async support but its TOTALLY garbage and kover almost 4-5 times faster that pymongo.
 
 # Status
 it still missing a lot of features. <br>
-e.g: **gridFS**, **bulk write API**, **Compression**<br>
+e.g: **bulk write API** and **Compression**<br>
 but its already very cool! <br>
 ill be happy if someone can help me implement missing features.
 
@@ -39,7 +49,9 @@ ill be happy if someone can help me implement missing features.
 - attrs 24.2.0 or later for dataclass functionality
 
 # Features
-all basic features from pymongo and object-orientied functionality. All auth types are supported.
+almost all features from pymongo and object-orientied functionality. All auth types are supported.
+this lib was built for new MongoDB versions. All features that were marked as DEPRECATED in docs
+were NOT added. See docs for references
 
 ### Cursors
 if you just need list:
@@ -171,5 +183,40 @@ if __name__ == "__main__":
 
 ```
 
+### GridFS
+
+```py
+import asyncio
+
+from kover.client import Kover
+from kover.gridfs import GridFS
+from kover.auth import AuthCredentials
+
+
+async def main():
+    credentials = AuthCredentials.from_environ()
+    kover = await Kover.make_client(credentials=credentials)
+
+    database = kover.get_database("files")
+    fs = GridFS(database)
+    await fs.create_indexes()  # optional make fs collections indexed
+
+    # can be bytes, any type of IO str or path
+    file_id = await fs.put(b"Hello World!")
+
+    file, binary = await fs.get_by_file_id(file_id)
+    print(file, binary.read())
+
+    files = await fs.list()
+    print(f"total files: {len(files)}")
+
+    deleted = await fs.delete(file_id)
+    print("is file deleted?", deleted)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+```
+
 # Tests/Benchmarks
-**will be available soon...**
+**next commit i promise**
