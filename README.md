@@ -1,11 +1,11 @@
-<img src="https://img.shields.io/github/actions/workflow/status/oMegaPB/kover/actions.yml"/>
-<img src="https://img.shields.io/github/license/oMegaPB/kover"/>
-<img src="https://img.shields.io/badge/python-3.10.6+-blue"/>
-<img src="https://img.shields.io/pypi/status/kover"/>
-<img src="https://img.shields.io/github/last-commit/oMegaPB/kover"/>
-<img src="https://img.shields.io/badge/MongoDB-6.0+-green"/>
+# kover
 
-# kover v1.6.0b
+![Build Status](https://img.shields.io/github/actions/workflow/status/oMegaPB/kover/actions.yml)
+![License](https://img.shields.io/github/license/oMegaPB/kover)
+![Python - Req](https://img.shields.io/badge/python-3.10.6+-blue)
+![Pypi Status](https://img.shields.io/pypi/status/kover)
+![Last Commit](https://img.shields.io/github/last-commit/oMegaPB/kover)
+![MongoDB](https://img.shields.io/badge/MongoDB-6.0+-green)
 
 **Kover** is a object-orientied fully typed mongodb driver supporting local mongod and replica sets. Battle tests are still required*<br>
 this library was inspired by <a href=https://github.com/sakal/aiomongo>this project</a> i like it very much. Though its 8 years old.
