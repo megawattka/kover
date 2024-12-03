@@ -133,8 +133,7 @@ class GridFS:
             } if add_sha1 else {}
         ).id(file_id)
         file.metadata.update(metadata or {})
-        await self._files.insert(file.to_dict(exclude_id=False))
-        return file_id
+        return await self._files.insert(file.to_dict(exclude_id=False))
 
     async def get_by_file_id(
         self,
