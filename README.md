@@ -35,7 +35,7 @@ The main reason why i created this project is that Motor - official async wrappe
 - 02.12.24 UPDATE: pymongo added async support but its TOTALLY (imo) garbage and kover almost 4-5 times faster than pymongo.
 
 # Status
-it still missing a lot of features. <br>
+it still missing features. <br>
 e.g: **bulk write API** and **Compression**<br>
 but its already very cool! <br>
 ill be happy if someone can help me implement missing features.

@@ -11,7 +11,9 @@ from .enums import CollationStrength, IndexDirection, IndexType
 from .schema import filter_non_null, to_camel_case, maybe_enum_value
 
 
+# TODO: refactor
 class Serializable:
+    # TODO: make it recursive
     def to_dict(self) -> xJsonT:
         return filter_non_null({
             to_camel_case(attrib.name): maybe_enum_value(

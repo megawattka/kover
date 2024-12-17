@@ -7,13 +7,12 @@ from io import BytesIO
 from typing import (
     Optional,
     Final,
-    BinaryIO,
-    TextIO,
     List
 )
 from hashlib import sha1
 
 from bson import ObjectId
+from typing_extensions import Self
 
 from ..models import Index
 from ..database import Database
@@ -32,10 +31,14 @@ CHUNKS_IDX: Final[Index] = Index("_chunks_idx", {
     "n": IndexDirection.ASCENDING
 }, unique=True)
 
-DEFAULT_CHUNK_SIZE: Final[int] = 255 * 1024
+DEFAULT_CHUNK_SIZE: Final[int] = 255 * 1024  # from pymongo
+SIZE_LIMIT: Final[int] = 1 * 1024 * 1024 * 16  # 16MB
 
 
 class GridFS:
+    """
+    create new instance of GridFS class.
+    """
     def __init__(
         self,
         database: Database,
@@ -53,36 +56,43 @@ class GridFS:
         encoding: str = "utf-8"
     ) -> tuple[BytesIO, Optional[str]]:
         name = None
-        if isinstance(data, (str, TextIO, BinaryIO, Path)):
-            if isinstance(data, TextIO):
-                # StringIO (?)
-                binary = BytesIO(
-                    data.read().encode(encoding=encoding)
-                )
-            elif isinstance(data, str):
-                path = Path(data)
-                if path.exists():
-                    # string as path
-                    binary = BytesIO(path.read_bytes())
-                    name = path.name
-                else:
-                    # str
-                    binary = BytesIO(
-                        data.encode(encoding=encoding)
-                    )
-            elif isinstance(data, BinaryIO):
-                # BytesIO
-                if data.tell() != 0:
-                    data.seek(0)
-                binary = BytesIO(data.read())
-            else:
-                # Path
-                name = data.name
-                binary = BytesIO(data.read_bytes())
-        else:
-            # bytes
+        if hasattr(data, "read"):  # io-like obj
+            if data.tell() != 0 and data.seekable():  # type: ignore
+                data.seek(0)  # type: ignore
+            data = data.read()  # type: ignore
+        if isinstance(data, str):
+            binary = BytesIO(
+                data.encode(encoding=encoding)
+            )
+        elif isinstance(data, Path):
+            name = data.name
+            binary = BytesIO(data.read_bytes())
+        elif isinstance(data, bytes):
             binary = BytesIO(data)
+        else:
+            cls = getattr(data, "__class__")  # type: ignore
+            raise Exception(
+                f"Incorrect data passed: {cls}, {data}"
+            )
         return binary, name
+
+    async def _partial_write_chunks(
+        self,
+        chunks: List[Chunk],
+        chunk_size: int
+    ) -> None:
+        total_chunks = len(chunks)
+        max_amount = math.ceil(
+            total_chunks / (
+                total_chunks * chunk_size / SIZE_LIMIT
+            )
+        ) - 1
+        splitted = [
+            chunks[x:x+max_amount]
+            for x in range(0, len(chunks), max_amount)
+        ]
+        for chunk_group in splitted:
+            await self._chunks.insert(chunk_group)
 
     async def put(
         self,
@@ -98,7 +108,7 @@ class GridFS:
         divide data into chunks and store them into gridfs
         also auto adds sha1 hash if add_sha1 param is True
         >>> database = kover.get_database("files")
-        >>> fs = GridFS(database)
+        >>> fs = await GridFS(database).indexed()
         >>> file_id = await fs.put("<AnyIO or bytes or str or path..>")
         >>> file, binary = await fs.get_by_file_id(file_id)
         >>> print(file, binary.read())
@@ -107,22 +117,31 @@ class GridFS:
         """
         chunk_size = chunk_size or DEFAULT_CHUNK_SIZE
         file_id = ObjectId()
+
         binary, name = self._get_binary_io(data, encoding=encoding)
         chunks: List[Chunk] = []
         size = len(binary.getvalue())
+
         iterations = math.ceil(
             size / chunk_size
         )
         filename = filename or name
+
         for n in range(iterations):
             data = binary.read(chunk_size)
-            chunks.append(Chunk(
+            chunk = Chunk(
                 files_id=file_id,
                 n=n,
                 data=data
-            ))
-        await self._chunks.insert(chunks)
+            )
+            chunks.append(chunk)
+
+        await self._partial_write_chunks(
+            chunks,
+            chunk_size=chunk_size
+        )
         upload_date = datetime.datetime.now()
+
         file = File(
             chunk_size=chunk_size,
             length=size,
@@ -131,9 +150,12 @@ class GridFS:
             metadata={
                 "sha1": sha1(binary.getvalue()).hexdigest()
             } if add_sha1 else {}
-        ).id(file_id)
+        ).id(file_id)  # setting id to predefined
+
         file.metadata.update(metadata or {})
-        return await self._files.insert(file.to_dict(exclude_id=False))
+        return await self._files.insert(
+            file.to_dict(exclude_id=False)
+        )
 
     async def get_by_file_id(
         self,
@@ -159,25 +181,43 @@ class GridFS:
             return file, binary
         raise GridFSFileNotFound("No file with that id found")
 
-    async def get_by_filename(self, filename: str) -> tuple[File, BytesIO]:
+    async def get_by_filename(
+        self,
+        filename: str
+    ) -> tuple[File, BytesIO]:
         file = await self._files.find_one({"filename": filename}, cls=File)
         if file is not None:
             return await self.get_by_file_id(file.id())
         raise GridFSFileNotFound("No file with that filename found")
 
-    async def delete(self, file_id: ObjectId) -> bool:
+    async def delete(
+        self,
+        file_id: ObjectId
+    ) -> bool:
         deleted = await self._files.delete_one({"_id": file_id})
         if deleted:
             await self._chunks.delete_many({"files_id": file_id})
         return deleted
 
+    async def drop_all_files(
+        self,
+    ) -> int:
+        await self._chunks.delete_many()
+        deleted = await self._files.delete_many()
+        return deleted
+
     async def list(self) -> List[File]:
         return await self._files.find(cls=File).to_list()
 
-    async def exists(self, file_id: ObjectId) -> bool:
+    async def exists(
+        self,
+        file_id: ObjectId
+    ) -> bool:
         file = await self._files.find_one({"_id": file_id})
         return file is not None
 
-    async def create_indexes(self) -> None:
+    async def indexed(self) -> Self:
+        """return itself but creating indexes first"""
         await self._chunks.create_indexes(CHUNKS_IDX)
         await self._files.create_indexes(FS_IDX)
+        return self

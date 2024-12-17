@@ -58,7 +58,7 @@ class MongoSocket:
 
     def get_hello_payload(
         self,
-        compression: Optional[COMPRESSION_T]
+        compression: Optional[COMPRESSION_T] = None
     ) -> xJsonT:
         uname = sysinfo.uname()
         impl = sys.implementation

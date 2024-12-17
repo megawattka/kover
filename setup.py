@@ -1,6 +1,5 @@
 import sys
 from pathlib import Path
-import pkg_resources
 from setuptools import setup  # type: ignore
 from typing import Dict, Any
 
@@ -12,11 +11,10 @@ if sys.version_info < (3, 10):
         f"Unsupported python version: {sys.version_info}. 3.10 is required."
     )
 
-requirements = Path.cwd() / "requirements.txt"
-install_requires = [
-    req.name
-    for req in pkg_resources.parse_requirements(requirements.open())
-]
+cwd = Path.cwd()
+package_dir = cwd.joinpath("kover")
+requirements = cwd / "requirements.txt"
+install_requires = requirements.open().read().splitlines()
 
 kwargs: Dict[str, Any] = {
     "name": kover.__name__,
@@ -25,7 +23,12 @@ kwargs: Dict[str, Any] = {
     "packages": [kover.__name__],
     "description": "fully async mongodb driver for mongod and replica sets",
     "author": __author__,
-    "url": "https://github.com/oMegaPB/kover"
+    "url": "https://github.com/oMegaPB/kover",
+    "include_package_data": True,
+    "data_files": [
+        str(x.relative_to(cwd))
+        for x in package_dir.joinpath("gridfs").iterdir()
+    ]
 }
 
 setup(**kwargs)

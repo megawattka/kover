@@ -131,14 +131,14 @@ class Collection:
             docs = [ensure_document(doc, add_id=True) for doc in ivalue]
         else:
             docs = [ensure_document(ivalue, add_id=True)]
-        command: xJsonT = {
+        command: xJsonT = filter_non_null({
             "insert": self.name,
             "ordered": ordered,
             "documents": docs,
             "maxTimeMS": max_time_ms,
             "bypassDocumentValidation": bypass_document_validation,
             "comment": comment
-        }
+        })
         await self.database.command(command, transaction=transaction)
         inserted = [
             doc["_id"] for doc in docs

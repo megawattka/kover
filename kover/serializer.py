@@ -13,7 +13,11 @@ class Serializer:
     def _randint(self) -> int:  # request_id must be any integer
         return int.from_bytes(os.urandom(4), signed=True)
 
-    def _pack_message(self, op: int, message: bytes) -> tuple[int, bytes]:
+    def _pack_message(
+        self,
+        op: int,
+        message: bytes
+    ) -> tuple[int, bytes]:
         # https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/#standard-message-header
         rid = self._randint()
         packed = b"".join(map(Int32, [
@@ -24,7 +28,11 @@ class Serializer:
         ])) + message  # doc itself
         return rid, packed
 
-    def _query_impl(self, doc: xJsonT, collection: str = "admin") -> bytes:
+    def _query_impl(
+        self,
+        doc: xJsonT,
+        collection: str = "admin"
+    ) -> bytes:
         # https://www.mongodb.com/docs/manual/legacy-opcodes/#op_query
         encoded = bson.encode(
             doc,
@@ -79,9 +87,16 @@ class Serializer:
         self,
         doc: xJsonT
     ) -> tuple[int, bytes]:
-        return self._pack_message(2013, self._op_msg_impl(doc))  # OP_MSG 2013
+        return self._pack_message(
+            2013,  # OP_MSG 2013
+            self._op_msg_impl(doc)
+        )
 
-    def verify_rid(self, data: bytes, rid: int) -> tuple[int, int]:
+    def verify_rid(
+        self,
+        data: bytes,
+        rid: int
+    ) -> tuple[int, int]:
         # https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/#standard-message-header
         length, _, response_to, op_code = struct.unpack("<iiii", data)
         if response_to != rid:

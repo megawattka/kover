@@ -109,10 +109,10 @@ def _collect_mro(
     if id(cls) in _mro_cache_map:
         return _mro_cache_map[id(cls)]
 
-    these: xJsonT = {"__annotations__": {}}
     if not issubclass(cls, Document):
         raise Exception("is not a Document subclass")
 
+    these: xJsonT = {"__annotations__": {}}
     # respect subclasses order and exclude object and Document
     mro: List[type[Any]] = cls.mro()[:-2:][::-1]
     for x in mro:
@@ -145,7 +145,7 @@ def _is_counting_attr(attr_t: Any) -> bool:
 
 
 def _get_field_property(
-    cls: type,
+    cls: type[Any],
     field_name: str,
     property_name: str,
     default: Optional[Any] = None
@@ -162,9 +162,12 @@ def _get_field_property(
 
 def _as_dict_helper(obj: "Document", /) -> xJsonT:
     """
-    internal helper for `.to_dict()`
+    internal helper for `Document.to_dict()`
     """
-    payload = {x: getattr(obj, x) for x in _get_parameter_names(obj)}
+    payload = {
+        x: getattr(obj, x)
+        for x in _get_parameter_names(obj)
+    }
     for key, value in {**payload}.items():  # prevent dict keys change
         # handle subclasses correctly
         cls = _cls_to_baseclass_from_mro(value.__class__)

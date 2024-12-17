@@ -1,3 +1,4 @@
+# TODO: add missing codes
 codes_to_exc_name: dict[int, str] = {
     2: "ErrBadValue",
     9: "ErrFailedToParse",
@@ -31,6 +32,7 @@ codes_to_exc_name: dict[int, str] = {
     186: "ErrClientMetadataCannotBeMutated",
     238: "ErrNotImplemented",
     10065: "ErrIndexesWrongType",
+    10334: "BSONObjectTooLarge",
     11000: "ErrDuplicateKeyInsert",
     40272: "ErrSetBadExpression",
     15947: "ErrStageGroupInvalidFields",

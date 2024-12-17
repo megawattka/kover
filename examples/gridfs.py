@@ -10,8 +10,7 @@ async def main():
     kover = await Kover.make_client(credentials=credentials)
 
     database = kover.get_database("files")
-    fs = GridFS(database)
-    await fs.create_indexes()  # optional make fs collections indexed
+    fs = await GridFS(database).indexed()
 
     # can be bytes, any type of IO str or path
     file_id = await fs.put(b"Hello World!")
