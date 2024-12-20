@@ -28,7 +28,7 @@ kwargs: Dict[str, Any] = {
     "data_files": [
         str(x.relative_to(cwd))
         for x in package_dir.joinpath("gridfs").iterdir()
-    ]
+    ]  # include "gridfs" dir into package
 }
 
 setup(**kwargs)

@@ -21,7 +21,7 @@
 # SOFTWARE.
 
 
-__version__ = "1.6.2"
+__version__ = "1.6.3"
 __author__ = "oMegaPB"
 __license__ = "MIT"
 __copyright__ = "Copyright (C) 2024-present oMegaPB <https://github.com/oMegaPB>"  # noqa: E501

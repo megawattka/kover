@@ -170,7 +170,7 @@ class GridFS:
             ])
             binary = BytesIO()
             for chunk in chunks:
-                binary.write(chunk["data"])
+                binary.write(chunk.pop("data"))
             binary.seek(0)
             if check_sha1:
                 stored_sha1 = file.metadata.get("sha1")

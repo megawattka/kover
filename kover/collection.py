@@ -294,11 +294,13 @@ class Collection:
             transaction=transaction
         )
 
+    # TODO: prob make overloads for cls like in "find"
     # https://www.mongodb.com/docs/manual/reference/command/aggregate/
     async def aggregate(
         self,
         pipeline: List[xJsonT],
         *,
+        # cls: Optional[type[Document]] = None,
         explain: bool = False,
         allow_disk_use: bool = True,
         cursor: Optional[xJsonT] = None,
@@ -331,7 +333,17 @@ class Collection:
             command,
             transaction=transaction
         )
-        return request["cursor"]["firstBatch"]
+        cursor_id = int(request["cursor"]["id"])
+        docs: List[Any] = request["cursor"]["firstBatch"]
+        if cursor_id != 0:
+            next_req = await self.database.command({
+                "getMore": cursor_id,
+                "collection": self.name
+            })
+            docs.extend(next_req["cursor"]["nextBatch"])
+        # if cls is not None:
+        #     docs = [*map(cls.from_document, docs)]
+        return docs
 
     # https://www.mongodb.com/docs/manual/reference/command/distinct/
     async def distinct(
