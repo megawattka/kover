@@ -32,7 +32,7 @@ if __name__ == "__main__":
 ```
 
 The main reason why i created this project is that Motor - official async wrapper for mongodb, uses ThreadPool executor and it's just a wrapper around pymongo. In general thats slower than clear asyncio and looks more dirty.
-- 02.12.24 UPDATE: pymongo added async support but its TOTALLY (imo) garbage and kover almost 4-5 times faster than pymongo.
+- 02.12.24 UPDATE: pymongo added async support but its kinda slow same as sync version. pymongo's code looks dirty and have lots of unnecessary things. kover almost 2-3 times faster than pymongo.
 
 # Status
 it still missing features. <br>

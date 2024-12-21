@@ -152,7 +152,7 @@ class MongoSocket:
                 length, op_code = self.serializer.verify_rid(header, rid)
                 data = await self.recv(length - 16)  # exclude header
                 reply = self.serializer.get_reply(data, op_code)
-            else:
+            else:  # cases like kover.shutdown()
                 return
         if reply.get("ok") != 1.0 or reply.get("writeErrors") is not None:
             exc_value = self._get_exception(reply=reply)
