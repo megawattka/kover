@@ -203,9 +203,8 @@ class GridFS:
     async def drop_all_files(
         self,
     ) -> int:
-        delete = Delete({}, limit=0)
-        await self._chunks.delete(delete)
-        deleted = await self._files.delete(delete)
+        await self._chunks.clear()
+        deleted = await self._files.clear()
         return deleted
 
     async def list(self) -> List[File]:

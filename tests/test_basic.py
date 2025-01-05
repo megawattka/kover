@@ -64,7 +64,7 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
         assert len(cs) == 100
         cs = await collection.find().skip(10).to_list()
         assert len(cs) == 990
-        await collection.delete(Delete({}, limit=0))
+        await collection.clear()
         await collection.insert([users[0]] * 75)
         cs = await collection.find(None).batch_size(50).to_list()
         assert len(cs) == 75
@@ -72,7 +72,7 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
         cs = await collection.find({"test": "nonexistent"}).to_list()
         assert len(cs) == 0
 
-        await collection.delete(Delete({}, limit=0))
+        await collection.clear()
 
     async def test_collection_create(self):
         collection = await self.client.db.create_collection(

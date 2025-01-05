@@ -202,6 +202,12 @@ class Collection:
         request = await self.database.command(command, transaction=transaction)
         return request["n"]
 
+    # custom func not stated in docs
+    # used to delete all docs from collection
+    async def clear(self) -> int:
+        deletion = Delete({}, limit=0)
+        return await self.delete(deletion)
+
     @overload
     async def find_one(
         self,
