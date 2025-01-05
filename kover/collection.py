@@ -19,7 +19,14 @@ from .typings import xJsonT
 from .session import Transaction
 from .cursor import Cursor
 from .enums import ValidationLevel, IndexDirection, IndexType
-from .models import Index, Collation, Update, ReadConcern, WriteConcern
+from .models import (
+    Index,
+    Collation,
+    Update,
+    ReadConcern,
+    WriteConcern,
+    Delete
+)
 from .schema import (
     Document,
     filter_non_null,
@@ -172,69 +179,34 @@ class Collection:
         )
         return request["nModified"]
 
-    # .delete_one and .delete_many were separated because a limit.
-    # Default is 0 but if you forget it youll lose all data
-    # in collection. Naming saves situation
-    async def delete_one(
+    # https://www.mongodb.com/docs/manual/reference/command/delete
+    async def delete(
         self,
-        filter: Optional[xJsonT] = None,
-        *,
-        collation: Optional[Collation] = None,
-        hint: Optional[Union[xJsonT, str]] = None,
+        *deletes: Delete,
         comment: Optional[str] = None,
         let: Optional[xJsonT] = None,
         ordered: bool = True,
-        max_time_ms: int = 0,
-        transaction: Optional[Transaction] = None
-    ) -> bool:
-        result = await self.delete_many(
-            filter=filter,
-            limit=1,
-            collation=collation,
-            hint=hint,
-            comment=comment,
-            let=let,
-            ordered=ordered,
-            max_time_ms=max_time_ms,
-            transaction=transaction
-        )
-        return bool(result)
-
-    # https://www.mongodb.com/docs/manual/reference/command/delete/
-    async def delete_many(
-        self,
-        filter: Optional[xJsonT] = None,
-        *,
-        limit: int = 0,
-        collation: Optional[Collation] = None,
-        hint: Optional[Union[xJsonT, str]] = None,
-        comment: Optional[str] = None,
-        let: Optional[xJsonT] = None,
-        ordered: bool = True,
+        write_concern: Optional[WriteConcern] = None,
         max_time_ms: int = 0,
         transaction: Optional[Transaction] = None
     ) -> int:
-        params = filter_non_null({
+        command = filter_non_null({
             "delete": self.name,
-            "ordered": ordered,
-            "deletes": [filter_non_null({
-                "q": filter or {},
-                "limit": limit,
-                "collation": maybe_to_dict(collation),
-                "hint": hint
-            })],
+            "deletes": [delete.to_dict() for delete in deletes],
             "comment": comment,
             "let": let,
+            "ordered": ordered,
+            "writeConcern": maybe_to_dict(write_concern),
             "maxTimeMS": max_time_ms
         })
-        request = await self.database.command(params, transaction=transaction)
+        request = await self.database.command(command, transaction=transaction)
         return request["n"]
 
     @overload
     async def find_one(
         self,
         filter: Optional[xJsonT],
-        cls: Literal[None],
+        cls: Literal[None] = None,
         transaction: Optional[Transaction] = None
     ) -> Optional[xJsonT]:
         ...

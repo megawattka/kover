@@ -14,7 +14,7 @@ from hashlib import sha1
 from bson import ObjectId
 from typing_extensions import Self
 
-from ..models import Index
+from ..models import Index, Delete
 from ..database import Database
 from ..enums import IndexDirection
 from ..typings import GridFSPayloadT, xJsonT
@@ -74,6 +74,7 @@ class GridFS:
             raise Exception(
                 f"Incorrect data passed: {cls}, {data}"
             )
+        binary.seek(0)
         return binary, name
 
     async def _partial_write_chunks(
@@ -194,16 +195,17 @@ class GridFS:
         self,
         file_id: ObjectId
     ) -> bool:
-        deleted = await self._files.delete_one({"_id": file_id})
+        deleted = await self._files.delete(Delete({"_id": file_id}, limit=1))
         if deleted:
-            await self._chunks.delete_many({"files_id": file_id})
-        return deleted
+            await self._chunks.delete(Delete({"files_id": file_id}, limit=0))
+        return bool(deleted)
 
     async def drop_all_files(
         self,
     ) -> int:
-        await self._chunks.delete_many()
-        deleted = await self._files.delete_many()
+        delete = Delete({}, limit=0)
+        await self._chunks.delete(delete)
+        deleted = await self._files.delete(delete)
         return deleted
 
     async def list(self) -> List[File]:

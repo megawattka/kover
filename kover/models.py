@@ -118,6 +118,15 @@ class Update(Serializable):
     hint: Optional[str] = None
 
 
+# https://www.mongodb.com/docs/manual/reference/command/delete/#syntax
+@define
+class Delete(Serializable):
+    q: xJsonT
+    limit: Literal[0, 1]
+    collation: Optional[Collation] = None
+    hint: Optional[Union[xJsonT, str]] = None
+
+
 # https://www.mongodb.com/docs/manual/reference/write-concern/
 @define
 class WriteConcern(Serializable):

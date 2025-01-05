@@ -28,6 +28,7 @@ kwargs: Dict[str, Any] = {
     "data_files": [
         str(x.relative_to(cwd))
         for x in package_dir.joinpath("gridfs").iterdir()
+        if x.name != "__pycache__"
     ]  # include "gridfs" dir into package
 }
 

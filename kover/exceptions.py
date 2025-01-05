@@ -17,3 +17,11 @@ class CorruptedDocument(Exception):
             "Schema was updated but document in collection is not. " +
             f'Missing field is: "{missing_field}"'
         )
+
+
+class CredentialsException(Exception):
+    def __init__(self) -> None:
+        super().__init__(
+            "either MONGO_PASSWORD or MONGO_USER environment "
+            "variable is missing."
+        )

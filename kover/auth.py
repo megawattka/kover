@@ -4,14 +4,14 @@ import os
 import hashlib
 import base64
 from hmac import HMAC, compare_digest
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING, Dict, Optional
 
 from attrs import define, field
 from bson import Binary
 from pymongo.saslprep import saslprep
-from typing_extensions import Self
 
 from .typings import xJsonT
+from .exceptions import CredentialsException
 
 if TYPE_CHECKING:
     from .client import MongoSocket
@@ -31,14 +31,13 @@ class AuthCredentials:
         document["saslSupportedMechs"] = f"{self.db_name}.{self.username}"
 
     @classmethod
-    def from_environ(cls) -> Self:
+    def from_environ(cls) -> Optional[AuthCredentials]:
         user, password = os.environ.get("MONGO_USER"), \
             os.environ.get("MONGO_PASSWORD")
-        if user is None or password is None:
-            raise Exception(
-                "MONGO_PASSWORD or MONGO_USER environment variables are empty."
-            )
-        return cls(user, password)
+        if user is not None and password is not None:
+            return cls(user, password)
+        if (user and not password) or (password and not user):
+            raise CredentialsException()
 
 
 class Auth:
@@ -46,7 +45,10 @@ class Auth:
         self.socket: MongoSocket = socket
 
     def parse_scram_response(self, payload: bytes) -> Dict[str, bytes]:
-        values = [item.split(b"=", 1) for item in payload.split(b",")]
+        values = [
+            item.split(b"=", 1)
+            for item in payload.split(b",")
+        ]
         return {
             k.decode(): v
             for k, v in values
