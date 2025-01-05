@@ -10,6 +10,7 @@ from kover.auth import AuthCredentials  # noqa: E402
 from kover.client import Kover  # noqa: E402
 from kover.schema import SchemaGenerator, Document  # noqa: E402
 from kover.typings import xJsonT  # noqa: E402
+from kover.models import Delete  # noqa: E402
 
 
 class User(Document):
@@ -63,7 +64,7 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
         assert len(cs) == 100
         cs = await collection.find().skip(10).to_list()
         assert len(cs) == 990
-        await collection.delete_many()
+        await collection.delete(Delete({}, limit=0))
         await collection.insert([users[0]] * 75)
         cs = await collection.find(None).batch_size(50).to_list()
         assert len(cs) == 75
@@ -71,7 +72,7 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
         cs = await collection.find({"test": "nonexistent"}).to_list()
         assert len(cs) == 0
 
-        await collection.delete_many()
+        await collection.delete(Delete({}, limit=0))
 
     async def test_collection_create(self):
         collection = await self.client.db.create_collection(
@@ -100,8 +101,8 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
         resp = await collection.find({}, cls=User).to_list()
         assert isinstance(resp[0], User)
         assert resp[0].name == "dima" and resp[0].age == 18
-        assert not await collection.delete_one({"name": "drake"})
-        assert await collection.delete_one({"name": "dima"})
+        assert not await collection.delete(Delete({"name": "drake"}, limit=1))
+        assert await collection.delete(Delete({"name": "dima"}, limit=1))
 
     async def test_documents(self) -> None:
         assert issubclass(User, Document)

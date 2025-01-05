@@ -55,7 +55,7 @@ class TestMethods(unittest.IsolatedAsyncioTestCase):
         assert len(ids) == 100
 
         count = await self.collection.count()
-        assert count == 101
+        assert count == 101, count
 
         found = await self.collection.find_one({"name": doc.name}, cls=Sample)
         assert found == doc
