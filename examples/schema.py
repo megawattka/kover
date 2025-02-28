@@ -1,9 +1,17 @@
 import asyncio
 from enum import Enum
-from typing import Optional
+from typing import Optional, Annotated
 
-from kover.client import Kover
-from kover.schema import SchemaGenerator, Document, field
+from pydantic import ValidationError
+
+from kover import (
+    SchemaGenerator,
+    Document,
+    Kover,
+    AuthCredentials,
+    OperationFailure
+)
+from kover.metadata import SchemaMetadata
 
 
 class UserType(Enum):
@@ -12,28 +20,30 @@ class UserType(Enum):
     CREATOR = "CREATOR"
 
 
-# can be used as annotation too
 class Friend(Document):
     name: str
-    age: int = field(min=18)  # minimum age is 18. less will error
+    age: Annotated[int, SchemaMetadata(minimum=18)]  # minimum age is 18.
 
 
-# note field_name kwarg in user_type field.
-# it'll be name of that key when using .to_dict()
+# kover automatically generates aliases using camel case.
+# so user_type will be "userType" in db
+# if you still need to snake cased field_name
+# use explicit alias="<snake_cased_name>"
 class User(Document):
-    name: str = field(description="must be a string")
-    age: int = field(
-        description="age must be int and more that 18", min=18
-    )
-    user_type: UserType = field(
-        description="can only be one of the enum values",
-        field_name="userType"
-    )
+    name: Annotated[str, SchemaMetadata(description="must be a string")]
+    age: Annotated[int, SchemaMetadata(
+        description="age must be int and more that 18",
+        minimum=18
+    )]
+    user_type: Annotated[UserType, SchemaMetadata(
+        description="can only be one of the enum values"
+    )]
     friend: Optional[Friend]
 
 
 async def main():
-    kover = await Kover.make_client()
+    credentials = AuthCredentials.from_environ()
+    kover = await Kover.make_client(credentials=credentials)
 
     generator = SchemaGenerator()
     schema = generator.generate(User)
@@ -41,20 +51,39 @@ async def main():
     collection = await kover.db.test.create_if_not_exists()
     await collection.set_validator(schema)
 
-    valid_user = User("John Doe", 20, UserType.USER, friend=Friend("dima", 18))
-
+    valid_user = User(
+        name="John Doe",
+        age=20,
+        user_type=UserType.USER,
+        friend=Friend(
+            name="dima",
+            age=18
+        )
+    )
     # function accepts either valid_user or valid_user.to_dict()
     object_id = await collection.insert(valid_user)
     print(object_id, "added!")
 
-    invalid_user = User(
-        "Rick",
-        age=15,
-        user_type=UserType.ADMIN,
-        friend=Friend("roma", 25)
-    )
+    try:
+        invalid_user = User(
+            name="Rick",
+            age=15,
+            user_type=UserType.ADMIN,
+            friend=Friend(
+                name="roma",
+                age=25
+            )
+        )
+    except ValidationError as e:  # it wont let you create such model
+        raise SystemExit(e.errors())
+
     # kover.exceptions.ErrDocumentValidationFailure: Rick's age is less than 18
-    await collection.insert(invalid_user)
+    try:
+        await collection.insert(invalid_user)
+    except OperationFailure as e:
+        msg: str = e.message["errmsg"]
+        print(f"got Error: {msg}")
+        assert e.code == 121  # ErrDocumentValidationFailure
 
 if __name__ == "__main__":
     asyncio.run(main())

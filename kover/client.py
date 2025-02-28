@@ -12,7 +12,7 @@ from .session import Session
 from .socket import MongoSocket
 from .database import Database
 from .models import BuildInfo
-from .schema import filter_non_null
+from .utils import filter_non_null
 
 
 class Kover:

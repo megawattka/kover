@@ -27,9 +27,19 @@ kwargs: Dict[str, Any] = {
     "include_package_data": True,
     "data_files": [
         str(x.relative_to(cwd))
-        for x in package_dir.joinpath("gridfs").iterdir()
+        for z in [
+            d.name for d in package_dir.iterdir()
+            if d.is_dir() and d.name != "__pycache__"
+        ] for x in package_dir.joinpath(z).iterdir()
         if x.name != "__pycache__"
-    ]  # include "gridfs" dir into package
+    ],  # include other dirs into package
+    "classifiers": [
+        'Intended Audience :: Developers',
+        'License :: OSI Approved :: MIT License',
+        'Operating System :: OS Independent',
+        'Programming Language :: Python :: 3',
+        'Topic :: Software Development :: Libraries :: Python Modules'
+    ],
 }
 
 setup(**kwargs)

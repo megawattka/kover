@@ -27,12 +27,8 @@ from .models import (
     WriteConcern,
     Delete
 )
-from .schema import (
-    Document,
-    filter_non_null,
-    ensure_document,
-    maybe_to_dict
-)
+from .schema import Document
+from .utils import filter_non_null, maybe_to_dict
 
 if TYPE_CHECKING:
     from .database import Database
@@ -135,9 +131,13 @@ class Collection:
     ) -> Union[List[ObjectId], ObjectId]:
         multi = isinstance(ivalue, Sequence)
         if multi:
-            docs = [ensure_document(doc, add_id=True) for doc in ivalue]
+            docs = [
+                doc.to_dict() if isinstance(doc, Document) else doc for doc in ivalue   # noqa: E501
+            ]
         else:
-            docs = [ensure_document(ivalue, add_id=True)]
+            docs = [ivalue.to_dict() if isinstance(ivalue, Document) else ivalue]  # noqa: E501
+        for doc in docs:
+            doc.setdefault("_id", ObjectId())
         command: xJsonT = filter_non_null({
             "insert": self.name,
             "ordered": ordered,
@@ -442,3 +442,6 @@ class Collection:
             "dropIndexes": self.name,
             "index": indexes
         })
+
+    async def drop(self) -> None:
+        await self.database.drop_collection(self.name)

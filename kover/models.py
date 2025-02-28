@@ -1,44 +1,50 @@
 from __future__ import annotations
 
 import datetime
-from typing import List, Literal, Optional, Union
+from enum import Enum
+from dataclasses import field, dataclass, asdict, is_dataclass
+from typing import List, Literal, Optional, Union, Any
 
 from bson import Binary
-from attrs import field, define, fields
 
 from .typings import COMPRESSION_T, xJsonT
 from .enums import CollationStrength, IndexDirection, IndexType
-from .schema import filter_non_null, to_camel_case, maybe_enum_value
 
 
-# TODO: refactor
-class Serializable:
-    # TODO: make it recursive
+@dataclass
+class AsDictMixin:
+    def _convert_enums(self, obj: Any) -> Any:
+        if isinstance(obj, Enum):
+            return obj.value
+        elif isinstance(obj, dict):
+            return {k: self._convert_enums(v) for k, v in obj.items()}  # type: ignore  # noqa: E501
+        elif isinstance(obj, list):
+            return [self._convert_enums(v) for v in obj]  # type: ignore
+        elif is_dataclass(obj):
+            return self._convert_enums(asdict(obj))  # type: ignore
+        return obj
+
     def to_dict(self) -> xJsonT:
-        return filter_non_null({
-            to_camel_case(attrib.name): maybe_enum_value(
-                getattr(self, attrib.name)
-            )
-            for attrib in fields(self.__class__)
-        })
+        serialized = self._convert_enums(self)
+        return {k: v for k, v in serialized.items() if v is not None}
 
 
-@define
-class HelloResult:
+@dataclass
+class HelloResult(AsDictMixin):
     local_time: datetime.datetime
     connection_id: int
     read_only: bool
     mechanisms: Optional[List[str]] = field(default=None)
-    compression: COMPRESSION_T = field(default=None)
+    compression: Optional[COMPRESSION_T] = field(default=None)
     requires_auth: bool = field(init=False, repr=False)
 
-    def __attrs_post_init__(self) -> None:
+    def __post_init__(self):
         self.requires_auth = self.mechanisms is not None \
             and len(self.mechanisms) > 0
 
 
-@define
-class BuildInfo(Serializable):
+@dataclass
+class BuildInfo(AsDictMixin):
     version: str
     git_version: str
     allocator: str
@@ -50,8 +56,8 @@ class BuildInfo(Serializable):
     storage_engines: list[str]
 
 
-@define
-class User(Serializable):
+@dataclass
+class User(AsDictMixin):
     user_id: Binary = field(repr=False)
     username: str
     db_name: str
@@ -80,8 +86,8 @@ class User(Serializable):
 
 
 # https://www.mongodb.com/docs/manual/reference/command/createIndexes/#example
-@define
-class Index(Serializable):
+@dataclass
+class Index(AsDictMixin):
     name: str  # any index name e.g my_index
     key: dict[
         str,
@@ -92,8 +98,8 @@ class Index(Serializable):
 
 
 # https://www.mongodb.com/docs/manual/reference/collation/
-@define
-class Collation(Serializable):
+@dataclass
+class Collation(AsDictMixin):
     locale: Optional[str] = None
     case_level: bool = False
     case_first: Literal["lower", "upper", "off"] = "off"
@@ -106,8 +112,8 @@ class Collation(Serializable):
 
 
 # https://www.mongodb.com/docs/manual/reference/command/update/#syntax
-@define
-class Update(Serializable):
+@dataclass
+class Update(AsDictMixin):
     q: xJsonT
     u: xJsonT
     c: Optional[xJsonT] = None
@@ -119,8 +125,8 @@ class Update(Serializable):
 
 
 # https://www.mongodb.com/docs/manual/reference/command/delete/#syntax
-@define
-class Delete(Serializable):
+@dataclass
+class Delete(AsDictMixin):
     q: xJsonT
     limit: Literal[0, 1]
     collation: Optional[Collation] = None
@@ -128,16 +134,16 @@ class Delete(Serializable):
 
 
 # https://www.mongodb.com/docs/manual/reference/write-concern/
-@define
-class WriteConcern(Serializable):
+@dataclass
+class WriteConcern(AsDictMixin):
     w: Union[str, int] = "majority"
     j: Optional[bool] = None
     wtimeout: int = 0
 
 
 # https://www.mongodb.com/docs/manual/reference/read-concern/
-@define
-class ReadConcern(Serializable):
+@dataclass
+class ReadConcern(AsDictMixin):
     level: Literal[
         "local",
         "available",

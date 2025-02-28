@@ -11,7 +11,7 @@ from typing import (
 )
 from hashlib import sha1
 
-from bson import ObjectId
+from bson import ObjectId, Binary
 from typing_extensions import Self
 
 from ..models import Index, Delete
@@ -133,10 +133,9 @@ class GridFS:
             chunk = Chunk(
                 files_id=file_id,
                 n=n,
-                data=data
+                data=Binary(data)
             )
             chunks.append(chunk)
-
         await self._partial_write_chunks(
             chunks,
             chunk_size=chunk_size
@@ -151,7 +150,7 @@ class GridFS:
             metadata={
                 "sha1": sha1(binary.getvalue()).hexdigest()
             } if add_sha1 else {}
-        ).id(file_id)  # setting id to predefined
+        ).with_id(file_id)
 
         file.metadata.update(metadata or {})
         return await self._files.insert(
@@ -188,7 +187,8 @@ class GridFS:
     ) -> tuple[File, BytesIO]:
         file = await self._files.find_one({"filename": filename}, cls=File)
         if file is not None:
-            return await self.get_by_file_id(file.id())
+            document_id: ObjectId = file.get_id()  # type: ignore
+            return await self.get_by_file_id(document_id)
         raise GridFSFileNotFound("No file with that filename found")
 
     async def delete(

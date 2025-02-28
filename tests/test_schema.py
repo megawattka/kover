@@ -63,6 +63,10 @@ class D(Document):
     d: Union[UUID, Binary, Int64, ObjectId]
 
 
+class D1(Document):
+    c: List[List[List[List[List[str]]]]]
+
+
 class SchemaTests(unittest.IsolatedAsyncioTestCase):
     def __init__(self, methodName: str = "runTest") -> None:
         super().__init__(methodName)
@@ -103,7 +107,6 @@ class SchemaTests(unittest.IsolatedAsyncioTestCase):
             ("f", ['null', 'binData', 'string']),
             ("_id", ['objectId'])
         ]:
-            # sorted because set() mixes values
             assert sorted(ps[name]["bsonType"]) == sorted(val)
         assert ps["d"]["enum"] == ['A', 'B', 'C']
         assert all(x in [None, '3', b'a'] for x in ps["f"]["enum"])
@@ -125,6 +128,9 @@ class SchemaTests(unittest.IsolatedAsyncioTestCase):
             assert sorted(ps[name]["bsonType"]) == sorted(val)
             for name, val in [("b", ['string']), ("c", ['object'])]:
                 assert ps[name]["items"]["bsonType"] == val
+        schema = self.generator.generate(D1)["$jsonSchema"]
+        items = schema["properties"]["c"]["items"]["items"]
+        assert items["items"]["items"]["items"]["bsonType"][0] == "string"
 
 
 if __name__ == "__main__":
