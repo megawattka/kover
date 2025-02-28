@@ -3,10 +3,10 @@ from __future__ import annotations
 import os
 import hashlib
 import base64
+from dataclasses import dataclass, field
 from hmac import HMAC, compare_digest
 from typing import TYPE_CHECKING, Dict, Optional
 
-from attrs import define, field
 from bson import Binary
 from pymongo.saslprep import saslprep
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from .client import MongoSocket
 
 
-@define(frozen=True)
+@dataclass(frozen=True)
 class AuthCredentials:
     username: str
     password: str = field(repr=False)
