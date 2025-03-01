@@ -15,7 +15,7 @@ from .models import User
 from .utils import filter_non_null
 
 if TYPE_CHECKING:
-    from client import Kover
+    from .client import Kover
 
 
 class Database:

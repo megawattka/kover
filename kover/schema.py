@@ -11,6 +11,7 @@ from typing import (
     Type,
     get_origin,
     List,
+    TypeVar
 )
 from functools import partial
 from typing_extensions import Self
@@ -189,11 +190,11 @@ class SchemaGenerator:
 class Document(BaseModel):
     model_config = ConfigDict(
         extra="allow",
-        frozen=True,
         use_enum_values=True,
         arbitrary_types_allowed=True,
         alias_generator=to_camel,
-        populate_by_name=True
+        populate_by_name=True,
+        validate_assignment=True
     )
     _id: Optional[ObjectId] = PrivateAttr(default=None)
 
@@ -266,3 +267,32 @@ class Document(BaseModel):
 
     def __str__(self) -> str:
         return self.__repr__()
+
+
+T = TypeVar("T", bound=Document)
+
+
+def model_configure(config: ConfigDict) -> Callable[[type[T]], Callable[..., T]]:  # noqa: E501
+    """
+    use this decorator on a class to change its model config.
+    ```
+    >>> class MyEnum(Enum):
+    ...    FIRST = "1"
+    ...    SECOND = "2"
+
+
+    >>> @model_configure(ConfigDict(use_enum_values=False))  # True by default
+    ... class Changed(Document):
+    ...    test: MyEnum
+
+    Changed(test=<MyEnum.FIRST: '1'>)
+    ```
+    """
+    def outer(cls: type[T]) -> Callable[..., T]:
+        cls.model_config.update(config)
+        cls.model_rebuild(force=True)
+
+        def inner(*args: Any, **kwargs: Any) -> T:
+            return cls(*args, **kwargs)
+        return inner
+    return outer
