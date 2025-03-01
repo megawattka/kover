@@ -7,7 +7,7 @@
 ![Last Commit](https://img.shields.io/github/last-commit/oMegaPB/kover)
 ![MongoDB](https://img.shields.io/badge/MongoDB-6.0+-green)
 
-**Kover** is a Model-orientied strict typed mongodb driver supporting local mongod and replica sets. Battle tests are still required*<br>
+**Kover** is a model-orientied strict typed mongodb driver supporting local mongod and replica sets. Battle tests are still required*<br>
 this library was inspired by <a href=https://github.com/sakal/aiomongo>this project</a> i like it very much. Though its 8 years old.
 
 ```py
