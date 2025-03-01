@@ -53,7 +53,11 @@ from .models import (
     BuildInfo,
     HelloResult
 )
-from .schema import SchemaGenerator, Document
+from .schema import (
+    SchemaGenerator,
+    Document,
+    model_configure
+)
 from .session import Session, Transaction
 from .typings import xJsonT
 from .utils import (
@@ -94,5 +98,6 @@ __all__ = [
     "HasToDict",
     "chain",
     "filter_non_null",
-    "maybe_to_dict"
+    "maybe_to_dict",
+    "model_configure"
 ]
