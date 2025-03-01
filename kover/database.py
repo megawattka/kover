@@ -12,10 +12,10 @@ from .collection import Collection
 from .typings import xJsonT
 from .session import Transaction
 from .models import User
-from .schema import filter_non_null
+from .utils import filter_non_null
 
 if TYPE_CHECKING:
-    from client import Kover
+    from .client import Kover
 
 
 class Database:

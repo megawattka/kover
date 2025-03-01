@@ -9,7 +9,6 @@ from typing import (
     BinaryIO,
     TextIO
 )
-
 from bson import SON
 
 xJsonT = Dict[str, Any]

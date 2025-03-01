@@ -1,209 +1,36 @@
-# from __future__ import annotations
+from __future__ import annotations
 
-import functools
-import itertools
-import inspect
-import datetime
 from enum import Enum
-from uuid import UUID
+from types import UnionType
 from typing import (
-    Union,
-    List,
-    Any,
-    Optional,
-    Final,
     Literal,
-    Iterable,
-    TypeVar,
+    Optional,
+    Union,
+    Any,
     Callable,
-    ParamSpec,
-    MutableMapping,
-    cast
-)
-
-from bson import Binary, ObjectId, Timestamp, Int64
-from attrs import (
-    field as _field,
-    define,
-    make_class,
-    NOTHING,
-)
-from attr._make import _CountingAttr  # type: ignore
-from typing_extensions import (
-    overload,
-    dataclass_transform,
+    Type,
     get_origin,
-    Self
+    List,
+    TypeVar
 )
-
-from .typings import xJsonT, UnionType
-from .exceptions import (
-    SchemaGenerationException,
-    CorruptedDocument
+from functools import partial
+from typing_extensions import Self
+from uuid import UUID
+from bson import ObjectId, Binary
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    model_serializer,
+    SerializationInfo,
+    PrivateAttr
 )
+from pydantic.alias_generators import to_camel
 
-T = TypeVar("T")
-P = ParamSpec('P')
-CAID: Final[int] = id(_CountingAttr)
-
-__all__ = [
-    "SchemaGenerator",
-    "field",
-    "Document"
-]
-
-TYPE_MAP: dict[type, list[str]] = {
-    str: ["string"],
-    bytes: ["binData"],
-    float: ["double"],
-    int: ["int", "long"],
-    list: ["array"],
-    type(None): ["null"],
-    ObjectId: ["objectId"],
-    bool: ["bool"],
-    datetime.datetime: ["date"],
-    Binary: ["binData"],
-    UUID: ["binData"],
-    Timestamp: ["timestamp"],
-    Int64: ["long"]
-}
-
-FIELD_NAME: Final[str] = "field_name"
-
-_METADATA_KEYS: dict[str, str] = {
-    "min": "minimum",
-    "max": "maximum",
-    "minlen": "minLength",
-    "maxlen": "maxLength",
-    "min_items": "minItems",
-    "max_items": "maxItems",
-    "unique_items": "uniqueItems"
-}
-
-
-def _collect_mro_helper(func: Callable[P, xJsonT]):
-    @functools.wraps(func)
-    def inner(*args: P.args, **kwargs: P.kwargs) -> xJsonT:
-        # copy because its cached and we dont want
-        # to del "__annotations__" completely
-        collected: xJsonT = func(*args, **kwargs).copy()
-        if not kwargs.get("include_annotations"):
-            del collected["__annotations__"]
-        return collected
-    return inner
-
-
-@_collect_mro_helper
-def _collect_mro(
-    cls: type[Any],
-    /,
-    *,
-    include_annotations: bool = False  # used in helper
-) -> xJsonT:
-    """
-    this collects all fields from class as _CountingAttr from attrs.
-    works with subclasses.
-    pass `include_annotations=True` to include annotations into return value
-    """
-    # if func call for this cls is cached:
-    if id(cls) in _mro_cache_map:
-        return _mro_cache_map[id(cls)]
-
-    if not issubclass(cls, Document):
-        raise Exception("is not a Document subclass")
-
-    these: xJsonT = {"__annotations__": {}}
-    # respect subclasses order and exclude object and Document
-    mro: List[type[Any]] = cls.mro()[:-2:][::-1]
-    for x in mro:
-        for k, v in x.__annotations__.items():
-            # fallback if its just annotation
-            value = getattr(x, k, _field(type=v))
-            # check for field
-            if not _is_counting_attr(value.__class__):
-                # if its just annotation with value
-                value = _field(default=value, type=v)
-            # set the values
-            these[k] = value
-            these["__annotations__"].update(x.__annotations__)
-
-    # cache result
-    _mro_cache_map[id(cls)] = these
-    return these
-
-
-def _cls_to_baseclass_from_mro(cls: type, /) -> type:
-    # needed for enums and stuff
-    # <MyEnum foo: bar> will return <class 'Enum'>
-    if hasattr(cls, "mro"):  # not all annotations have mro (e.g Literal)
-        return cls.mro()[-2]  # at this position sits base class
-    return cls
-
-
-def _is_counting_attr(attr_t: Any) -> bool:
-    return attr_t is _CountingAttr or isinstance(attr_t, _CountingAttr)
-
-
-def _get_field_property(
-    cls: type[Any],
-    field_name: str,
-    property_name: str,
-    default: Optional[Any] = None
-) -> Any:
-    _field_obj: Any = getattr(cls, field_name, None)
-
-    # check if its actual field
-    if _is_counting_attr(_field_obj):
-        prop = getattr(_field_obj, property_name)  # raise error too
-        if prop is not NOTHING:
-            return prop
-    return default
-
-
-def _as_dict_helper(obj: "Document", /) -> xJsonT:
-    """
-    internal helper for `Document.to_dict()`
-    """
-    payload = {
-        x: getattr(obj, x)
-        for x in _get_parameter_names(obj)
-    }
-    for key, value in {**payload}.items():  # prevent dict keys change
-        # handle subclasses correctly
-        cls = _cls_to_baseclass_from_mro(value.__class__)
-        metadata: xJsonT = _get_field_property(
-            obj.__class__,
-            field_name=key,
-            property_name="metadata",
-            default={}
-        )
-
-        # apply internal converter
-        internal_converter = _CONVERTERS.get(cls, {}).get("to")
-        if internal_converter is not None:
-            payload[key] = internal_converter(value)
-
-        # apply field converter
-        field_converter = _get_field_property(
-            obj.__class__,
-            field_name=key,
-            property_name="converter"
-        )
-        if field_converter is not None:
-            payload[key] = field_converter(value)
-
-        # replace keys according to metadata's `field_name` param
-        if FIELD_NAME in metadata:
-            payload[metadata[FIELD_NAME]] = payload.pop(key)
-
-    return payload
-
-
-def _get_parameter_names(obj: Any, /) -> list[str]:
-    """
-    return list of parameter names from `obj` `__init__` signature
-    """
-    return [*inspect.signature(obj.__init__).parameters.keys()]
+from .metadata import ExcludeIfNone, SchemaMetadata
+from .exceptions import SchemaGenerationException
+from .typings import xJsonT
+from ._internals import value_to_json_schema
+from .utils import is_origin_ex, isinstance_ex
 
 
 class SchemaGenerator:
@@ -232,57 +59,14 @@ class SchemaGenerator:
         self.additional_properties: bool = additional_properties
         self.auto_append_long = auto_append_long
 
-    def _get_field_name(self, name: str, cls: type, /) -> str:
-        metadata: xJsonT = _get_field_property(
-            cls,
-            field_name=name,
-            property_name="metadata",
-            default={}
-        )
-        return metadata.get(FIELD_NAME, name)
-
-    def _maybe_add_object_id_signature(self, payload: xJsonT, /) -> xJsonT:
-        if self.additional_properties:
-            return payload
-        required: List[str] = payload["$jsonSchema"]["required"]
-        required.append("_id")
-        payload["$jsonSchema"]["properties"]["_id"] = {
-            "bsonType": ["objectId"]
-        }
-        return payload
-
-    def generate(self, cls: type, /, *, child: bool = False) -> xJsonT:
-        if not issubclass(cls, Document):
+    def _extract_args(self, attr_t: Any) -> List[Any]:
+        if not hasattr(attr_t, "__args__"):
             raise SchemaGenerationException(
-                "class must be inherited from Document"
+                f"Expecting type arguments for the generic class. {attr_t}"
             )
+        return list(attr_t.__args__)
 
-        mro = _collect_mro(cls, include_annotations=True)
-        annotations = mro.pop("__annotations__")
-        required = [self._get_field_name(k, cls) for k in mro.keys()]
-
-        payload: xJsonT = {
-            "bsonType": ["object"],
-            "required": required,  # make all fields required
-            "properties": {},
-            "additionalProperties": self.additional_properties,
-        }
-        for k in mro.keys():
-            annotation = annotations[k]
-            name = self._get_field_name(k, cls)
-            payload["properties"][name] = {
-                **self._get_type_data(annotation, attr_name=k),
-                **self._generate_fixed_metadata(cls, k)
-            }
-        if not child:
-            return self._maybe_add_object_id_signature({
-                "$jsonSchema": {
-                    **payload
-                }
-            })
-        return payload
-
-    def _get_type_data(
+    def _generate_type_data(
         self,
         attr_t: Any,
         attr_name: str,
@@ -293,112 +77,51 @@ class SchemaGenerator:
         origin = get_origin(attr_t)
         is_union: bool = origin in [UnionType, Union]
         if not is_union:
-            if origin is Literal:  # like extended enum
-                args = [
-                    x.value if issubclass(type(x), Enum)
-                    else x for x in attr_t.__args__
-                ]
-                dtypes = chain([
-                    self._lookup_type(type(val)) for val in args
-                ])
-                return {
-                    "enum": args + ([None] if is_optional else []),
-                    "bsonType": list(set(dtypes))
-                }
+            schema = value_to_json_schema(attr_t, is_optional=is_optional)
+            if schema is not None:
+                return schema
             elif origin is list:
-                cls_: type = attr_t.__args__[0]
+                cls_: type = self._extract_args(attr_t)[0]
                 return {
                     "bsonType": ["array"] + (["null"] if is_optional else []),
                     "items": {
-                        **self._get_type_data(cls_, attr_name=attr_name)
+                        **self._generate_type_data(cls_, attr_name=attr_name)
                     }
                 }
-            elif origin is dict:
-                return {
-                    "bsonType": ["object"] + (["null"] if is_optional else []),
-                }
-            if not isinstance(attr_t, type):
+            elif isinstance_ex(attr_t, Document):
+                return self.generate(attr_t, child=True)  # type: ignore
+            else:
                 _args = attr_t.__class__, attr_t
                 raise SchemaGenerationException(
                     "Unsupported annotation found: %s, %s" % _args
                 )
-
-            if issubclass(attr_t, Enum):
-                values = [z.value for z in attr_t]
-                dtypes = chain([
-                    self._lookup_type(type(val)) for val in values
-                ])
-                return {
-                    "enum": values + ([None] if is_optional else []),
-                    "bsonType": list(set(dtypes)) + (
-                        ["null"] if is_optional else []
-                    )
-                }
-
-            elif self._is_document(attr_t):
-                return self.generate(attr_t, child=True)
-
-            else:
-                # add [["null"]] because _lookup_type returns list
-                dtype = chain([
-                    self._lookup_type(attr_t)] + (
-                        [["null"]] if is_optional else []
-                    )
-                )
-                return {"bsonType": dtype}
         else:
-            args: List[type] = list(attr_t.__args__)
+            args: List[type] = self._extract_args(attr_t)
             is_optional = type(None) in args
 
-            # huhcat
             for func in [
-                self._is_document,
-                self._is_enum,
-                self._is_literal
+                partial(isinstance_ex, argument=Document),
+                partial(isinstance_ex, argument=Enum),
+                partial(is_origin_ex, argument=Literal)
             ]:
                 condition = any(func(cls) for cls in args)
                 if condition and len(args) != (1 + is_optional):
-                    raise SchemaGenerationException(func.__doc__)
+                    kw = func.keywords["argument"]
+                    raise SchemaGenerationException(
+                        f"Cannot specify other annotations with {kw}"
+                    )
 
-            if sum([self._is_list(cls) for cls in args]) > 1:
+            if sum([is_origin_ex(cls, list) for cls in args]) > 1:
                 raise SchemaGenerationException(
                     "Multiple Lists are not allowed in Union"
                 )
 
-            payloads = [self._get_type_data(
+            payloads = [self._generate_type_data(
                 cls,
                 attr_name=attr_name,
                 is_optional=is_optional
             ) for cls in args]
             return self._merge_payloads(payloads)
-
-    def _lookup_type(self, attr_t: Any, /) -> list[str]:
-        try:
-            resolved = TYPE_MAP[attr_t]
-            if attr_t is int:
-                if not self.auto_append_long:
-                    return ["int"]
-            return resolved
-        except KeyError:
-            raise SchemaGenerationException(
-                f"Unsupported annotation: {attr_t}"
-            )
-
-    def _is_document(self, attr_t: Any, /) -> bool:
-        "Cannot specify other annotations with Document"
-        return isinstance(attr_t, type) and issubclass(attr_t, Document)
-
-    def _is_enum(self, attr_t: Any, /) -> bool:
-        "Cannot specify other annotations with Enum"
-        return isinstance(attr_t, type) and issubclass(attr_t, Enum)
-
-    def _is_literal(self, attr_t: Any, /) -> bool:
-        "Cannot specify other annotations with Literal"
-        return get_origin(attr_t) is Literal
-
-    def _is_list(self, attr_t: Any, /) -> bool:
-        "Cannot specify other annotations with List"
-        return get_origin(attr_t) is list
 
     def _merge_payloads(self, payloads: List[xJsonT], /) -> xJsonT:
         data: xJsonT = {"bsonType": []}
@@ -413,209 +136,163 @@ class SchemaGenerator:
 
         return data
 
-    def _generate_fixed_metadata(self, cls: type, attr_name: str) -> xJsonT:
-        metadata: xJsonT = _get_field_property(
-            cls,
-            field_name=attr_name,
-            property_name="metadata",
-            default={}
-        )
-        unsupported: List[str] = [FIELD_NAME]
-        return {
-            _METADATA_KEYS.get(k, k): v
-            for k, v in metadata.items()
-            if k not in unsupported
+    def generate(
+        self,
+        cls: "Type[Document]",
+        /,
+        *,
+        child: bool = False
+    ) -> xJsonT:
+        fields = cls.model_fields.items()
+        required = [
+            v.alias if v.alias else k
+            for k, v in fields
+        ]
+        if "_id" in required:
+            required.remove("_id")
+        payload: xJsonT = {
+            "bsonType": ["object"],
+            "required": required,  # make all fields required
+            "properties": {},
+            "additionalProperties": self.additional_properties,
         }
+        for k, v in fields:
+            key = v.alias if v.alias else k
+            payload["properties"][key] = {
+                **self._generate_type_data(v.annotation, k),
+                **self._generate_metadata(v.metadata)
+            }
+        if not child:
+            return self._maybe_add_object_id_signature({
+                "$jsonSchema": {
+                    **payload
+                }
+            })
+        return payload
+
+    def _maybe_add_object_id_signature(self, payload: xJsonT, /) -> xJsonT:
+        if self.additional_properties:
+            return payload
+        required: List[str] = payload["$jsonSchema"]["required"]
+        required.append("_id")
+        payload["$jsonSchema"]["properties"]["_id"] = {
+            "bsonType": ["objectId"]
+        }
+        return payload
+
+    def _generate_metadata(self, metadata: List[Any]) -> xJsonT:
+        for _meta in metadata:
+            if isinstance(_meta, SchemaMetadata):
+                return _meta.serialize()
+        return {}
 
 
-def chain(iterable: Iterable[Iterable[T]]) -> List[T]:
-    return [*itertools.chain.from_iterable(iterable)]
-
-
-def filter_non_null(doc: xJsonT) -> xJsonT:
-    return {
-        k: v for k, v in doc.items() if v is not None
-    }
-
-
-def ensure_document(
-    doc: Union[xJsonT, "Document"],
-    add_id: bool = False
-) -> xJsonT:
-    if isinstance(doc, Document):
-        doc = doc.to_dict()
-    if add_id:
-        doc = doc.copy()
-        doc.setdefault("_id", ObjectId())
-    return doc
-
-
-# https://www.mongodb.com/docs/manual/reference/operator/query/jsonSchema/#available-keywords
-# TODO: implement other?
-def field(
-    *,
-    default: Any = NOTHING,
-    converter: Any = None,
-    repr: Any = True,
-    title: Optional[str] = None,
-    description: Optional[str] = None,
-    min: Optional[int] = None,
-    max: Optional[int] = None,
-    min_items: Optional[int] = None,
-    max_items: Optional[int] = None,
-    minlen: Optional[int] = None,
-    maxlen: Optional[int] = None,
-    field_name: Optional[str] = None,
-    pattern: Optional[str] = None,
-    unique_items: bool = False,
-    metadata: Optional[xJsonT] = None
-) -> Any:
-
-    metadata = metadata or {}
-    not_needed: list[str] = [
-        "metadata",
-        "default",
-        "not_needed",
-        "converter",
-        "repr"
-    ]
-    payload = {
-        **{k: v for k, v in locals().items() if k not in not_needed},
-        **metadata
-    }  # remove other
-
-    if unique_items is False:
-        del payload["unique_items"]
-
-    metadata = filter_non_null(payload)
-    return _field(
-        default=default,
-        metadata=metadata,
-        converter=converter,
-        repr=repr
+class Document(BaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+        use_enum_values=True,
+        arbitrary_types_allowed=True,
+        alias_generator=to_camel,
+        populate_by_name=True,
+        validate_assignment=True
     )
+    _id: Optional[ObjectId] = PrivateAttr(default=None)
 
-
-_cls_cache_map: dict[int, type] = {}
-_mro_cache_map: dict[int, xJsonT] = {}
-
-
-@dataclass_transform(field_specifiers=(field,))
-class Document:
-    """
-    this is `magic` class that makes subclasses
-    act like `attrs-defined` classes when initialization
-    but not converting them to dataclasses instantly.
-    `Document` is hooking child's `__new__` method
-    changing its cls to `attrs-defined` one (cached).
-    new instance has `__class__` attribute same as
-    original one. (e.g for `isinstance()`)
-    because subclassed classes are NOT being
-    transformed into dataclasses instantly
-    you cant use `fields()` or its friends from `attrs`.
-    this library provides private api for that.
-    i've decided to make its that way, because i didn't want
-    to use `@define` and subclass from other class
-    at the same time like
-    >>> @define # decorator
-    >>> class User(Document) # and Document
-    >>>     ...
-
-    Using decorator and subclass together looks ugly,
-    so i've implemented this class.
-    """
-    _id: ObjectId  # supports _id as ObjectId only
-
-    def __new__(cls, *args: tuple[Any], **kwargs: xJsonT) -> Self:
-        if id(cls) in _cls_cache_map:
-            injected = _cls_cache_map[id(cls)]
-        else:
-            mro_entries = _collect_mro(cls)
-            injected = make_class(
-                cls.__name__,  # create a class with cls name
-                mro_entries,  # attrs needed for class
-                bases=(define(cls),),  # make cls be a attrs-defined class
-                class_body={"__class__": cls}  # trick for isinstance
-            )
-            _cls_cache_map[id(cls)] = injected
-        obj = super().__new__(injected)
-        obj.__init__(*args, **kwargs)
-        return obj.id(ObjectId())
-
-    def to_dict(self, *, exclude_id: bool = True) -> xJsonT:
-        id_payload = {"_id": self._id} if not exclude_id else {}
-        return {
-            **id_payload,
-            **_as_dict_helper(self),
-        }
+    @model_serializer(mode="wrap")
+    def serialize(
+        self,
+        wrap: Callable[[Self], dict[str, Any]],
+        info: SerializationInfo
+    ) -> dict[str, Any]:
+        wrapped = wrap(self)
+        for k, v in self.model_fields.items():
+            if v.metadata and any(isinstance(x, ExcludeIfNone) for x in v.metadata):  # noqa: E501
+                key = (v.alias if v.alias else k) if info.by_alias else k
+                if getattr(self, k) is None:
+                    wrapped.pop(key, None)
+        if self.model_extra:
+            for k in self.model_extra.keys():
+                wrapped.pop(k, None)
+        for k, v in wrapped.items():
+            if isinstance(v, UUID):
+                wrapped[k] = Binary.from_uuid(v)
+        return wrapped
 
     @classmethod
-    def from_document(cls, document: xJsonT, /) -> Self:
-        mro = _collect_mro(cls, include_annotations=True)
-        payload: xJsonT = {}
-        annotations = mro.pop("__annotations__")
-        for name, attr in mro.items():
-            field_name = attr.metadata.get(FIELD_NAME, name)
-            if field_name not in document:
-                raise CorruptedDocument(field_name)
-            annotation = _cls_to_baseclass_from_mro(annotations[name])
-            if annotation in _CONVERTERS:
-                converter = _CONVERTERS[annotation]["from"]
-                payload[name] = converter(
-                    annotations[name], document[field_name]
-                )
-            else:
-                payload[name] = document[field_name]  # TODO: fix dict ordering
-        _id: ObjectId = document.get("_id", ObjectId())
-        return cls(**payload).id(_id)
+    def from_document(cls, payload: xJsonT) -> Self:
+        return cls.model_validate(payload)
 
-    @overload
-    def id(self, _id: None = None, /) -> ObjectId:
-        ...
+    def model_post_init(self, ctx: Any) -> None:
+        extra = (self.model_extra or {})
+        _id: Optional[ObjectId] = extra.pop("_id", None)
+        self._id = _id
+        extra_keys = set(extra.keys())
+        if extra_keys:
+            raise ValueError(f"Unexpected fields: {extra_keys}")
 
-    @overload
-    def id(self, _id: ObjectId, /) -> Self:
-        ...
+    def to_dict(self, exclude_id: bool = False) -> xJsonT:
+        dumped: xJsonT = self.model_dump(by_alias=True)
+        if not exclude_id and self._id is not None:
+            dumped = {"_id": self._id, **dumped}
+        return dumped
 
-    def id(self, _id: Optional[ObjectId] = None, /) -> Union[ObjectId, Self]:
-        if _id is None:
-            return self._id
+    @classmethod
+    def from_args(cls, *args: Any, **kwargs: Any) -> Self:
+        """
+        Initialize Document from non keyword arguments.
+        (You cannot set _id that way)
+        """
+        properties = [
+            v.alias if v.alias else k for k, v in cls.model_fields.items()
+        ]
+        keywords = {
+            **dict(zip(properties, args)),
+            **kwargs
+        }
+        return cls(**keywords)
+
+    def with_id(self, _id: ObjectId) -> Self:
         self._id = _id
         return self
 
+    def get_id(self) -> Optional[ObjectId]:
+        return self._id
 
-_CONVERTERS: Final[dict[type, xJsonT]] = {
-    UUID: {
-        "to": lambda uuid: Binary.from_uuid(uuid),  # type: ignore
-        "from": lambda _, value: value.as_uuid()  # type: ignore
-    },
-    Enum: {
-        "to": lambda enm: enm.value,  # type: ignore
-        "from": lambda cls, value: cls(value)  # type: ignore
-    },
-    Document: {
-        "to": lambda doc: doc.to_dict(),  # type: ignore
-        "from": lambda cls, value: cls.from_document(value)  # type: ignore
-    }
-}
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, Document):
+            raise NotImplementedError
+        if self._id is not None and other._id is not None:
+            return self._id == other._id
+        return self.to_dict(exclude_id=True) == other.to_dict(exclude_id=True)
+
+    def __str__(self) -> str:
+        return self.__repr__()
 
 
-# https://stackoverflow.com/questions/19053707/converting-snake-case-to-lower-camel-case-lowercamelcase
-def to_camel_case(attr_name: str) -> str:
-    camel = "".join(x.capitalize() for x in attr_name.lower().split("_"))
-    return camel[0].lower() + camel[1:]
+T = TypeVar("T", bound=Document)
 
 
-def maybe_enum_value(val: Any) -> Any:
-    if isinstance(val, MutableMapping):
-        for k, v in val.items():  # type: ignore
-            val[k] = maybe_enum_value(v)
-    if isinstance(val, Enum):
-        return val.value
-    return cast(Any, val)
+def model_configure(config: ConfigDict) -> Callable[[type[T]], Callable[..., T]]:  # noqa: E501
+    """
+    use this decorator on a class to change its model config.
+    ```
+    >>> class MyEnum(Enum):
+    ...    FIRST = "1"
+    ...    SECOND = "2"
 
 
-def maybe_to_dict(obj: Any) -> Any:
-    if isinstance(obj, Document):
-        return obj.to_dict()
-    return obj
+    >>> @model_configure(ConfigDict(use_enum_values=False))  # True by default
+    ... class Changed(Document):
+    ...    test: MyEnum
+
+    Changed(test=<MyEnum.FIRST: '1'>)
+    ```
+    """
+    def outer(cls: type[T]) -> Callable[..., T]:
+        cls.model_config.update(config)
+        cls.model_rebuild(force=True)
+
+        def inner(*args: Any, **kwargs: Any) -> T:
+            return cls(*args, **kwargs)
+        return inner
+    return outer

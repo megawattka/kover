@@ -5,12 +5,11 @@ import os  # noqa: E402
 import unittest  # noqa: E402
 from uuid import uuid4, UUID  # noqa: E402
 
-from bson import ObjectId  # noqa: E402
-
 from kover.typings import xJsonT  # noqa: E402
 from kover.auth import AuthCredentials  # noqa: E402
 from kover.client import Kover  # noqa: E402
 from kover.schema import Document  # noqa: E402
+from kover.gridfs import GridFS  # noqa: E402
 
 
 class Sample(Document):
@@ -34,31 +33,24 @@ class TestMethods(unittest.IsolatedAsyncioTestCase):
             username="main_m1",
             password="incunaby!"
         )
-        self.coll_name = "test"
+        self.coll_name = "fs"
 
     async def asyncSetUp(self) -> None:
         self.client = await Kover.make_client(credentials=self.credentials)
         assert self.client.signature is not None
         self.addAsyncCleanup(self.client.close)
         self.collection = self.client.db.get_collection(self.coll_name)
+        self._18_mb = 1 * 1024 * 1024 * 18
 
     async def asyncTearDown(self) -> None:
         await self.client.db.drop_collection(self.coll_name)
 
-    async def test_insert(self) -> None:
-        doc = Sample.random()
-        obj_id = await self.collection.insert(doc)
-        assert isinstance(obj_id, ObjectId)
-
-        samples = [Sample.random() for _ in range(100)]
-        ids = await self.collection.insert(samples)
-        assert len(ids) == 100
-
-        count = await self.collection.count()
-        assert count == 101, count
-
-        found = await self.collection.find_one({"name": doc.name}, cls=Sample)
-        assert found == doc, (found, doc)
+    async def test_gridfs(self) -> None:
+        fs = await GridFS(self.client.gridfsdb).indexed()
+        file_id = await fs.put(os.urandom(self._18_mb))
+        file, binary = await fs.get_by_file_id(file_id)
+        print("sha1: ", file.metadata["sha1"])
+        assert len(binary.getvalue()) == self._18_mb
 
 
 if __name__ == "__main__":

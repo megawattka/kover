@@ -56,8 +56,7 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
             self.test_collection_name
         )
         assert await collection.count() == 0
-
-        users = [User("josh", age=50)] * 1000
+        users = [User(name="josh", age=50)] * 1000
         r = await collection.insert(users)
         assert len(r) == 1000 and len(set(r)) == 1000
         cs = await collection.find().limit(100).to_list()
@@ -106,18 +105,21 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_documents(self) -> None:
         assert issubclass(User, Document)
-        user = User("john", 16)
-        assert user.id() is not None
-        document = user.to_dict(exclude_id=False)
-        assert "_id" in document
+        user = User(name="john", age=16)
+        assert user.get_id() is None
         document = user.to_dict()
         assert "_id" not in document
         serialized = User.from_document(document)
         assert serialized.name == "john" and serialized.age == 16
         assert isinstance(serialized, User) and serialized == user
 
-        subdocument = SubDocument(1, "5", 2893912931299219912919129)
-        sbcls = Subclass("jora", 20, uuid4(), subdocument=subdocument)
+        subdocument = SubDocument(a=1, b="5", uid=2893912931299219912919129)
+        sbcls = Subclass(
+            name="jora",
+            age=20,
+            uuid=uuid4(),
+            subdocument=subdocument
+        )
         deserialized = sbcls.to_dict()
         assert len(deserialized.keys()) == 4
         assert isinstance(deserialized["uuid"], Binary)
@@ -139,7 +141,7 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
                         'bsonType': ['objectId']
                     },
                     'age': {
-                        'bsonType': ['int', 'long']
+                        'bsonType': ['int', "long"]
                     },
                     'name': {
                         'bsonType': ['string']

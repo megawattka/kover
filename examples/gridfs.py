@@ -1,8 +1,7 @@
 import asyncio
 
-from kover.client import Kover
+from kover import Kover, AuthCredentials
 from kover.gridfs import GridFS
-from kover.auth import AuthCredentials
 
 
 async def main():

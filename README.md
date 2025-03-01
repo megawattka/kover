@@ -7,14 +7,13 @@
 ![Last Commit](https://img.shields.io/github/last-commit/oMegaPB/kover)
 ![MongoDB](https://img.shields.io/badge/MongoDB-6.0+-green)
 
-**Kover** is a object-orientied fully typed mongodb driver supporting local mongod and replica sets. Battle tests are still required*<br>
+**Kover** is a Model-orientied strict typed mongodb driver supporting local mongod and replica sets. Battle tests are still required*<br>
 this library was inspired by <a href=https://github.com/sakal/aiomongo>this project</a> i like it very much. Though its 8 years old.
 
 ```py
 import asyncio
 
-from kover.client import Kover
-from kover.auth import AuthCredentials
+from kover import Kover, AuthCredentials
 
 
 async def main():
@@ -45,11 +44,11 @@ ill be happy if someone can help me implement missing features.
 - pymongo 4.10.1 (latest for now) or later.
 - python 3.10.6
 - im using MongoDB 7.0 but it should also work on MongoDB 6.0
-- attrs 24.2.0 or later for dataclass functionality
+- pydantic 2.10.6 or later
 
 # Features
-almost all features from pymongo and object-orientied functionality. All auth types are supported.
-this lib was built for new MongoDB versions. All features that were marked as DEPRECATED in docs
+almost all features from pymongo. All auth types are supported. Integration with Pydantic supported.
+this lib was built for new mongod versions. All features that were marked as DEPRECATED in docs
 were NOT added. See docs for references
 
 ### Cursors
@@ -67,6 +66,8 @@ async with db.test.find().limit(1000).batch_size(50) as cursor:
 ```
 ### if collection has specific schema:
 ```py
+from kover import Document
+
 class User(Document):
     uuid: UUID
     name: str
@@ -80,14 +81,23 @@ async with db.test.find(cls=User).limit(1000) as cursor:
 ```
 
 ### Schema Validation
-some people say that mongodb is dirty because you can insert any document in collection. Kover fixes that!
+some people say that mongodb is dirty because you can insert any document in collection. Kover fixes that! Use `pydantic.Field` here if you need
+Document is a Pydantic Model in 2.0
 ```py
 import asyncio
 from enum import Enum
-from typing import Optional
+from typing import Optional, Annotated
 
-from kover.client import Kover
-from kover.schema import SchemaGenerator, Document, field
+from pydantic import ValidationError
+
+from kover import (
+    SchemaGenerator,
+    Document,
+    Kover,
+    AuthCredentials,
+    OperationFailure
+)
+from kover.metadata import SchemaMetadata
 
 
 class UserType(Enum):
@@ -96,28 +106,30 @@ class UserType(Enum):
     CREATOR = "CREATOR"
 
 
-# can be used as annotation too
 class Friend(Document):
     name: str
-    age: int = field(min=18)  # minimum age is 18. less will error
+    age: Annotated[int, SchemaMetadata(minimum=18)]  # minimum age is 18.
 
 
-# note field_name kwarg in user_type field.
-# it'll be name of that key when using .to_dict()
+# kover automatically generates aliases using camel case.
+# so user_type will be "userType" in db
+# if you still need to snake cased field_name
+# use explicit alias="<snake_cased_name>"
 class User(Document):
-    name: str = field(description="must be a string")
-    age: int = field(
-        description="age must be int and more that 18", min=18
-    )
-    user_type: UserType = field(
-        description="can only be one of the enum values",
-        field_name="userType"
-    )
+    name: Annotated[str, SchemaMetadata(description="must be a string")]
+    age: Annotated[int, SchemaMetadata(
+        description="age must be int and more that 18",
+        minimum=18
+    )]
+    user_type: Annotated[UserType, SchemaMetadata(
+        description="can only be one of the enum values"
+    )]
     friend: Optional[Friend]
 
 
 async def main():
-    kover = await Kover.make_client()
+    credentials = AuthCredentials.from_environ()
+    kover = await Kover.make_client(credentials=credentials)
 
     generator = SchemaGenerator()
     schema = generator.generate(User)
@@ -125,20 +137,39 @@ async def main():
     collection = await kover.db.test.create_if_not_exists()
     await collection.set_validator(schema)
 
-    valid_user = User("John Doe", 20, UserType.USER, friend=Friend("dima", 18))
-
+    valid_user = User(
+        name="John Doe",
+        age=20,
+        user_type=UserType.USER,
+        friend=Friend(
+            name="dima",
+            age=18
+        )
+    )
     # function accepts either valid_user or valid_user.to_dict()
     object_id = await collection.insert(valid_user)
     print(object_id, "added!")
 
-    invalid_user = User(
-        "Rick",
-        age=15,
-        user_type=UserType.ADMIN,
-        friend=Friend("roma", 25)
-    )
+    try:
+        invalid_user = User(
+            name="Rick",
+            age=15,
+            user_type=UserType.ADMIN,
+            friend=Friend(
+                name="roma",
+                age=25
+            )
+        )
+    except ValidationError as e:  # it wont let you create such model
+        raise SystemExit(e.errors())
+
     # kover.exceptions.ErrDocumentValidationFailure: Rick's age is less than 18
-    await collection.insert(invalid_user)
+    try:
+        await collection.insert(invalid_user)
+    except OperationFailure as e:
+        msg: str = e.message["errmsg"]
+        print(f"got Error: {msg}")
+        assert e.code == 121  # ErrDocumentValidationFailure
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -152,20 +183,22 @@ import asyncio
 
 from bson import ObjectId
 
-from kover.client import Kover
-from kover.session import Transaction
-from kover.typings import xJsonT
+from kover.client import (
+    Kover,
+    xJsonT,
+    AuthCredentials
+)
 
 
 async def main():
-    kover = await Kover.make_client()
+    credentials = AuthCredentials.from_environ()
+    kover = await Kover.make_client(credentials=credentials)
     session = await kover.start_session()
 
     # specify _id directly
     doc: xJsonT = {"_id": ObjectId(), "name": "John", "age": 30}
     collection = await kover.db.test.create_if_not_exists()
 
-    transaction: Transaction
     async with session.start_transaction() as transaction:
         await collection.insert(doc, transaction=transaction)
         # it should error with duplicate key now
@@ -187,9 +220,8 @@ if __name__ == "__main__":
 ```py
 import asyncio
 
-from kover.client import Kover
+from kover import Kover, AuthCredentials
 from kover.gridfs import GridFS
-from kover.auth import AuthCredentials
 
 
 async def main():
@@ -223,13 +255,15 @@ import asyncio
 
 from bson import ObjectId
 
-from kover.client import Kover
-from kover.schema import Document
-from kover.models import Update, Delete
-from kover.auth import AuthCredentials
+from kover import (
+    Kover,
+    Document,
+    Update,
+    Delete,
+    AuthCredentials
+)
 
 
-# example document
 class User(Document):
     name: str
     age: int
@@ -239,13 +273,13 @@ async def main():
     credentials = AuthCredentials.from_environ()
     kover = await Kover.make_client(credentials=credentials)
 
-    collection = kover.db.test
-    user = User("John", 23)
+    collection = kover.db.get_collection("test")
+    user = User(name="John", age=23)
     file_id: ObjectId = await collection.insert(user)  # or user.to_dict()
 
-    # this concept requires using "$set" explicitly for updating field
+    # this concept requires using "$set" explicitly
     # if you dont specify it your entire doc will be
-    # just replaced fully to specified here doc.
+    # just replaced fully to specified here
     # advancements of this way is that you can do anything here not only "$set"
     # e.g {"$push": {"userIds": 12345}} and more
     # in conclusion: be careful with specifying "$set", dont forget it!
@@ -255,7 +289,7 @@ async def main():
     # limit 1 corresponds to .delete_one and 0 to .delete_many
     delete = Delete({"_id": file_id}, limit=1)
     n = await collection.delete(delete)
-    print(f"documents deleted: {n}")
+    print(f"documents deleted: {n}")  # 1
 
 
 if __name__ == "__main__":
@@ -263,5 +297,4 @@ if __name__ == "__main__":
 
 ```
 
-# Tests/Benchmarks
-**next commit i promise**
+# If you found a bug, open issue pls. lib is still WIP

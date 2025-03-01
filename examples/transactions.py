@@ -2,12 +2,16 @@ import asyncio
 
 from bson import ObjectId
 
-from kover.client import Kover
-from kover.typings import xJsonT
+from kover.client import (
+    Kover,
+    xJsonT,
+    AuthCredentials
+)
 
 
 async def main():
-    kover = await Kover.make_client()
+    credentials = AuthCredentials.from_environ()
+    kover = await Kover.make_client(credentials=credentials)
     session = await kover.start_session()
 
     # specify _id directly

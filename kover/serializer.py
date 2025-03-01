@@ -11,7 +11,7 @@ from .typings import xJsonT
 
 class Serializer:
     def _randint(self) -> int:  # request_id must be any integer
-        return int.from_bytes(os.urandom(4), signed=True)
+        return int.from_bytes(os.urandom(4), "big", signed=True)
 
     def _pack_message(
         self,

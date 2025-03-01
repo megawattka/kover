@@ -2,10 +2,13 @@ import asyncio
 
 from bson import ObjectId
 
-from kover.client import Kover
-from kover.schema import Document
-from kover.models import Update, Delete
-from kover.auth import AuthCredentials
+from kover import (
+    Kover,
+    Document,
+    Update,
+    Delete,
+    AuthCredentials
+)
 
 
 class User(Document):
@@ -17,8 +20,8 @@ async def main():
     credentials = AuthCredentials.from_environ()
     kover = await Kover.make_client(credentials=credentials)
 
-    collection = kover.db.test  # or kover.files
-    user = User("John", 23)
+    collection = kover.db.get_collection("test")
+    user = User(name="John", age=23)
     file_id: ObjectId = await collection.insert(user)  # or user.to_dict()
 
     # this concept requires using "$set" explicitly
@@ -33,7 +36,7 @@ async def main():
     # limit 1 corresponds to .delete_one and 0 to .delete_many
     delete = Delete({"_id": file_id}, limit=1)
     n = await collection.delete(delete)
-    print(f"documents deleted: {n}")
+    print(f"documents deleted: {n}")  # 1
 
 
 if __name__ == "__main__":
