@@ -1,10 +1,10 @@
-from .models import Chunk, File
+from .exceptions import GridFSFileNotFound  # noqa: D104
 from .gridfs import GridFS
-from .exceptions import GridFSFileNotFound
+from .models import Chunk, File
 
 __all__ = [
-    "GridFS",
     "Chunk",
     "File",
-    "GridFSFileNotFound"
+    "GridFS",
+    "GridFSFileNotFound",
 ]

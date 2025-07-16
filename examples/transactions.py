@@ -1,15 +1,19 @@
 import asyncio
+import logging
+from typing import TYPE_CHECKING
 
 from bson import ObjectId
 
-from kover.client import (
-    Kover,
-    xJsonT,
-    AuthCredentials
-)
+from kover import AuthCredentials, Kover
+
+if TYPE_CHECKING:
+    from kover import xJsonT
+
+log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
-async def main():
+async def main() -> None:  # noqa: D103
     credentials = AuthCredentials.from_environ()
     kover = await Kover.make_client(credentials=credentials)
     session = await kover.start_session()
@@ -23,11 +27,13 @@ async def main():
         # it should error with duplicate key now
         await collection.insert(doc, transaction=transaction)
 
-    print(transaction.exception, type(transaction.exception))  # if exist
-    print(transaction.state)
+    exc = transaction.exception  # if exist
+    log.info(f"{exc}, {type(exc)}")
+    log.info(f"trx state: {transaction.state}")
 
     found = await collection.find().to_list()
-    print(found)  # no documents found due to transaction abort
+    log.info(found)  # no documents found due to transaction abort
+
 
 if __name__ == "__main__":
     asyncio.run(main())

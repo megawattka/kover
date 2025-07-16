@@ -1,22 +1,28 @@
 import asyncio
-
-from bson import ObjectId
+import logging
+from typing import TYPE_CHECKING
 
 from kover import (
-    Kover,
-    Document,
-    Update,
+    AuthCredentials,
     Delete,
-    AuthCredentials
+    Document,
+    Kover,
+    Update,
 )
 
+if TYPE_CHECKING:
+    from bson import ObjectId
 
-class User(Document):
+log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
+
+class User(Document):  # noqa: D101
     name: str
     age: int
 
 
-async def main():
+async def main() -> None:  # noqa: D103
     credentials = AuthCredentials.from_environ()
     kover = await Kover.make_client(credentials=credentials)
 
@@ -36,7 +42,7 @@ async def main():
     # limit 1 corresponds to .delete_one and 0 to .delete_many
     delete = Delete({"_id": file_id}, limit=1)
     n = await collection.delete(delete)
-    print(f"documents deleted: {n}")  # 1
+    log.info(f"documents deleted: {n}")  # 1
 
 
 if __name__ == "__main__":

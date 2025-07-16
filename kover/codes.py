@@ -1,4 +1,4 @@
-# TODO: add missing codes
+# TODO @megawattka: add missing codes
 codes_to_exc_name: dict[int, str] = {
     2: "ErrBadValue",
     9: "ErrFailedToParse",
@@ -23,8 +23,11 @@ codes_to_exc_name: dict[int, str] = {
     68: "ErrIndexAlreadyExists",
     72: "ErrInvalidOptions",
     73: "ErrInvalidNamespace",
+    76: "NoReplicationEnabled",
     85: "ErrIndexOptionsConflict",
     86: "ErrIndexKeySpecsConflict",
+    93: "InvalidReplicaSetConfig",
+    94: "NotYetInitialized",
     96: "ErrOperationFailed",
     121: "ErrDocumentValidationFailure",
     197: "ErrInvalidIndexSpecificationOption",
@@ -32,6 +35,7 @@ codes_to_exc_name: dict[int, str] = {
     186: "ErrClientMetadataCannotBeMutated",
     238: "ErrNotImplemented",
     10065: "ErrIndexesWrongType",
+    10107: "NotWritablePrimary",
     10334: "BSONObjectTooLarge",
     11000: "ErrDuplicateKeyInsert",
     40272: "ErrSetBadExpression",
@@ -96,5 +100,5 @@ codes_to_exc_name: dict[int, str] = {
     5107200: "ErrStageSkipBadValue",
     5107201: "ErrStageLimitInvalidArg",
     5447000: "ErrStageCollStatsInvalidArg",
-    7582300: "ErrStageIndexedStringVectorDuplicate"
+    7582300: "ErrStageIndexedStringVectorDuplicate",
 }

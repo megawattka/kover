@@ -1,10 +1,20 @@
-import asyncio
+"""Example of using GridFS with Kover.
 
-from kover import Kover, AuthCredentials
+This example demonstrates how to put, get, list, and delete
+files using Kover's GridFS implementation.
+"""
+
+import asyncio
+import logging
+
+from kover import AuthCredentials, Kover
 from kover.gridfs import GridFS
 
+log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
-async def main():
+
+async def main() -> None:  # noqa: D103
     credentials = AuthCredentials.from_environ()
     kover = await Kover.make_client(credentials=credentials)
 
@@ -15,13 +25,14 @@ async def main():
     file_id = await fs.put(b"Hello World!")
 
     file, binary = await fs.get_by_file_id(file_id)
-    print(file, binary.read())
+    log.info(file, binary.read())
 
     files = await fs.list()
-    print(f"total files: {len(files)}")
+    log.info(f"total files: {len(files)}")
 
     deleted = await fs.delete(file_id)
-    print("is file deleted?", deleted)
+    log.info(f"is file deleted? {deleted}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

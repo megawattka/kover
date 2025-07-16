@@ -3,93 +3,196 @@ from __future__ import annotations
 from collections import deque
 from typing import (
     TYPE_CHECKING,
-    Optional,
-    List,
     Generic,
     TypeVar,
-    Type,
     cast,
-    Any,
-    Union
 )
 
 from bson import Int64
 from typing_extensions import Self
 
-from .typings import xJsonT
-from .session import Transaction
-from .models import Collation
 from .utils import filter_non_null
 
 if TYPE_CHECKING:
     from .collection import Collection
+    from .models import Collation
     from .schema import Document
+    from .session import Transaction
+    from .typings import xJsonT
 
 T = TypeVar("T")
 
 
 class Cursor(Generic[T]):
+    """Asynchronous MongoDB-like cursor for iterating over query results.
+
+    Methods:
+    -------
+    sort(mapping: xJsonT) -> Self
+        Set the sort order for the query results.
+    skip(value: int) -> Self
+        Set the number of documents to skip.
+    limit(value: int) -> Self
+        Set the maximum number of documents to return.
+    batch_size(value: int) -> Self
+        Set the batch size for the query results.
+    projection(mapping: xJsonT) -> Self
+        Set the projection for the query results.
+    comment(comment: str) -> Self
+        Set a comment for the operation.
+    hint(hint: str | xJsonT) -> Self
+        Set an index hint for the query.
+    close() -> None
+        Close the cursor and release resources.
+    to_list() -> list[T]
+        Return all documents from the cursor as a list.
+    """
+
     def __init__(
         self,
-        filter: xJsonT,
+        filter_: xJsonT,
         collection: Collection,
-        cls: Optional[Type[Document]] = None,
-        transaction: Optional[Transaction] = None
+        cls: type[Document] | None = None,
+        transaction: Transaction | None = None,
     ) -> None:
-        self._id: Optional[Int64] = None
+        self._id: Int64 | None = None
         self._collection = collection
         self._limit = 0
-        self._filter = filter
-        self._projection: Optional[xJsonT] = None
-        self._sort: Optional[xJsonT] = None
+        self._filter = filter_
+        self._projection: xJsonT | None = None
+        self._sort: xJsonT | None = None
         self._skip: int = 0
         self._limit: int = 0
-        self._hint: Optional[Union[str, xJsonT]] = None
+        self._hint: str | xJsonT | None = None
         self._batch_size: int = 101
-        self._comment: Optional[str] = None
+        self._comment: str | None = None
         self._retrieved: int = 0
         self._killed: bool = False
         self._second_iteration: bool = False
         self._docs: deque[T] = deque()
         self._cls = cls
         self._transaction = transaction
-        self._collation: Optional[Collation] = None
+        self._collation: Collation | None = None
 
     async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, *args: tuple[Any]) -> None:
+    async def __aexit__(self, *args: object) -> None:
         await self.close()
 
     def sort(self, mapping: xJsonT) -> Self:
+        """Set the sort order for the query results.
+
+        Parameters:
+        ----------
+        mapping : xJsonT
+            A mapping specifying the sort order for the query.
+
+        Returns:
+        -------
+        Self
+            The cursor instance with the sort order applied.
+        """
         self._sort = mapping
         return self
 
     def skip(self, value: int) -> Self:
+        """Set the skip amount for the query results.
+
+        Parameters:
+        ----------
+        value : int
+            Amount to skip.
+
+        Returns:
+        -------
+        Self
+            The cursor instance with the sort order applied.
+        """
         self._skip = value
         return self
 
     def limit(self, value: int) -> Self:
+        """Set the limit for the query.
+
+        Parameters:
+        ----------
+        value : int
+            Maximum amount of docs to return.
+
+        Returns:
+        -------
+        Self
+            The cursor instance with the sort order applied.
+        """
         self._limit = value
         return self
 
     def batch_size(self, value: int) -> Self:
+        """Set the batch size for the query results.
+
+        Parameters:
+        ----------
+        value : int
+            Maximum amount of docs to return from first batch.
+
+        Returns:
+        -------
+        Self
+            The cursor instance with the projection applied.
+        """
         self._batch_size = value
         return self
 
     def projection(self, mapping: xJsonT) -> Self:
+        """Set the projection for the query results.
+
+        Parameters:
+        ----------
+        mapping : xJsonT
+            A mapping specifying the fields to include or exclude in the query results.
+
+        Returns:
+        -------
+        Self
+            The cursor instance with the projection applied.
+        """  # noqa: E501
         self._projection = mapping
         return self
 
     def comment(self, comment: str) -> Self:
+        """Set the comment for operation.
+
+        Parameters:
+        ----------
+        comment : str
+            A comment that will be shown in logs.
+
+        Returns:
+        -------
+        Self
+            The cursor instance with the projection applied.
+        """
         self._comment = comment
         return self
 
-    def hint(self, hint: Union[str, xJsonT]) -> Self:
+    def hint(self, hint: str | xJsonT) -> Self:
+        """Set the hint for the query.
+
+        Parameters:
+        ----------
+        hint : str | xJsonT
+            Index hint to optimize query performance.
+
+        Returns:
+        -------
+        Self
+            The cursor instance with the hint applied.
+        """
         self._hint = hint
         return self
 
-    def get_query(self) -> xJsonT:
+    def _get_query(self) -> xJsonT:
         collation = self._collation.to_dict() if self._collation else None
         return filter_non_null({
             "find": self._collection.name,
@@ -101,18 +204,18 @@ class Cursor(Generic[T]):
             "batchSize": self._batch_size,
             "comment": self._comment,
             "collation": collation,
-            "hint": self._hint
+            "hint": self._hint,
         })
 
     def _map_docs(
         self,
-        documents: List[xJsonT]
-    ) -> List[T]:
+        documents: list[xJsonT],
+    ) -> list[T]:
         if self._cls is not None:
             documents = [
                 self._cls.from_document(doc) for doc in documents
             ]  # type: ignore
-        return cast(List[T], documents)
+        return cast("list[T]", documents)
 
     def __aiter__(self) -> Self:
         return self
@@ -121,10 +224,10 @@ class Cursor(Generic[T]):
         if self._docs:
             return self._docs.popleft()
         if self._id is None:
-            query = self.get_query()
+            query = self._get_query()
             request = await self._collection.database.command(
                 query,
-                transaction=self._transaction
+                transaction=self._transaction,
             )
             docs = request["cursor"]["firstBatch"]
             self._retrieved += len(docs)
@@ -137,11 +240,11 @@ class Cursor(Generic[T]):
             self._second_iteration = True
             command: xJsonT = {
                 "getMore": Int64(self._id),
-                "collection": self._collection.name
+                "collection": self._collection.name,
             }
             request = await self._collection.database.command(
                 command,
-                transaction=self._transaction
+                transaction=self._transaction,
             )
             docs = request["cursor"]["nextBatch"]
             self._retrieved += len(docs)
@@ -151,14 +254,27 @@ class Cursor(Generic[T]):
         raise StopAsyncIteration
 
     async def close(self) -> None:
+        """Close the cursor and release any associated resources.
+
+        This method kills the cursor on the server if it is still active and
+        clears any remaining documents in the local buffer.
+        """
         if not self._killed:
             self._killed = True
             if self._id is not None and int(self._id) > 0 and self._limit != 0:
                 command: xJsonT = {
-                    "killCursors": self._collection.name, "cursors": [self._id]
+                    "killCursors": self._collection.name,
+                    "cursors": [self._id],
                 }
                 await self._collection.database.command(command)
             self._docs.clear()
 
-    async def to_list(self) -> List[T]:
+    async def to_list(self) -> list[T]:
+        """Return all documents from the cursor as a list.
+
+        Returns:
+        -------
+        list[T]
+            A list containing all documents retrieved by the cursor.
+        """
         return [doc async for doc in self]

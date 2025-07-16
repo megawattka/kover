@@ -1,6 +1,6 @@
-# MIT License
+# MIT License  # noqa: D104
 
-# Copyright (c) 2024 oMegaPB
+# Copyright (c) 2024 megawattka
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -9,8 +9,8 @@
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
 
-# The above copyright notice and this permission notice shall be included in all # noqa: E501
-# copies or substantial portions of the Software.
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -20,10 +20,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-__version__ = "2.0.8"
+__version__ = "2.1.0"
 __author__ = "oMegaPB"
 __license__ = "MIT"
-__copyright__ = "Copyright (C) 2024-present oMegaPB <https://github.com/oMegaPB>"  # noqa: E501
+__copyright__ = "Copyright (C) 2024-present megawattka"
 
 from .auth import AuthCredentials
 from .client import Kover
@@ -31,68 +31,69 @@ from .collection import Collection
 from .cursor import Cursor
 from .database import Database
 from .enums import (
-    ValidationLevel,
+    CollationStrength,
     IndexDirection,
     IndexType,
-    CollationStrength
+    ValidationLevel,
 )
 from .exceptions import (
+    CorruptedDocument,
+    CredentialsException,
     OperationFailure,
     SchemaGenerationException,
-    CorruptedDocument,
-    CredentialsException
 )
 from .models import (
-    Update,
-    Delete,
-    ReadConcern,
-    WriteConcern,
-    Collation,
-    Index,
-    User,
     BuildInfo,
-    HelloResult
+    Collation,
+    Delete,
+    HelloResult,
+    Index,
+    ReadConcern,
+    ReplicaSetConfig,
+    ReplicaSetConfigSettings,
+    ReplicaSetMember,
+    Update,
+    User,
+    WriteConcern,
 )
-from .schema import SchemaGenerator, Document
+from .schema import Document, SchemaGenerator
 from .session import Session, Transaction
 from .typings import xJsonT
-from .utils import (
-    HasToDict,
-    chain,
-    filter_non_null,
-    maybe_to_dict
-)
+from .utils import HasToDict, chain, filter_non_null, maybe_to_dict
 
 __all__ = [
     "AuthCredentials",
-    "Kover",
-    "Collection",
-    "Cursor",
-    "Database",
-    "ValidationLevel",
-    "IndexDirection",
-    "IndexType",
+    "BuildInfo",
+    "Collation",
     "CollationStrength",
-    "OperationFailure",
-    "SchemaGenerationException",
+    "Collection",
     "CorruptedDocument",
     "CredentialsException",
-    "Update",
+    "Cursor",
+    "Database",
     "Delete",
-    "ReadConcern",
-    "WriteConcern",
-    "Collation",
-    "Index",
-    "User",
-    "BuildInfo",
-    "HelloResult",
-    "SchemaGenerator",
     "Document",
+    "HasToDict",
+    "HelloResult",
+    "Index",
+    "IndexDirection",
+    "IndexType",
+    "Kover",
+    "OperationFailure",
+    "ReadConcern",
+    "ReplicaSetConfig",
+    "ReplicaSetConfigSettings",
+    "ReplicaSetMember",
+    "SchemaGenerationException",
+    "SchemaGenerator",
     "Session",
     "Transaction",
-    "xJsonT",
-    "HasToDict",
+    "Update",
+    "User",
+    "ValidationLevel",
+    "WriteConcern",
     "chain",
     "filter_non_null",
-    "maybe_to_dict"
+    "maybe_to_dict",
+    "xJsonT",
 ]

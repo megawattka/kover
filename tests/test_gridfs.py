@@ -1,15 +1,21 @@
-__import__("sys").path.append(
-    str(__import__("pathlib").Path(__file__).parent.parent))
+from __future__ import annotations
 
-import os  # noqa: E402
-import unittest  # noqa: E402
-from uuid import uuid4, UUID  # noqa: E402
+import logging
+import os
+from typing import TYPE_CHECKING
+import unittest
+from uuid import uuid4
 
-from kover.typings import xJsonT  # noqa: E402
-from kover.auth import AuthCredentials  # noqa: E402
-from kover.client import Kover  # noqa: E402
-from kover.schema import Document  # noqa: E402
-from kover.gridfs import GridFS  # noqa: E402
+from kover.auth import AuthCredentials
+from kover.client import Kover
+from kover.gridfs import GridFS
+from kover.schema import Document
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 class Sample(Document):
@@ -18,20 +24,20 @@ class Sample(Document):
     uuid: UUID
 
     @classmethod
-    def random(cls) -> "Sample":
-        return cls.from_args(
-            os.urandom(4).hex(),
-            int.from_bytes(os.urandom(2), "little"),
-            uuid4()
+    def random(cls) -> Sample:
+        return cls(
+            name=os.urandom(4).hex(),
+            age=int.from_bytes(os.urandom(2), "little"),
+            uuid=uuid4(),
         )
 
 
 class TestMethods(unittest.IsolatedAsyncioTestCase):
-    def __init__(self, *args: str, **kwargs: xJsonT) -> None:
+    def __init__(self, *args: str, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
         self.credentials = AuthCredentials(
             username="main_m1",
-            password="incunaby!"
+            password="incunaby!",
         )
         self.coll_name = "fs"
 
@@ -49,7 +55,8 @@ class TestMethods(unittest.IsolatedAsyncioTestCase):
         fs = await GridFS(self.client.gridfsdb).indexed()
         file_id = await fs.put(os.urandom(self._18_mb))
         file, binary = await fs.get_by_file_id(file_id)
-        print("sha1: ", file.metadata["sha1"])
+        sha1_hash = file.metadata["sha1"]
+        log.info(f"sha1: {sha1_hash}")
         assert len(binary.getvalue()) == self._18_mb
 
 

@@ -1,2 +1,6 @@
 class GridFSFileNotFound(Exception):
-    pass
+    """Exception raised when a GridFS file is not found."""
+
+
+class IncorrectGridFSData(Exception):
+    """Exception raised when incorrect data is passed to GridFS methods."""

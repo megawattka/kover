@@ -1,51 +1,59 @@
-from typing import Iterator, Optional
-from dataclasses import dataclass, asdict
+from __future__ import annotations
 
+from dataclasses import asdict, dataclass
+from typing import TYPE_CHECKING
+
+from annotated_types import GroupedMetadata
 from pydantic import Field
 from pydantic.alias_generators import to_camel
-from annotated_types import GroupedMetadata
 
+from .._internals import ReprMixin as _ReprMixin
 
-from ..typings import xJsonT
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
-
-class _ReprMixin:
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}()"
-
-    def __str__(self) -> str:
-        return self.__repr__()
+    from ..typings import xJsonT
 
 
 class ExcludeIfNone(_ReprMixin):
+    """A metadata annotation for Document subclasses.
+
+    Its excludes a field from the
+    `.model_dump()` output if its value is `None`.
+
+    Usage example:
+        uid: Annotated[Optional[UUID], ExcludeIfNone()] = None
+
+    This is useful for omitting optional fields from serialized representations
+    when they are not set.
     """
-    Applicable only to Document subclasses
-    Excludes Value from .model_dump() if the value is None
-    e.g `uid: Annotated[Optional[UUID], ExcludeIfNone()] = None`
-    """
-    pass
 
 
 @dataclass(frozen=True)
 class SchemaMetadata(GroupedMetadata, _ReprMixin):
-    """
-    Specify additional jsonSchema metadata for MongoDB
-    Schema generation
+    """Specify additional jsonSchema metadata for MongoDB Schema generation.
+
     https://www.mongodb.com/docs/manual/reference/operator/query/jsonSchema/
     https://www.mongodb.com/docs/manual/reference/operator/query/jsonSchema/#available-keywords
     """
-    title: Optional[str] = None
-    description: Optional[str] = None
-    minimum: Optional[int] = None
-    maximum: Optional[int] = None
-    min_items: Optional[int] = None
-    max_items: Optional[int] = None
-    min_length: Optional[int] = None
-    max_length: Optional[int] = None
-    pattern: Optional[str] = None
-    unique_items: Optional[bool] = None
+
+    title: str | None = None
+    description: str | None = None
+    minimum: int | None = None
+    maximum: int | None = None
+    min_items: int | None = None
+    max_items: int | None = None
+    min_length: int | None = None
+    max_length: int | None = None
+    pattern: str | None = None
+    unique_items: bool | None = None
 
     def serialize(self) -> xJsonT:
+        """Serialize the SchemaMetadata instance.
+
+        Serializing to a dictionary with camelCase keys,
+        omitting fields with None values.
+        """
         serialized = asdict(self)
         for k in list(serialized.keys()):
             value = serialized.pop(k)
@@ -54,9 +62,7 @@ class SchemaMetadata(GroupedMetadata, _ReprMixin):
         return serialized
 
     def __iter__(self) -> Iterator[object]:
-        """
-        for GroupedMetadata. Raise valiadation Errors upon model creation
-        """
+        """For GroupedMetadata. Raise validation Errors upon model creation."""
         yield Field(
             min_length=(self.min_items or self.min_length),
             max_length=(self.max_items or self.max_length),
@@ -64,5 +70,5 @@ class SchemaMetadata(GroupedMetadata, _ReprMixin):
             ge=self.minimum,
             title=self.title,
             description=self.description,
-            pattern=self.pattern
+            pattern=self.pattern,
         )

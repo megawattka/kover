@@ -1,16 +1,14 @@
-__import__("sys").path.append(
-    str(__import__("pathlib").Path(__file__).parent.parent))
+from __future__ import annotations
 
-import unittest  # noqa: E402
-from uuid import uuid4, UUID  # noqa: E402
+import unittest
+from uuid import UUID, uuid4
 
-from bson import ObjectId, Binary  # noqa: E402
+from bson import Binary, ObjectId
 
-from kover.auth import AuthCredentials  # noqa: E402
-from kover.client import Kover  # noqa: E402
-from kover.schema import SchemaGenerator, Document  # noqa: E402
-from kover.typings import xJsonT  # noqa: E402
-from kover.models import Delete  # noqa: E402
+from kover.auth import AuthCredentials
+from kover.client import Kover
+from kover.models import Delete
+from kover.schema import Document, SchemaGenerator
 
 
 class User(Document):
@@ -30,13 +28,13 @@ class Subclass(User):
 
 
 class BasicTests(unittest.IsolatedAsyncioTestCase):
-    def __init__(self, *args: str, **kwargs: xJsonT) -> None:
+    def __init__(self, *args: str, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
         self.schema_generator = SchemaGenerator()
         self.test_collection_name: str = "test"
         self.credentials = AuthCredentials(
             username="main_m1",
-            password="incunaby!"
+            password="incunaby!",
         )
 
     async def asyncSetUp(self) -> None:
@@ -49,23 +47,24 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_credentials_md5(self) -> None:
         hashed = self.credentials.md5_hash()
-        assert hashed == b'f79a93932f4e10c3654be025a576398c'
+        assert hashed == b"f79a93932f4e10c3654be025a576398c"
 
     async def test_cursor(self) -> None:
         collection = await self.client.db.create_collection(
-            self.test_collection_name
+            self.test_collection_name,
         )
         assert await collection.count() == 0
         users = [User(name="josh", age=50)] * 1000
         r = await collection.insert(users)
-        assert len(r) == 1000 and len(set(r)) == 1000
+        assert len(r) == 1000
+        assert len(set(r)) == 1000
         cs = await collection.find().limit(100).to_list()
         assert len(cs) == 100
         cs = await collection.find().skip(10).to_list()
         assert len(cs) == 990
         await collection.clear()
         await collection.insert([users[0]] * 75)
-        cs = await collection.find(None).batch_size(50).to_list()
+        cs = await collection.find().batch_size(50).to_list()
         assert len(cs) == 75
 
         cs = await collection.find({"test": "nonexistent"}).to_list()
@@ -73,16 +72,16 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
 
         await collection.clear()
 
-    async def test_collection_create(self):
+    async def test_collection_create(self) -> None:
         collection = await self.client.db.create_collection(
-            self.test_collection_name
+            self.test_collection_name,
         )
-        assert collection.name == self.test_collection_name and \
-            collection.database.name == "db"
+        assert collection.name == self.test_collection_name
+        assert collection.database.name == "db"
 
-    async def test_basic_operations(self):
+    async def test_basic_operations(self) -> None:
         collection = await self.client.db.create_collection(
-            self.test_collection_name
+            self.test_collection_name,
         )
 
         user = User(name="dima", age=18)
@@ -99,57 +98,61 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
 
         resp = await collection.find({}, cls=User).to_list()
         assert isinstance(resp[0], User)
-        assert resp[0].name == "dima" and resp[0].age == 18
+        assert resp[0].name == "dima"
+        assert resp[0].age == 18
         assert not await collection.delete(Delete({"name": "drake"}, limit=1))
         assert await collection.delete(Delete({"name": "dima"}, limit=1))
 
-    async def test_documents(self) -> None:
+    async def test_documents(self) -> None:  # noqa: PLR6301
         assert issubclass(User, Document)
         user = User(name="john", age=16)
         assert user.get_id() is None
         document = user.to_dict()
         assert "_id" not in document
         serialized = User.from_document(document)
-        assert serialized.name == "john" and serialized.age == 16
-        assert isinstance(serialized, User) and serialized == user
+        assert isinstance(serialized, User)
+        assert serialized.name == "john"
+        assert serialized.age == 16
+        assert serialized == user
 
         subdocument = SubDocument(a=1, b="5", uid=2893912931299219912919129)
         sbcls = Subclass(
             name="jora",
             age=20,
             uuid=uuid4(),
-            subdocument=subdocument
+            subdocument=subdocument,
         )
         deserialized = sbcls.to_dict()
         assert len(deserialized.keys()) == 4
         assert isinstance(deserialized["uuid"], Binary)
-        assert issubclass(Subclass, User) and issubclass(Subclass, Document)
+        assert issubclass(Subclass, User)
+        assert issubclass(Subclass, Document)
         serialized = Subclass.from_document(deserialized)
-        assert isinstance(serialized.uuid, UUID) and \
-            isinstance(serialized.subdocument, SubDocument)
-        assert serialized.subdocument.a == 1 and \
-            serialized.subdocument.b == "5"
+        assert isinstance(serialized.uuid, UUID)
+        assert isinstance(serialized.subdocument, SubDocument)
+        assert serialized.subdocument.a == 1
+        assert serialized.subdocument.b == "5"
 
     async def test_base_schema(self) -> None:
         schema = self.schema_generator.generate(User)
-        self.assertEqual(schema, {
-            '$jsonSchema': {
-                'additionalProperties': False,
-                'bsonType': ['object'],
-                'properties': {
-                    '_id': {
-                        'bsonType': ['objectId']
+        assert schema == {
+            "$jsonSchema": {
+                "additionalProperties": False,
+                "bsonType": ["object"],
+                "properties": {
+                    "_id": {
+                        "bsonType": ["objectId"],
                     },
-                    'age': {
-                        'bsonType': ['int', "long"]
+                    "age": {
+                        "bsonType": ["int", "long"],
                     },
-                    'name': {
-                        'bsonType': ['string']
-                    }
+                    "name": {
+                        "bsonType": ["string"],
+                    },
                 },
-                'required': ['name', 'age', '_id']
-            }
-        })
+                "required": ["name", "age", "_id"],
+            },
+        }
 
 
 if __name__ == "__main__":

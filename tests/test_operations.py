@@ -1,16 +1,14 @@
-__import__("sys").path.append(
-    str(__import__("pathlib").Path(__file__).parent.parent))
+from __future__ import annotations
 
-import os  # noqa: E402
-import unittest  # noqa: E402
-from uuid import uuid4, UUID  # noqa: E402
+import os
+import unittest
+from uuid import UUID, uuid4
 
-from bson import ObjectId  # noqa: E402
+from bson import ObjectId
 
-from kover.typings import xJsonT  # noqa: E402
-from kover.auth import AuthCredentials  # noqa: E402
-from kover.client import Kover  # noqa: E402
-from kover.schema import Document  # noqa: E402
+from kover.auth import AuthCredentials
+from kover.client import Kover
+from kover.schema import Document
 
 
 class Sample(Document):
@@ -19,20 +17,20 @@ class Sample(Document):
     uuid: UUID
 
     @classmethod
-    def random(cls) -> "Sample":
-        return cls.from_args(
-            os.urandom(4).hex(),
-            int.from_bytes(os.urandom(2), "little"),
-            uuid4()
+    def random(cls) -> Sample:
+        return cls(
+            name=os.urandom(4).hex(),
+            age=int.from_bytes(os.urandom(2), "little"),
+            uuid=uuid4(),
         )
 
 
 class TestMethods(unittest.IsolatedAsyncioTestCase):
-    def __init__(self, *args: str, **kwargs: xJsonT) -> None:
+    def __init__(self, *args: str, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
         self.credentials = AuthCredentials(
             username="main_m1",
-            password="incunaby!"
+            password="incunaby!",
         )
         self.coll_name = "test"
 

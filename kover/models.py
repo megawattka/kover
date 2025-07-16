@@ -1,153 +1,219 @@
 from __future__ import annotations
 
-import datetime
-from enum import Enum
-from dataclasses import field, dataclass, asdict, is_dataclass
-from typing import List, Literal, Optional, Union, Any
+import datetime  # noqa: TC003
+from typing import Literal
 
-from bson import Binary
+from bson import Binary, ObjectId  # noqa: TC002
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic.alias_generators import to_camel
 
+from .enums import CollationStrength, IndexDirection, IndexType  # noqa: TC001
 from .typings import COMPRESSION_T, xJsonT
-from .enums import CollationStrength, IndexDirection, IndexType
 
 
-@dataclass
-class AsDictMixin:
-    def _convert_enums(self, obj: Any) -> Any:
-        if isinstance(obj, Enum):
-            return obj.value
-        elif isinstance(obj, dict):
-            return {k: self._convert_enums(v) for k, v in obj.items()}  # type: ignore  # noqa: E501
-        elif isinstance(obj, list):
-            return [self._convert_enums(v) for v in obj]  # type: ignore
-        elif is_dataclass(obj):
-            return self._convert_enums(asdict(obj))  # type: ignore
-        return obj
+class _CamelAliasedModel(BaseModel):
+    """Base class for all models with camel case fields."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        extra="ignore",
+        arbitrary_types_allowed=True,
+        use_enum_values=True,
+    )
 
     def to_dict(self) -> xJsonT:
-        serialized = self._convert_enums(self)
-        return {k: v for k, v in serialized.items() if v is not None}
+        """Convert the model to a dictionary with camel case keys."""
+        return self.model_dump(by_alias=True, exclude_none=True)
 
 
-@dataclass
-class HelloResult(AsDictMixin):
+class HelloResult(_CamelAliasedModel):
+    """Represents the result of a hello command."""
+
     local_time: datetime.datetime
     connection_id: int
     read_only: bool
-    mechanisms: Optional[List[str]] = field(default=None)
-    compression: Optional[COMPRESSION_T] = field(default=None)
-    requires_auth: bool = field(init=False, repr=False)
+    sasl_supported_mechs: list[str] = Field(default_factory=list[str])
+    compression: COMPRESSION_T = Field(default_factory=COMPRESSION_T)
 
-    def __post_init__(self):
-        self.requires_auth = self.mechanisms is not None \
-            and len(self.mechanisms) > 0
+    @property
+    def requires_auth(self) -> bool:
+        """Check if the server requires authentication."""
+        return len(self.sasl_supported_mechs) > 0
 
 
-@dataclass
-class BuildInfo(AsDictMixin):
+class BuildInfo(_CamelAliasedModel):
+    """Represents the result of a buildInfo command."""
+
     version: str
     git_version: str
     allocator: str
-    js_engine: str
+    javascript_engine: str
     version_array: list[int]
     openssl: str
     debug: bool
-    max_bson_obj_size: int
+    max_bson_object_size: int
     storage_engines: list[str]
 
-
-@dataclass
-class User(AsDictMixin):
-    user_id: Binary = field(repr=False)
-    username: str
-    db_name: str
-    mechanisms: List[
-        Literal['SCRAM-SHA-1', 'SCRAM-SHA-256']
-    ] = field(repr=False)
-    credentials: xJsonT = field(repr=False)
-    roles: List[xJsonT]
-    auth_restrictions: List[xJsonT] = field(repr=False)
-    privileges: List[xJsonT] = field(repr=False)
-    custom_data: xJsonT = field(repr=False)
-
+    @field_validator("openssl")
     @classmethod
-    def from_json(cls, document: xJsonT) -> User:
-        return cls(
-            user_id=document["userId"],
-            username=document["user"],
-            db_name=document["db"],
-            mechanisms=document["mechanisms"],
-            credentials=document.get("credentials", {}),
-            roles=document["roles"],
-            auth_restrictions=document.get("authenticationRestrictions", []),
-            privileges=document.get("inheritedPrivileges", []),
-            custom_data=document.get("customData", {})
-        )
+    def validate_openssl(cls, value: xJsonT) -> str:
+        """Validate the OpenSSL version."""
+        return value["running"]
+
+
+class User(_CamelAliasedModel):
+    """Represents a MongoDB user document."""
+
+    user_id: Binary = Field(repr=False)
+    username: str = Field(alias="user")
+    db_name: str = Field(alias="db")
+    mechanisms: list[
+        Literal["SCRAM-SHA-1", "SCRAM-SHA-256"]
+    ] = Field(repr=False)
+    credentials: xJsonT = Field(repr=False, default_factory=xJsonT)
+    roles: list[xJsonT]
+    authentication_restrictions: list[xJsonT] = Field(
+        repr=False, default_factory=list[xJsonT],
+    )
+    inherited_privileges: list[xJsonT] = Field(
+        repr=False, default_factory=list[xJsonT],
+    )
+    custom_data: xJsonT = Field(
+        repr=False, default_factory=xJsonT,
+    )
 
 
 # https://www.mongodb.com/docs/manual/reference/command/createIndexes/#example
-@dataclass
-class Index(AsDictMixin):
+class Index(_CamelAliasedModel):
+    """Represents a MongoDB index document."""
+
     name: str  # any index name e.g my_index
-    key: dict[
-        str,
-        Union[IndexType, IndexDirection]
-    ]
-    unique: bool = False
-    hidden: bool = False
+    key: dict[str, IndexType | IndexDirection]
+    unique: bool = Field(default=False)
+    hidden: bool = Field(default=False)
 
 
 # https://www.mongodb.com/docs/manual/reference/collation/
-@dataclass
-class Collation(AsDictMixin):
-    locale: Optional[str] = None
+class Collation(_CamelAliasedModel):
+    """Represents a MongoDB collation document."""
+
+    locale: str | None = None
     case_level: bool = False
     case_first: Literal["lower", "upper", "off"] = "off"
     strength: CollationStrength = CollationStrength.TERTIARY
     numeric_ordering: bool = False
     alternate: Literal["non-ignorable", "shifted"] = "non-ignorable"
-    max_variable: Optional[Literal["punct", "space"]] = None
+    max_variable: Literal["punct", "space"] | None = None
     backwards: bool = False
     normalization: bool = False
 
 
 # https://www.mongodb.com/docs/manual/reference/command/update/#syntax
-@dataclass
-class Update(AsDictMixin):
+class Update(_CamelAliasedModel):
+    """Represents a MongoDB update document."""
+
+    def __init__(
+        self,
+        q: xJsonT,
+        u: xJsonT,
+        c: xJsonT | None = None,
+        /,
+        **kwargs: object,
+    ) -> None:
+        BaseModel.__init__(self, q=q, u=u, c=c, **kwargs)
+
     q: xJsonT
     u: xJsonT
-    c: Optional[xJsonT] = None
+    c: xJsonT | None = None
     upsert: bool = False
     multi: bool = False
-    collation: Optional[Collation] = None
-    array_filters: Optional[xJsonT] = None
-    hint: Optional[str] = None
+    collation: Collation | None = None
+    array_filters: xJsonT | None = None
+    hint: str | None = None
 
 
 # https://www.mongodb.com/docs/manual/reference/command/delete/#syntax
-@dataclass
-class Delete(AsDictMixin):
+class Delete(_CamelAliasedModel):
+    """Represents a MongoDB delete document."""
+
+    def __init__(self, q: xJsonT, /, **kwargs: object) -> None:
+        BaseModel.__init__(self, q=q, **kwargs)
+
     q: xJsonT
     limit: Literal[0, 1]
-    collation: Optional[Collation] = None
-    hint: Optional[Union[xJsonT, str]] = None
+    collation: Collation | None = None
+    hint: xJsonT | str | None = None
 
 
 # https://www.mongodb.com/docs/manual/reference/write-concern/
-@dataclass
-class WriteConcern(AsDictMixin):
-    w: Union[str, int] = "majority"
-    j: Optional[bool] = None
+class WriteConcern(_CamelAliasedModel):
+    """Represents a MongoDB write concern document."""
+
+    w: str | int = "majority"
+    j: bool | None = None
     wtimeout: int = 0
 
 
 # https://www.mongodb.com/docs/manual/reference/read-concern/
-@dataclass
-class ReadConcern(AsDictMixin):
+class ReadConcern(_CamelAliasedModel):
+    """Represents a MongoDB read concern document."""
+
     level: Literal[
         "local",
         "available",
         "majority",
         "linearizable",
-        "snapshot"
+        "snapshot",
     ] = "local"
+
+
+# https://www.mongodb.com/docs/manual/reference/replica-configuration/#members
+class ReplicaSetMember(_CamelAliasedModel):
+    """Represents a MongoDB replica set member document."""
+
+    member_id: int = Field(serialization_alias="_id", alias="member_id")
+    host: str
+    arbiter_only: bool = Field(default=False)
+    build_indexes: bool = Field(default=True)
+    hidden: bool = Field(default=False)
+    priority: int = Field(default=1)
+    tags: xJsonT | None = Field(default=None)
+    secondary_delay_secs: int = Field(default=0)
+    votes: int = Field(default=1)
+
+
+# https://www.mongodb.com/docs/manual/reference/replica-configuration/#settings
+class ReplicaSetConfigSettings(_CamelAliasedModel):
+    """Represents a MongoDB replica set settings document."""
+
+    replica_set_id: ObjectId
+    chaining_allowed: bool = Field(default=True)
+    get_last_error_modes: xJsonT | None = Field(default=None)
+    heartbeat_timeout_secs: int = Field(default=10)
+    election_timeout_millis: int = Field(default=10000)
+    catch_up_timeout_millis: int = Field(default=-1)
+    catch_up_takeover_delay_millis: int = Field(default=-1)
+
+
+# https://www.mongodb.com/docs/manual/reference/replica-configuration/#replica-set-configuration-document-example
+class ReplicaSetConfig(_CamelAliasedModel):
+    """Represents a MongoDB replica set configuration document."""
+
+    rs_name: str = Field(serialization_alias="_id", alias="rs_name")
+    version: int
+    term: int
+    members: list[ReplicaSetMember]
+    configsvr: bool = Field(default=False)
+    protocol_version: int = Field(default=1)
+    write_concern_majority_journal_default: bool = Field(default=True)
+    settings: ReplicaSetConfigSettings | None = None
+
+    @classmethod
+    def default(cls) -> ReplicaSetConfig:
+        """Create a default replica set configuration."""
+        return cls(
+            rs_name="rs0",
+            version=1,
+            term=0,
+            members=[ReplicaSetMember(member_id=0, host="127.0.0.1:27017")],
+        )

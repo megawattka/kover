@@ -1,0 +1,140 @@
+[project]
+name = "kover"
+version = "2.1.0"
+description = "Fully async mongodb driver for mongod and replica sets."
+readme = "README.md"
+authors = [{ name = "megawattka", email = "gunter56741@gmail.com" }]
+license = "MIT"
+requires-python = ">=3.10"
+classifiers = [
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Database",
+    "Typing :: Typed",
+]
+keywords = [
+    "megawattka",
+    "kover",
+    "mongodb",
+    "mongo kover",
+    "Mongo Kover",
+    "Kover API mongo",
+    "mongod driver",
+    "async driver",
+    "mongo async",
+    "kover mongodb",
+]
+dependencies = [
+    "pydantic >= 2.10.6",
+    "pymongo >= 4.10.1",
+    "typing-extensions >= 4.12.2",
+]
+
+[project.urls]
+Repository = "https://github.com/megawattka/kover"
+Documentation = "https://github.com/megawattka/kover"
+
+[tool.ruff]
+line-length = 79
+indent-width = 4
+target-version = "py310"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-line-length = "dynamic"
+
+[tool.ruff.lint]
+ignore = [
+    "G004",  # f-string in logging statement
+    "PGH003",  # type: ignore warnings
+    "INP001",  # __init__.py in public namespaces
+    "TD003",  # issue links for todos
+    "D100",  # undocumented-public-module
+    "FIX002",  # TODOs
+    "TID252",  # fvck absolute imports
+    "N818",  # "Error" suffix in exception class
+    "S101",  # assertions
+    "S324",  # I want to use sha1 please
+    "D105",  # undocumented-magic-method
+    "D107",  # undocumented-public-init
+    "FBT001",  # boolean typed args
+    "FBT002",
+    "CPY001",  # Copyright notice at the top
+    "DOC202",  # docs issues
+    "DOC501",
+    "PLR0913",  # too many arguments in function def
+    "PLR0917",  # too many positional arguments in function def
+    "PLR0904",  # too many public methods
+    "PLR2004",  # int comparisons
+    "EM101",  # string literal in exception
+    "EM102",
+    "TRY003"
+]
+select = ["ALL"]
+unfixable = [
+    "RUF100", # unused noqa
+    "T20",  # removes print statements
+    "F841", # removes unused variables
+]
+preview = true
+
+[tool.ruff.lint.flake8-builtins]
+strict-checking = true
+
+[tool.ruff.lint.per-file-ignores]
+"kover/utils.py" = ["DOC201"]  # return type not documented in docstring
+"kover/schema.py" = ["DOC201"]
+"kover/msocket.py" = ["DOC201", "E501"]  # line too long
+"kover/models.py" = ["DOC201"]
+"kover/__init__.py" = ["E501"]
+"kover/metadata/definitions.py" = ["DOC402", "DOC201"]  # undocumented yield
+"kover/serializer.py" = ["SLF001", "ERA001"]  # private member access, commented code
+"setup.py" = ["UP036"]  # version block outdated
+"tests/*" = ["D101", "D102", "S106", "TC003", "TC002", "N802", "PT027"]  # undocumented public class/method, hardcoded password, type checking blocks uninitialized vars, lowercase names, unittest style
+"main.py" = ["ERA001", "S106", "T201"]
+
+[tool.ruff.lint.flake8-type-checking]
+exempt-modules = ["typing", "typing_extensions"]
+quote-annotations = true
+strict = true
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.uv]
+link-mode="copy"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "flake8>=7.3.0",
+    "pyright>=1.1.403",
+    "ruff>=0.12.3",
+    "setuptools>=80.9.0",
+]
+
+[tool.hatch.build]
+include = [
+    "/README.md",
+    "/requirements.txt",
+    "/CODE_OF_CONDUCT.md",
+    "/kover"
+]
+exclude = [
+    "/benchmarks",
+    "/examples",
+    "/tests",
+    "/setup.py"
+]

@@ -27,7 +27,7 @@ jobs:
         run: |
           python3 -m pip install pyright
           python3 -m pyright ./
-      - name: flake8 lint
+      - name: Lint with ruff
         run: |
-          python3 -m pip install flake8
-          python3 -m flake8 ./
+          python3 -m pip install ruff
+          python3 -m ruff check ./

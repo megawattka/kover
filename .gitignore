@@ -4,3 +4,8 @@ main.py
 .git
 out
 badges.txt
+uv.lock
+.venv
+dist
+.ruff_cache
+.python-version

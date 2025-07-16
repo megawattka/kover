@@ -1,25 +1,18 @@
-import sys
 from pathlib import Path
+from types import UnionType  # type: ignore  # noqa: F401
 from typing import (
-    Dict,
     Any,
-    Union,
-    Literal,
-    List,
     BinaryIO,
-    TextIO
+    Literal,
+    TextIO,
 )
+
 from bson import SON
 
-xJsonT = Dict[str, Any]
-DocumentT = Union[xJsonT, SON[str, Any]]
-COMPRESSION_T = List[
-    Literal["zlib", "zstd", "snappy"]
-]  # TODO: implement
+xJsonT = dict[str, Any]  # noqa: N816
+DocumentT = xJsonT | SON[str, Any]
 
-if sys.version_info < (3, 10):
-    UnionType = Union
-else:
-    from types import UnionType # noqa: F401, E261 # type: ignore
+# TODO @megawattka: implement compression
+COMPRESSION_T = list[Literal["zlib", "zstd", "snappy"]]
 
-GridFSPayloadT = Union[bytes, str, BinaryIO, TextIO, Path]
+GridFSPayloadT = bytes | str | BinaryIO | TextIO | Path
