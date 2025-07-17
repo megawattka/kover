@@ -1,4 +1,4 @@
-from .definitions import ExcludeIfNone, SchemaMetadata  # noqa: D104
+from .definitions import ExcludeIfNone, SchemaMetadata
 
 __all__ = [
     "ExcludeIfNone",

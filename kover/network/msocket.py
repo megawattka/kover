@@ -6,17 +6,17 @@ import platform as sysinfo
 import sys
 from typing import TYPE_CHECKING, Literal, overload
 
-from . import __version__
-from .codes import codes_to_exc_name
-from .exceptions import OperationFailure
-from .models import HelloResult
+from .. import __version__
+from ..codes import codes_to_exc_name
+from ..exceptions import OperationFailure
+from ..models import HelloResult
+from ..session import TxnState
 from .serializer import Serializer
-from .session import TxnState
 
 if TYPE_CHECKING:
+    from ..session import Transaction
+    from ..typings import COMPRESSION_T, DocumentT, xJsonT
     from .auth import AuthCredentials
-    from .session import Transaction
-    from .typings import COMPRESSION_T, DocumentT, xJsonT
 
 
 class MongoSocket:
@@ -34,7 +34,9 @@ class MongoSocket:
 
     def __repr__(self) -> str:
         # this can return None?
-        host, port = self.writer.get_extra_info("peername", default=(None, None))
+        host, port = self.writer.get_extra_info(
+            "peername", default=(None, None),
+        )
         return f"<MongoSocket host={host} port={port}>"
 
     @classmethod

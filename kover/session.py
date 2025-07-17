@@ -171,7 +171,7 @@ class Session:
         self.socket: MongoSocket = socket
 
     def start_transaction(self) -> Transaction:
-        """Start a new transaction for this session."""  # noqa: DOC201
+        """Start a new transaction for this session."""
         return Transaction(
             socket=self.socket,
             session_document=self.document,

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import datetime  # noqa: TC003
+import datetime
 from typing import Annotated
 
-from bson import Binary, ObjectId  # noqa: TC002
+from bson import Binary, ObjectId
 from pydantic import Field
 
 from ..metadata import SchemaMetadata

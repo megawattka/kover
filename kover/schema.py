@@ -275,10 +275,10 @@ class Document(BaseModel):
         return self.to_dict(exclude_id=True) == other.to_dict(exclude_id=True)
 
     def __hash__(self) -> int:
-        """Hash based on id if present, otherwise hash the dict without _id."""
+        """Hash based on id if present, otherwise error."""
         if self._id is not None:
             return hash(self._id)
-        return hash(self.with_id(ObjectId()))
+        raise NotImplementedError("Hash requires _id set.")
 
     def with_id(self, _id: ObjectId) -> Self:
         """Set the document's ObjectId."""

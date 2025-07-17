@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING
 import unittest
 from uuid import uuid4
 
-from kover.auth import AuthCredentials
 from kover.client import Kover
 from kover.gridfs import GridFS
+from kover.network import AuthCredentials
 from kover.schema import Document
 
 if TYPE_CHECKING:

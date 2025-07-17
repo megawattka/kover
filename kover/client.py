@@ -6,18 +6,17 @@ from typing import TYPE_CHECKING, Literal
 
 from typing_extensions import Self
 
-from .auth import Auth
 from .database import Database
 from .models import BuildInfo
-from .msocket import MongoSocket
+from .network import Auth, MongoSocket
 from .session import Session
 from .utils import filter_non_null, maybe_to_dict
 
 if TYPE_CHECKING:
     import asyncio
 
-    from .auth import AuthCredentials
     from .models import ReplicaSetConfig
+    from .network import AuthCredentials
     from .typings import xJsonT
 
 

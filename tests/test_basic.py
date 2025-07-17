@@ -5,9 +5,9 @@ from uuid import UUID, uuid4
 
 from bson import Binary, ObjectId
 
-from kover.auth import AuthCredentials
 from kover.client import Kover
 from kover.models import Delete
+from kover.network import AuthCredentials
 from kover.schema import Document, SchemaGenerator
 
 

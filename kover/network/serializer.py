@@ -10,7 +10,7 @@ from bson import DEFAULT_CODEC_OPTIONS
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from .typings import xJsonT
+    from ..typings import xJsonT
 
 
 class Serializer:

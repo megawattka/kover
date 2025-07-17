@@ -9,7 +9,7 @@ from gridfs import AsyncGridFS as PymongoAsyncGridFS
 from gridfs import GridFS as PymongoGridFS
 import pymongo
 
-from kover.auth import AuthCredentials
+from kover import AuthCredentials
 from kover.client import Kover
 from kover.gridfs import GridFS as KoverGridFS
 

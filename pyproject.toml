@@ -1,6 +1,6 @@
 [project]
 name = "kover"
-version = "2.1.0"
+version = "2.1.1"
 description = "Fully async mongodb driver for mongod and replica sets."
 readme = "README.md"
 authors = [{ name = "megawattka", email = "gunter56741@gmail.com" }]
@@ -64,18 +64,17 @@ ignore = [
     "S324",  # I want to use sha1 please
     "D105",  # undocumented-magic-method
     "D107",  # undocumented-public-init
-    "FBT001",  # boolean typed args
-    "FBT002",
+    "FBT001", "FBT002",  # boolean typed args
     "CPY001",  # Copyright notice at the top
-    "DOC202",  # docs issues
-    "DOC501",
+    "DOC202", "DOC501",  # docs issues
     "PLR0913",  # too many arguments in function def
     "PLR0917",  # too many positional arguments in function def
     "PLR0904",  # too many public methods
     "PLR2004",  # int comparisons
-    "EM101",  # string literal in exception
-    "EM102",
-    "TRY003"
+    "EM101", "EM102", "TRY003",  # string literal in exception
+    "D104",  # undocumented public package
+    "DOC201",  # return not documented
+    "TC001", "TC002", "TC003"  # move in if_type_checking block
 ]
 select = ["ALL"]
 unfixable = [
@@ -89,16 +88,13 @@ preview = true
 strict-checking = true
 
 [tool.ruff.lint.per-file-ignores]
-"kover/utils.py" = ["DOC201"]  # return type not documented in docstring
-"kover/schema.py" = ["DOC201"]
-"kover/msocket.py" = ["DOC201", "E501"]  # line too long
-"kover/models.py" = ["DOC201"]
+"kover/network/msocket.py" = ["E501"]  # line too long
 "kover/__init__.py" = ["E501"]
-"kover/metadata/definitions.py" = ["DOC402", "DOC201"]  # undocumented yield
-"kover/serializer.py" = ["SLF001", "ERA001"]  # private member access, commented code
-"setup.py" = ["UP036"]  # version block outdated
+"kover/metadata/definitions.py" = ["DOC402"]  # undocumented yield
+"kover/network/serializer.py" = ["SLF001", "ERA001"]  # private member access, commented code
 "tests/*" = ["D101", "D102", "S106", "TC003", "TC002", "N802", "PT027"]  # undocumented public class/method, hardcoded password, type checking blocks uninitialized vars, lowercase names, unittest style
 "main.py" = ["ERA001", "S106", "T201"]
+# "setup.py" = ["UP036"]  # version block outdated
 
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = ["typing", "typing_extensions"]
@@ -120,10 +116,10 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "flake8>=7.3.0",
-    "pyright>=1.1.403",
-    "ruff>=0.12.3",
-    "setuptools>=80.9.0",
+    "flake8 >= 7.3.0",
+    "pyright >= 1.1.403",
+    "ruff >= 0.12.3",
+    "setuptools >= 80.9.0",
 ]
 
 [tool.hatch.build]

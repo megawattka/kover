@@ -10,11 +10,11 @@ from typing import TYPE_CHECKING
 from bson import Binary
 from pymongo.saslprep import saslprep
 
-from .exceptions import CredentialsException
+from ..exceptions import CredentialsException
 
 if TYPE_CHECKING:
-    from .client import MongoSocket
-    from .typings import xJsonT
+    from ..client import MongoSocket
+    from ..typings import xJsonT
 
 
 @dataclass(frozen=True)
@@ -96,7 +96,7 @@ class Auth:
 
     @staticmethod
     def xor(fir: bytes, sec: bytes) -> bytes:
-        """XOR two byte strings together."""  # noqa: DOC201
+        """XOR two byte strings together."""
         return b"".join(
             [bytes([x ^ y]) for x, y in zip(fir, sec, strict=True)],
         )

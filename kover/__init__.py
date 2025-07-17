@@ -1,4 +1,4 @@
-# MIT License  # noqa: D104
+# MIT License
 
 # Copyright (c) 2024 megawattka
 
@@ -20,12 +20,11 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 __author__ = "oMegaPB"
 __license__ = "MIT"
 __copyright__ = "Copyright (C) 2024-present megawattka"
 
-from .auth import AuthCredentials
 from .client import Kover
 from .collection import Collection
 from .cursor import Cursor
@@ -56,6 +55,7 @@ from .models import (
     User,
     WriteConcern,
 )
+from .network import AuthCredentials
 from .schema import Document, SchemaGenerator
 from .session import Session, Transaction
 from .typings import xJsonT

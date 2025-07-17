@@ -1,4 +1,4 @@
-from .exceptions import GridFSFileNotFound  # noqa: D104
+from .exceptions import GridFSFileNotFound
 from .gridfs import GridFS
 from .models import Chunk, File
 
