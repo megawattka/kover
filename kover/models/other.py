@@ -3,10 +3,10 @@ from __future__ import annotations
 import datetime
 from typing import Literal
 
-from bson import Binary
 from pydantic import Field, field_validator
 
 from .._internals._mixins import ModelMixin as _ModelMixin
+from ..bson import Binary
 from ..enums import CollationStrength, IndexDirection, IndexType
 from ..typings import COMPRESSION_T, xJsonT
 

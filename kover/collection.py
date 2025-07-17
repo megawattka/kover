@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, TypeVar
 
-from bson import ObjectId
 from typing_extensions import overload
 
+from .bson import ObjectId
 from .cursor import Cursor
 from .enums import IndexDirection, IndexType, ValidationLevel
 from .models import (

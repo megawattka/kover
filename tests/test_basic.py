@@ -3,8 +3,7 @@ from __future__ import annotations
 import unittest
 from uuid import UUID, uuid4
 
-from bson import Binary, ObjectId
-
+from kover.bson import Binary, ObjectId
 from kover.client import Kover
 from kover.models import Delete
 from kover.network import AuthCredentials

@@ -4,8 +4,7 @@ import os
 import unittest
 from uuid import UUID, uuid4
 
-from bson import ObjectId
-
+from kover.bson import ObjectId
 from kover.client import Kover
 from kover.network import AuthCredentials
 from kover.schema import Document

@@ -4,8 +4,9 @@ from enum import Enum
 import time
 from typing import TYPE_CHECKING
 
-from bson import Int64
 from typing_extensions import Self
+
+from .bson import Int64
 
 if TYPE_CHECKING:
     from types import TracebackType

@@ -41,7 +41,6 @@ but its already very cool! <br>
 
 # Dependencies
 - All platforms.
-- pymongo 4.10.1 (latest for now) or later.
 - python 3.10
 - MongoDB 6.0+ (not sure about older versions)
 - pydantic 2.10.6 or later
@@ -49,7 +48,7 @@ but its already very cool! <br>
 # Features
 Almost all features from pymongo. All auth types are supported. Integration with Pydantic supported.
 this lib was built for new mongod versions. All features that were marked as DEPRECATED in docs
-were NOT added. See docs for references
+were NOT added. See docs for references. The kover.bson package was entirely copied from pymongo source code. Also pymongo.saslprep was copied for internal purposes, i do not own these files.
 
 ### Cursors
 if you just need list:
@@ -186,7 +185,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-from bson import ObjectId
+from kover.bson import ObjectId
 
 from kover import AuthCredentials, Kover
 
@@ -278,7 +277,7 @@ from kover import (
 )
 
 if TYPE_CHECKING:
-    from bson import ObjectId
+    from kover.bson import ObjectId
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)

@@ -11,7 +11,7 @@ from kover import (
 )
 
 if TYPE_CHECKING:
-    from bson import ObjectId
+    from kover.bson import ObjectId
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)

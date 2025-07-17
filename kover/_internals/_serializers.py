@@ -10,8 +10,7 @@ from typing import (
 )
 from uuid import UUID
 
-from bson import Binary, Int64, ObjectId, Timestamp
-
+from ..bson import Binary, Int64, ObjectId, Timestamp
 from ..exceptions import UnsupportedAnnotation
 from ..utils import chain
 

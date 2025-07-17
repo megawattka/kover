@@ -8,9 +8,9 @@ from typing import (
     cast,
 )
 
-from bson import Int64
 from typing_extensions import Self
 
+from .bson import Int64
 from .utils import filter_non_null
 
 if TYPE_CHECKING:

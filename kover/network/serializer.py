@@ -4,8 +4,12 @@ import os
 import struct
 from typing import TYPE_CHECKING, Any
 
-import bson
-from bson import DEFAULT_CODEC_OPTIONS
+from ..bson import (
+    DEFAULT_CODEC_OPTIONS,
+    _decode_all_selective,
+    _make_c_string,
+    encode,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -45,14 +49,14 @@ class Serializer:
         collection: str = "admin",
     ) -> bytes:
         # https://www.mongodb.com/docs/manual/legacy-opcodes/#op_query
-        encoded = bson.encode(
+        encoded = encode(
             doc,
             check_keys=False,
             codec_options=DEFAULT_CODEC_OPTIONS,
         )
         return b"".join([
             self._to_bytes_le(0, size=4),  # flags
-            bson._make_c_string(f"{collection}.$cmd"),  # type: ignore
+            _make_c_string(f"{collection}.$cmd"),
             self._to_bytes_le(0, size=4),  # to_skip
             self._to_bytes_le(-1, size=4),  # to_return (all)
             encoded,  # doc itself
@@ -65,7 +69,7 @@ class Serializer:
     ) -> bytes:
         # https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/#op_msg
         # https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/#kind-0--body
-        encoded = bson.encode(
+        encoded = encode(
             command,
             check_keys=False,
             codec_options=DEFAULT_CODEC_OPTIONS,
@@ -92,7 +96,7 @@ class Serializer:
             message = msg[5:]
         else:
             raise AssertionError(f"Unsupported op_code from server: {op_code}")
-        return bson._decode_all_selective(  # type: ignore
+        return _decode_all_selective(
             message,
             codec_options=DEFAULT_CODEC_OPTIONS,
             fields=None,

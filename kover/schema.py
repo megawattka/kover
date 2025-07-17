@@ -13,7 +13,6 @@ from typing import (
 )
 from uuid import UUID
 
-from bson import Binary, ObjectId
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -24,6 +23,7 @@ from pydantic.alias_generators import to_camel
 from typing_extensions import Self
 
 from ._internals import value_to_json_schema
+from .bson import Binary, ObjectId
 from .exceptions import SchemaGenerationException
 from .metadata import ExcludeIfNone, SchemaMetadata
 from .utils import is_origin_ex, isinstance_ex

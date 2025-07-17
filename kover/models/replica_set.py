@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from bson import ObjectId
 from pydantic import Field
 
 from .._internals._mixins import ModelMixin as _ModelMixin
+from ..bson import ObjectId
 from ..typings import xJsonT
 
 

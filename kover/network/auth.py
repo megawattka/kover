@@ -7,10 +7,9 @@ from hmac import HMAC, compare_digest
 import os
 from typing import TYPE_CHECKING
 
-from bson import Binary
-from pymongo.saslprep import saslprep
-
+from ..bson import Binary
 from ..exceptions import CredentialsException
+from .saslprep import saslprep
 
 if TYPE_CHECKING:
     from ..client import MongoSocket

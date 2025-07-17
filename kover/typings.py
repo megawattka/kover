@@ -7,7 +7,7 @@ from typing import (
     TextIO,
 )
 
-from bson import SON
+from .bson import SON
 
 xJsonT = dict[str, Any]  # noqa: N816
 DocumentT = xJsonT | SON[str, Any]

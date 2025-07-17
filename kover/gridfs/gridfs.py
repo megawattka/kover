@@ -7,9 +7,9 @@ import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from bson import Binary, ObjectId
 from typing_extensions import Self
 
+from ..bson import Binary, ObjectId
 from ..enums import IndexDirection
 from ..models import Delete, Index
 from .exceptions import GridFSFileNotFound, IncorrectGridFSData

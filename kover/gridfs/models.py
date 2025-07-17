@@ -3,9 +3,9 @@ from __future__ import annotations
 import datetime
 from typing import Annotated
 
-from bson import Binary, ObjectId
 from pydantic import Field
 
+from ..bson import Binary, ObjectId
 from ..metadata import SchemaMetadata
 from ..schema import Document
 
