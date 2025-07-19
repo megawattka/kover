@@ -3,7 +3,7 @@ from typing import Literal
 import unittest
 from uuid import UUID
 
-from kover.bson import Binary, Int64, ObjectId
+from kover.bson import Binary, Int64, ObjectId  # noqa: TC001
 from kover.exceptions import SchemaGenerationException
 from kover.schema import Document, SchemaGenerator
 

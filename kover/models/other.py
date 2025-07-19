@@ -3,7 +3,9 @@ from __future__ import annotations
 import datetime
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, model_validator
+from pydantic.functional_validators import ModelWrapValidatorHandler
+from typing_extensions import Self
 
 from .._internals._mixins import ModelMixin as _ModelMixin
 from ..bson import Binary
@@ -39,11 +41,15 @@ class BuildInfo(_ModelMixin):
     max_bson_object_size: int
     storage_engines: list[str]
 
-    @field_validator("openssl")
+    @model_validator(mode="wrap")
     @classmethod
-    def validate_openssl(cls, value: xJsonT) -> str:
-        """Validate the OpenSSL version."""
-        return value["running"]
+    def _validate_openssl(
+        cls,
+        data: xJsonT,
+        wrap: ModelWrapValidatorHandler[Self],
+    ) -> Self:
+        data["openssl"] = data["openssl"]["running"]
+        return wrap(data)
 
 
 class User(_ModelMixin):

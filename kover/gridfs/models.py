@@ -14,13 +14,9 @@ class Chunk(Document):
     """Represents a GridFS chunk document.
 
     Attributes:
-    ----------
-    files_id : ObjectId
-        The id of the file this chunk belongs to.
-    n : int
-        The sequence number of the chunk (must be >= 0).
-    data : Binary
-        The binary data stored in this chunk.
+        files_id : The id of the file this chunk belongs to.
+        n : The sequence number of the chunk (must be >= 0).
+        data : The binary data stored in this chunk.
     """
 
     files_id: ObjectId = Field(alias="files_id")
@@ -32,17 +28,11 @@ class File(Document):
     """Represents a GridFS file document.
 
     Attributes:
-    ----------
-    length : int
-        The length of the file in bytes.
-    upload_date : datetime.datetime
-        The date and time the file was uploaded in UTC.
-    filename : str | None
-        The name of the file.
-    metadata : dict[str, object]
-        Additional metadata associated with the file.
-    chunk_size : int
-        The size of each chunk in bytes.
+        length : The length of the file in bytes.
+        upload_date : The date and time the file was uploaded in UTC.
+        filename : The name of the file.
+        metadata : Additional metadata associated with the file.
+        chunk_size : The size of each chunk in bytes.
     """
 
     length: int

@@ -24,29 +24,7 @@ T = TypeVar("T")
 
 
 class Cursor(Generic[T]):
-    """Asynchronous MongoDB-like cursor for iterating over query results.
-
-    Methods:
-    -------
-    sort(mapping: xJsonT) -> Self
-        Set the sort order for the query results.
-    skip(value: int) -> Self
-        Set the number of documents to skip.
-    limit(value: int) -> Self
-        Set the maximum number of documents to return.
-    batch_size(value: int) -> Self
-        Set the batch size for the query results.
-    projection(mapping: xJsonT) -> Self
-        Set the projection for the query results.
-    comment(comment: str) -> Self
-        Set a comment for the operation.
-    hint(hint: str | xJsonT) -> Self
-        Set an index hint for the query.
-    close() -> None
-        Close the cursor and release resources.
-    to_list() -> list[T]
-        Return all documents from the cursor as a list.
-    """
+    """Asynchronous MongoDB-like cursor for iterating over query results."""
 
     def __init__(
         self,
@@ -84,13 +62,9 @@ class Cursor(Generic[T]):
         """Set the sort order for the query results.
 
         Parameters:
-        ----------
-        mapping : xJsonT
-            A mapping specifying the sort order for the query.
+            mapping : A mapping specifying the sort order for the query.
 
         Returns:
-        -------
-        Self
             The cursor instance with the sort order applied.
         """
         self._sort = mapping
@@ -100,13 +74,9 @@ class Cursor(Generic[T]):
         """Set the skip amount for the query results.
 
         Parameters:
-        ----------
-        value : int
-            Amount to skip.
+            value : Amount to skip.
 
         Returns:
-        -------
-        Self
             The cursor instance with the sort order applied.
         """
         self._skip = value
@@ -116,13 +86,9 @@ class Cursor(Generic[T]):
         """Set the limit for the query.
 
         Parameters:
-        ----------
-        value : int
-            Maximum amount of docs to return.
+            value : Maximum amount of docs to return.
 
         Returns:
-        -------
-        Self
             The cursor instance with the sort order applied.
         """
         self._limit = value
@@ -132,13 +98,9 @@ class Cursor(Generic[T]):
         """Set the batch size for the query results.
 
         Parameters:
-        ----------
-        value : int
-            Maximum amount of docs to return from first batch.
+            value : Maximum amount of docs to return from first batch.
 
         Returns:
-        -------
-        Self
             The cursor instance with the projection applied.
         """
         self._batch_size = value
@@ -148,15 +110,12 @@ class Cursor(Generic[T]):
         """Set the projection for the query results.
 
         Parameters:
-        ----------
-        mapping : xJsonT
-            A mapping specifying the fields to include or exclude in the query results.
+            mapping : A mapping specifying the fields
+                to include or exclude in the query results.
 
         Returns:
-        -------
-        Self
             The cursor instance with the projection applied.
-        """  # noqa: E501
+        """
         self._projection = mapping
         return self
 
@@ -164,13 +123,9 @@ class Cursor(Generic[T]):
         """Set the comment for operation.
 
         Parameters:
-        ----------
-        comment : str
-            A comment that will be shown in logs.
+            comment : A comment that will be shown in logs.
 
         Returns:
-        -------
-        Self
             The cursor instance with the projection applied.
         """
         self._comment = comment
@@ -180,13 +135,9 @@ class Cursor(Generic[T]):
         """Set the hint for the query.
 
         Parameters:
-        ----------
-        hint : str | xJsonT
-            Index hint to optimize query performance.
+            hint : Index hint to optimize query performance.
 
         Returns:
-        -------
-        Self
             The cursor instance with the hint applied.
         """
         self._hint = hint
@@ -273,8 +224,6 @@ class Cursor(Generic[T]):
         """Return all documents from the cursor as a list.
 
         Returns:
-        -------
-        list[T]
             A list containing all documents retrieved by the cursor.
         """
         return [doc async for doc in self]

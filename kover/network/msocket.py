@@ -4,10 +4,10 @@ import asyncio
 import os
 import platform as sysinfo
 import sys
-from typing import TYPE_CHECKING, Literal, overload
+from typing import TYPE_CHECKING, Literal
 
 from .. import __version__
-from ..codes import codes_to_exc_name
+from ..codes import get_exception_name
 from ..exceptions import OperationFailure
 from ..models import HelloResult
 from ..session import TxnState
@@ -31,6 +31,7 @@ class MongoSocket:
         self.writer = writer
         self.serializer = Serializer()
         self.lock = asyncio.Lock()
+        self.compressor: Literal["zlib", "zstd", "snappy"] | None = None
 
     def __repr__(self) -> str:
         # this can return None?
@@ -38,6 +39,10 @@ class MongoSocket:
             "peername", default=(None, None),
         )
         return f"<MongoSocket host={host} port={port}>"
+
+    def set_compressor(self, compressor: Literal["zlib", "zstd", "snappy"]) -> None:
+        """Sets the compressor. (no way!)."""
+        self.compressor = compressor
 
     @classmethod
     async def make(
@@ -73,6 +78,8 @@ class MongoSocket:
         """Create a hello payload for the MongoDB server."""
         uname = sysinfo.uname()
         impl = sys.implementation
+        if compression is None:
+            compression = []
         platform = impl.name + " " + ".".join(map(str, impl.version))
         payload: xJsonT = {
             "hello": 1.0,
@@ -89,9 +96,8 @@ class MongoSocket:
                 },
                 "platform": platform,
             },
+            "compression": compression,
         }
-        if compression is not None:
-            payload["compression"] = compression
         return payload
 
     @staticmethod
@@ -112,8 +118,8 @@ class MongoSocket:
 
         if "code" in reply:
             code: int = reply["code"]
-            if code in codes_to_exc_name:
-                exc_name = codes_to_exc_name.get(code, f"UnknownError{code}")
+            exc_name = get_exception_name(code=code)
+            if exc_name is not None:
                 error = reply["errmsg"] if not write_errors else reply
                 exception = self._construct_exception(exc_name)
                 return exception(code, error)
@@ -124,28 +130,6 @@ class MongoSocket:
 
         return OperationFailure(-1, reply)
 
-    @overload
-    async def request(
-        self,
-        doc: DocumentT,
-        *,
-        db_name: str = "admin",
-        transaction: Transaction | None = None,
-        wait_response: Literal[True] = True,
-    ) -> xJsonT:
-        ...
-
-    @overload
-    async def request(
-        self,
-        doc: DocumentT,
-        *,
-        db_name: str = "admin",
-        transaction: Transaction | None = None,
-        wait_response: Literal[False] = False,
-    ) -> None:
-        ...
-
     async def request(
         self,
         doc: DocumentT,
@@ -153,15 +137,12 @@ class MongoSocket:
         db_name: str = "admin",
         transaction: Transaction | None = None,
         wait_response: bool = True,
-    ) -> xJsonT | None:
+    ) -> xJsonT:
         """Send a request to the MongoDB server."""
-        doc = {
-            **doc,
-            "$db": db_name,
-        }
+        doc = {**doc, "$db": db_name}  # order important
         if transaction is not None and transaction.is_active:
             transaction.apply_to(doc)
-        rid, msg = self.serializer.get_message(doc)
+        rid, msg = self.serializer.get_message(doc, compressor=self.compressor)
 
         async with self.lock:
             await self.send(msg)
@@ -171,7 +152,7 @@ class MongoSocket:
                 data = await self.recv(length - 16)  # exclude header
                 reply = self.serializer.get_reply(data, op_code)
             else:  # cases like kover.shutdown()
-                return None
+                return {}
 
         if reply.get("ok") != 1.0 or reply.get("writeErrors") is not None:
             exc_value = self._get_exception(reply=reply)
@@ -184,7 +165,6 @@ class MongoSocket:
 
         return reply
 
-    # TODO @megawattka: implement compression!!!
     async def hello(
         self,
         compression: COMPRESSION_T | None = None,

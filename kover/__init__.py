@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"
 __author__ = "oMegaPB"
 __license__ = "MIT"
 __copyright__ = "Copyright (C) 2024-present megawattka"
@@ -59,7 +59,7 @@ from .network import AuthCredentials
 from .schema import Document, SchemaGenerator
 from .session import Session, Transaction
 from .typings import xJsonT
-from .utils import HasToDict, chain, filter_non_null, maybe_to_dict
+from .utils import chain, filter_non_null, maybe_to_dict
 
 __all__ = [
     "AuthCredentials",
@@ -73,7 +73,6 @@ __all__ = [
     "Database",
     "Delete",
     "Document",
-    "HasToDict",
     "HelloResult",
     "Index",
     "IndexDirection",

@@ -3,26 +3,16 @@ from __future__ import annotations
 import itertools
 from typing import (
     TYPE_CHECKING,
-    Protocol,
     TypeVar,
     get_origin,
-    runtime_checkable,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from .typings import xJsonT
+    from .typings import HasToDict, xJsonT
 
 T = TypeVar("T")
-
-
-@runtime_checkable
-class HasToDict(Protocol):
-    """Protocol for objects that can be converted to a dictionary."""
-
-    def to_dict(self) -> xJsonT:  # noqa: D102
-        ...
 
 
 def chain(iterable: Iterable[Iterable[T]]) -> list[T]:

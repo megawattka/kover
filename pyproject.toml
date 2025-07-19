@@ -1,6 +1,6 @@
 [project]
 name = "kover"
-version = "2.2.0"
+version = "2.3.0"
 description = "Fully async mongodb driver for mongod and replica sets."
 readme = "README.md"
 authors = [{ name = "megawattka", email = "gunter56741@gmail.com" }]
@@ -40,6 +40,10 @@ dependencies = [
 Repository = "https://github.com/megawattka/kover"
 Documentation = "https://github.com/megawattka/kover"
 
+[project.optional-dependencies]
+snappy = ["python-snappy"]
+zstd = ["zstd"]
+
 [tool.ruff]
 line-length = 79
 indent-width = 4
@@ -78,7 +82,8 @@ ignore = [
     "EM101", "EM102", "TRY003",  # string literal in exception
     "D104",  # undocumented public package
     "DOC201",  # return not documented
-    "TC001", "TC002", "TC003"  # move in if_type_checking block
+    "DOC502",  # explicitly raised exceptions in docstrings
+    # "TC001", "TC002", "TC003"  # move in if_type_checking block
 ]
 select = ["ALL"]
 unfixable = [
@@ -98,7 +103,8 @@ strict-checking = true
 "kover/network/serializer.py" = ["SLF001", "ERA001"]  # private member access, commented code
 "tests/*" = ["D101", "D102", "S106", "TC003", "TC002", "N802", "PT027"]  # undocumented public class/method, hardcoded password, type checking blocks uninitialized vars, lowercase names, unittest style
 "main.py" = ["ERA001", "S106", "T201"]
-# "setup.py" = ["UP036"]  # version block outdated
+"kover/network/compressors.py" = ["PLR6301"]  # Could be staticmethod no self
+"kover/typings.py" = ["D102"]
 
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = ["typing", "typing_extensions"]

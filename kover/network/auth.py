@@ -21,13 +21,12 @@ class AuthCredentials:
     """Stores authentication credentials for MongoDB.
 
     Attributes:
-    ----------
-    username : str
-        The username for authentication.
-    password : str
-        The password for authentication.
-    db_name : str
-        The database name to authenticate against (default is "admin").
+        username : str
+            The username for authentication.
+        password : str
+            The password for authentication.
+        db_name : str
+            The database name to authenticate against (default is "admin").
     """
 
     username: str
@@ -46,16 +45,13 @@ class AuthCredentials:
         """Create AuthCredentials from environment variables.
 
         Returns:
-        -------
-        AuthCredentials or None
-            Returns an AuthCredentials instance if both MONGO_USER and MONGO_PASSWORD
-            are set in the environment, otherwise returns None.
+            AuthCredentials instance if both MONGO_USER and MONGO_PASSWORD
+                are set in the environment, otherwise returns None.
 
         Raises:
-        ------
-        CredentialsException
-            If only one of MONGO_USER or MONGO_PASSWORD is set.
-        """  # noqa: E501
+            CredentialsException : If only one of MONGO_USER
+                or MONGO_PASSWORD is set.
+        """
         user, password = os.environ.get("MONGO_USER"), \
             os.environ.get("MONGO_PASSWORD")
         if user is not None and password is not None:
@@ -69,14 +65,7 @@ class Auth:
     """Handles authentication mechanisms for MongoDB connections.
 
     Attributes:
-    ----------
-    socket : MongoSocket
-        The socket used for communication with the MongoDB server.
-
-    Methods:
-    -------
-    create(mechanism: str, credentials: AuthCredentials) -> bytes
-        Performs SCRAM authentication and returns the server signature.
+        socket : The socket used for communication with the MongoDB server.
     """
 
     def __init__(self, socket: MongoSocket) -> None:
@@ -135,22 +124,19 @@ class Auth:
         """Perform SCRAM authentication with the MongoDB server.
 
         Parameters:
-        ----------
-        mechanism : str
-            The authentication mechanism to use (e.g., "SCRAM-SHA-1", "SCRAM-SHA-256").
-        credentials : AuthCredentials
-            The authentication credentials containing username, password, and database name.
+            mechanism : The authentication mechanism to use
+                (e.g., "SCRAM-SHA-1", "SCRAM-SHA-256").
+            credentials : The authentication credentials containing
+                username, password, and database name.
 
         Returns:
-        -------
-        bytes
             The server signature after successful authentication.
 
         Raises:
-        ------
-        AssertionError
-            If the server returns an invalid iteration count or nonce, or if the server signature does not match.
-        """  # noqa: E501
+            AssertionError : If the server returns an invalid
+                iteration count or nonce,
+                or if the server signature does not match.
+        """
         if mechanism == "SCRAM-SHA-1":
             digest = "sha1"
             digestmod = hashlib.sha1

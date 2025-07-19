@@ -15,38 +15,12 @@ if TYPE_CHECKING:
 
 
 class Database:
-    """Represents a database instance, providing methods to manage collections and users.
+    """Represents a database instance, providing methods to manage database.
 
     Attributes:
-    ----------
-    name : str
-        The name of the database.
-    client : Kover
-        The client instance used to communicate with the database.
-
-    Methods:
-    -------
-    get_collection(name: str) -> Collection
-        Returns a collection object by name.
-    list_collections(...)
-        Lists collections in the database.
-    create_collection(...)
-        Creates a new collection.
-    drop_collection(name: str)
-        Drops a collection by name.
-    create_user(...)
-        Creates a new user in the database.
-    users_info(...)
-        Retrieves information about users.
-    drop_user(name: str)
-        Drops a user from the database.
-    grant_roles_to_user(username: str, roles: list)
-        Grants roles to a user.
-    command(doc: xJsonT, ...)
-        Sends a command to the database.
-    ping() -> bool
-        Checks if the database is reachable.
-    """  # noqa: E501
+        name : The name of the database.
+        client : The client instance used to communicate with the database.
+    """
 
     def __init__(self, name: str, client: Kover) -> None:
         self.name = name
@@ -55,14 +29,10 @@ class Database:
     def get_collection(self, name: str) -> Collection:
         """Returns a collection object by name.
 
-        Parameters
-        ----------
-        name : str
-            The name of the collection to retrieve.
+        Parameters:
+            name : The name of the collection to retrieve.
 
         Returns:
-        -------
-        Collection
             The collection object corresponding to the given name.
         """
         return Collection(name=name, database=self)
@@ -79,22 +49,17 @@ class Database:
     ) -> list[Collection]:
         """Lists collections in the database.
 
-        Parameters
-        ----------
-        filter_ : xJsonT | None, optional
-            A filter to apply to the collections.
-        name_only : bool, optional
-            If True, only collection names are returned.
-        authorized_collections : bool, optional
-            If True, only authorized collections are listed.
-        comment : str | None, optional
-            Optional comment for the operation.
+        Parameters:
+            filter_ : A filter to apply to the collections.
+            name_only : If True, only collection names are returned.
+            authorized_collections : If True, only authorized
+                collections are listed.
+            comment : Optional comment for the operation.
 
         Returns:
-        -------
-        list[Collection]
-            A list of Collection objects or collection names if name_only is True.
-        """  # noqa: E501
+            A list of Collection objects or collection names
+                if name_only is True.
+        """
         request = await self.command({
             "listCollections": 1.0,
             "filter": filter_ or {},
@@ -118,16 +83,11 @@ class Database:
     ) -> Collection:
         """Creates a new collection in the database.
 
-        Parameters
-        ----------
-        name : str
-            The name of the collection to create.
-        params : xJsonT | None, optional
-            Additional parameters for collection creation.
+        Parameters:
+            name : The name of the collection to create.
+            params : Additional parameters for collection creation.
 
         Returns:
-        -------
-        Collection
             The created collection object.
         """
         await self.command({
@@ -139,16 +99,9 @@ class Database:
         """Drops a collection by name.
 
         Parameters
-        ----------
-        name : str
-            The name of the collection to drop.
-
-        Returns:
-        -------
-        None
+            name : The name of the collection to drop.
         """
         # TODO @megawattka: add `comment` parameter
-        # TODO @megawattka: add return type bool depending on success
         await self.command({"drop": name})
 
     # https://gist.github.com/xandout/61d25df23a77236ab28236650f84ce6b
@@ -165,30 +118,16 @@ class Database:
         """Creates a new user in the database.
 
         Parameters
-        ----------
-        name : str
-            The name of the user to create.
-        password : str
-            The password for the user.
-        roles : Sequence[xJsonT | str] | None, optional
-            Roles to assign to the user.
-        custom_data : xJsonT | None, optional
-            Custom data to associate with the user.
-        mechanisms : list[str] | None, optional
-            Authentication mechanisms for the user.
-        comment : str | None, optional
-            Optional comment for the operation.
-        root : bool, optional
-            If True, assigns root roles to the user.
-
-        Returns:
-        -------
-        None
+            name : The name of the user to create.
+            password : The password for the user.
+            roles : Roles to assign to the user.
+            custom_data : Custom data to associate with the user.
+            mechanisms : Authentication mechanisms for the user.
+            comment : Optional comment for the operation.
+            root : If True, assigns root roles to the user.
 
         Raises:
-        ------
-        ValueError
-            If user roles are not specified.
+            ValueError : If user roles are not specified.
         """
         if mechanisms is None:
             mechanisms = ["SCRAM-SHA-1", "SCRAM-SHA-256"]
@@ -222,27 +161,20 @@ class Database:
     ) -> list[User]:
         """Retrieves information about users in the database.
 
-        Parameters
-        ----------
-        query : str | xJsonT | list[xJsonT] | None, optional
-            Query to filter users; can be a username,
-            a query document, or a list of query documents.
-        show_credentials : bool, optional
-            Whether to include user credentials in the result.
-        show_custom_data : bool, optional
-            Whether to include custom data associated with users.
-        show_privileges : bool, optional
-            Whether to include user privileges in the result.
-        show_auth_restrictions : bool, optional
-            Whether to include authentication restrictions.
-        filter_ : xJsonT | None, optional
-            Additional filter for users.
-        comment : str | None, optional
-            Optional comment for the operation.
+        Parameters:
+            query : Query to filter users; can be a username,
+                a query document, or a list of query documents.
+            show_credentials : Whether to include user
+                credentials in the result.
+            show_custom_data : Whether to include custom data associated
+                with users.
+            show_privileges : Whether to include user privileges in the result.
+            show_auth_restrictions : Whether to include authentication
+                restrictions.
+            filter_ : Additional filter.
+            comment : Optional comment for the operation.
 
         Returns:
-        -------
-        list[User]
             A list of User objects matching the query.
         """
         if query is None:
@@ -266,16 +198,9 @@ class Database:
     ) -> None:
         """Drops a user from the database.
 
-        Parameters
-        ----------
-        name : str
-            The name of the user to drop.
-        comment : str | None, optional
-            Optional comment for the operation.
-
-        Returns:
-        -------
-        None
+        Parameters:
+            name : The name of the user to drop.
+            comment : Optional comment for the operation.
         """
         command = filter_non_null({
             "dropUser": name,
@@ -290,16 +215,9 @@ class Database:
     ) -> None:
         """Grants roles to a user in the database.
 
-        Parameters
-        ----------
-        username : str
-            The name of the user to grant roles to.
-        roles : list[str | xJsonT]
-            A list of roles or role documents to assign to the user.
-
-        Returns:
-        -------
-        None
+        Parameters:
+            username : The name of the user to grant roles to.
+            roles : A list of roles or role documents to assign to the user.
         """
         await self.command({
             "grantRolesToUser": username,
@@ -315,16 +233,11 @@ class Database:
     ) -> xJsonT:
         """Sends a command to the database.
 
-        Parameters
-        ----------
-        doc : xJsonT
-            The command document to send.
-        transaction : Transaction | None, optional
-            An optional transaction context.
+        Parameters:
+            doc : The command document to send.
+            transaction : An optional transaction context.
 
         Returns:
-        -------
-        xJsonT
             The response from the database.
         """
         return await self.client.socket.request(
@@ -338,9 +251,7 @@ class Database:
         """Checks if the database is reachable by sending a ping command.
 
         Returns:
-        -------
-        bool
-            True if the database responds successfully, False otherwise.
+            True if the database responds successfully.
         """
         r = await self.command({"ping": 1.0})
         return r["ok"] == 1.0

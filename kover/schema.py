@@ -23,7 +23,7 @@ from pydantic.alias_generators import to_camel
 from typing_extensions import Self
 
 from ._internals import value_to_json_schema
-from .bson import Binary, ObjectId
+from .bson import Binary, ObjectId  # noqa: TC001
 from .exceptions import SchemaGenerationException
 from .metadata import ExcludeIfNone, SchemaMetadata
 from .utils import is_origin_ex, isinstance_ex
@@ -40,14 +40,16 @@ class SchemaGenerator:
     """Kover's Schema Generator.
 
     This class is used for generating schemas for models
-    that are subclassed from `kover.schema.Document`
-    >>> generator = SchemaGenerator()
-    >>> # assume we have model called "User"
-    >>> schema = generator.generate(User)
+    that are subclassed from `kover.schema.Document`.
 
-    :param additional_properties: should be possible to add
-        additional properties to documents? default False
-        and not recommended to set to True.
+    Examples:
+        >>> generator = SchemaGenerator()
+        >>> schema = generator.generate(User)  # our model
+
+    Parameters:
+        additional_properties : Should be possible to add
+            additional properties to documents?
+            Defaults to False and not recommended to set to True.
     """
 
     def __init__(
@@ -60,7 +62,7 @@ class SchemaGenerator:
     @staticmethod
     def _extract_args(attr_t: object) -> list[Any]:
         if not hasattr(attr_t, "__args__"):
-            msg = f"Expecting type arguments for the generic class. {attr_t}"
+            msg = f"Expecting type arguments for the generic class {attr_t}"
             raise SchemaGenerationException(msg)
         return list(getattr(attr_t, "__args__", []))
 
@@ -88,6 +90,7 @@ class SchemaGenerator:
                 }
             if isinstance_ex(attr_t, Document):
                 return self.generate(attr_t, child=True)  # type: ignore
+            # TODO @megawattka: deal with ForwardRef's
             args_ = attr_t.__class__, attr_t
             msg = "Unsupported annotation found: {}, {}".format(*args_)
             raise SchemaGenerationException(msg)
@@ -140,17 +143,12 @@ class SchemaGenerator:
         """Generate a JSON schema for the given Document subclass.
 
         Parameters:
-        ----------
-        cls : type[Document]
-            The Document subclass to generate the schema for.
-        child : bool, optional
-            If True, generates schema for nested documents (default is False).
+            cls : The Document subclass to generate the schema for.
+            child : If True, generates schema for nested documents (default is False).
 
         Returns:
-        -------
-        xJsonT
             The generated JSON schema as a dictionary.
-        """
+        """  # noqa: E501
         fields = cls.model_fields.items()
         required = [
             v.alias or k
@@ -180,7 +178,8 @@ class SchemaGenerator:
         if self.additional_properties:
             return payload
         required: list[str] = payload["$jsonSchema"]["required"]
-        required.append("_id")
+        if "_id" not in required:
+            required.append("_id")
         payload["$jsonSchema"]["properties"]["_id"] = {
             "bsonType": ["objectId"],
         }
@@ -199,24 +198,6 @@ class Document(BaseModel):
 
     This class provides serialization, validation, and utility methods for
     working with MongoDB documents using Pydantic models.
-
-    Attributes:
-    ----------
-    _id : Optional[ObjectId]
-        The MongoDB ObjectId for the document.
-
-    Methods:
-    -------
-    from_document(payload: xJsonT) -> Self
-        Creates a Document instance from a dictionary.
-    to_dict(exclude_id: bool = False) -> xJsonT
-        Converts the document to a dictionary.
-    from_args(*args, **kwargs) -> Self
-        Initializes the document from positional arguments.
-    with_id(_id: ObjectId) -> Self
-        Sets the document's ObjectId.
-    get_id() -> Optional[ObjectId]
-        Returns the document's ObjectId.
     """
     model_config = ConfigDict(
         extra="allow",
@@ -260,10 +241,11 @@ class Document(BaseModel):
             dumped = {"_id": self._id, **dumped}
         return dumped
 
-    def model_post_init(self, _ctx: object) -> None:  # noqa: D102
+    def model_post_init(self, _ctx: object) -> None:
+        """Document's post init function. Do NOT subclass."""
         extra = (self.model_extra or {})
-        _id: ObjectId | None = extra.pop("_id", None)  # noqa: RUF052
-        self._id = _id
+        document_id: ObjectId | None = extra.pop("_id", None)
+        self._id = document_id
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Document):

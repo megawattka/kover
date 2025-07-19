@@ -27,32 +27,12 @@ class Transaction:
     """Represents a MongoDB transaction.
 
     Attributes:
-    ----------
-    socket : MongoSocket
-        The socket used to communicate with MongoDB.
-    session_document : xJsonT
-        The session document associated with the transaction.
-    id : Int64
-        The transaction identifier.
-    state : TxnState
-        The current state of the transaction.
-    action_count : int
-        The number of actions performed in the transaction.
-    exception : BaseException | None
-        The exception raised during the transaction, if any.
-
-    Methods:
-    -------
-    start() -> None
-        Starts the transaction.
-    end(state: TxnState, exc_value: Optional[BaseException]) -> None
-        Ends the transaction with the given state and exception.
-    commit() -> None
-        Commits the transaction.
-    abort() -> None
-        Aborts the transaction.
-    apply_to(command: xJsonT) -> None
-        Applies transaction information to a MongoDB command.
+        socket : The socket used to communicate with MongoDB.
+        session_document : The transaction's session document.
+        id : The transaction identifier.
+        state : The current state of the transaction.
+        action_count : The number of actions performed in the transaction.
+        exception : The exception raised during the transaction, if any.
     """
 
     def __init__(
@@ -155,16 +135,8 @@ class Session:
     """Represents a MongoDB session.
 
     Attributes:
-    ----------
-    document : xJsonT
-        The session document associated with the session.
-    socket : MongoSocket
-        The socket used to communicate with MongoDB.
-
-    Methods:
-    -------
-    start_transaction() -> Transaction
-        Starts a new transaction for this session.
+        document : The session document associated with the session.
+        socket : The socket used to communicate with MongoDB.
     """
 
     def __init__(self, document: xJsonT, socket: MongoSocket) -> None:

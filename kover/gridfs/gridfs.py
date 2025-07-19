@@ -81,8 +81,7 @@ class GridFS:
 
         else:
             cls = getattr(data, "__class__", None)  # type: ignore
-            msg = f"Incorrect data passed: {cls}, {data}"
-            raise IncorrectGridFSData(msg)
+            raise IncorrectGridFSData(f"Incorrect data passed: {cls}, {data}")
 
         binary.seek(0)
         return binary, name
@@ -118,30 +117,23 @@ class GridFS:
         """Store a file in GridFS, splitting it into chunks.
 
         Parameters:
-        ----------
-        data : GridFSPayloadT
-            The file data to store (can be bytes, str, Path, or file-like object).
-        filename : str, optional
-            The name of the file, defaults to None.
-        encoding : str, optional
-            Encoding to use if data is a string, defaults to "utf-8".
-        chunk_size : int, optional
-            Size of each chunk in bytes, defaults to DEFAULT_CHUNK_SIZE.
-        add_sha1 : bool, optional
-            Whether to add a SHA1 hash to the file metadata, defaults to True.
-        metadata : xJsonT, optional
-            Additional metadata to store with the file.
+            data : The file data to store
+                (can be bytes, str, Path, or file-like object).
+            filename : The name of the file, defaults to None.
+            encoding : Encoding to use if data is a string,
+                defaults to "utf-8".
+            chunk_size : Size of each chunk in bytes,
+                defaults to DEFAULT_CHUNK_SIZE.
+            add_sha1 : Whether to add a SHA1 hash to the
+                file metadata, defaults to True.
+            metadata : Additional metadata to store with the file.
 
         Returns:
-        -------
-        ObjectId
             The ObjectId of the stored file.
 
         Raises:
-        ------
-        IncorrectGridFSData
-            If the provided data type is not supported.
-        """  # noqa: E501
+            IncorrectGridFSData : If the provided data type is not supported.
+        """
         chunk_size = chunk_size or DEFAULT_CHUNK_SIZE
         file_id = ObjectId()
 
@@ -189,23 +181,17 @@ class GridFS:
         """Retrieve a file and its binary data from GridFS by file ID.
 
         Parameters:
-        ----------
-        file_id : ObjectId
-            The unique identifier of the file to retrieve.
-        check_sha1 : bool, optional
-            Whether to verify the SHA1 hash of the file data, defaults to True.
+            file_id : The unique identifier of the file to retrieve.
+            check_sha1 : Whether to verify the SHA1 hash of the file data,
+                defaults to True.
 
         Returns:
-        -------
-        tuple[File, BytesIO]
             The File object and its binary data.
 
         Raises:
-        ------
-        GridFSFileNotFound
-            If no file with the given ID is found.
-        AssertionError
-            If check_sha1 is True and the SHA1 hash does not match.
+            GridFSFileNotFound : If no file with the given ID is found.
+            AssertionError : If check_sha1 is True and
+                the SHA1 hash does not match.
         """
         file = await self._files.find_one({"_id": file_id}, cls=File)
         if file is not None:
@@ -233,19 +219,13 @@ class GridFS:
         """Retrieve a file and its binary data from GridFS by filename.
 
         Parameters:
-        ----------
-        filename : str
-            The name of the file to retrieve.
+            filename : The name of the file to retrieve.
 
         Returns:
-        -------
-        tuple[File, BytesIO]
             The File object and its binary data.
 
         Raises:
-        ------
-        GridFSFileNotFound
-            If no file with the given filename is found.
+            GridFSFileNotFound : If no file with the given filename is found.
         """
         file = await self._files.find_one({"filename": filename}, cls=File)
         if file is not None:
@@ -260,13 +240,9 @@ class GridFS:
         """Delete a file and its associated chunks from GridFS by file ID.
 
         Parameters:
-        ----------
-        file_id : ObjectId
-            The unique identifier of the file to delete.
+            file_id : The unique identifier of the file to delete.
 
         Returns:
-        -------
-        bool
             True if the file was deleted, False otherwise.
         """
         deleted = await self._files.delete(Delete({"_id": file_id}, limit=1))
@@ -274,14 +250,10 @@ class GridFS:
             await self._chunks.delete(Delete({"files_id": file_id}, limit=0))
         return bool(deleted)
 
-    async def drop_all_files(
-        self,
-    ) -> int:
+    async def drop_all_files(self) -> int:
         """Delete all files and their associated chunks from GridFS.
 
         Returns:
-        -------
-        int
             The number of files deleted.
         """
         await self._chunks.clear()
@@ -291,8 +263,6 @@ class GridFS:
         """List all files stored in GridFS.
 
         Returns:
-        -------
-        list[File]
             List of "File" objects, stored in GridFS.
         """
         return await self._files.find(cls=File).to_list()
@@ -304,13 +274,9 @@ class GridFS:
         """Check if a file exists in GridFS by its ObjectId.
 
         Parameters:
-        ----------
-        file_id : ObjectId
-            The unique identifier of the file to check.
+            file_id : The unique identifier of the file to check.
 
         Returns:
-        -------
-        bool
             True if the file exists, False otherwise.
         """
         file = await self._files.find_one({"_id": file_id})
@@ -320,8 +286,6 @@ class GridFS:
         """Create necessary indexes for GridFS files and chunks collections.
 
         Returns:
-        -------
-        Self
             The GridFS instance with ensured indexes.
         """
         await self._chunks.create_indexes(CHUNKS_IDX)

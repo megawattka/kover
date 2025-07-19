@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from typing_extensions import overload
 
@@ -13,7 +13,6 @@ from .models import (
     Index,
 )
 from .schema import Document
-from .typings import xJsonT
 from .utils import filter_non_null, maybe_to_dict
 
 if TYPE_CHECKING:
@@ -25,9 +24,9 @@ if TYPE_CHECKING:
         WriteConcern,
     )
     from .session import Transaction
+    from .typings import xJsonT
 
 T = TypeVar("T", bound=Document)
-MaybeDocument = xJsonT | Document
 
 
 class Collection:
@@ -37,56 +36,10 @@ class Collection:
     index management, aggregation, and other collection-level commands.
 
     Attributes:
-    ----------
-    name : str
-        The name of the collection.
-    database : Database
-        The database instance to which the collection belongs.
-    options : xJsonT | None
-        Optional collection options.
-    info : xJsonT | None
-        Optional collection metadata.
-
-    Methods:
-    -------
-    create_if_not_exists()
-        Create the collection if it does not exist.
-    with_options()
-        Retrieve the collection with its options.
-    coll_mod(params)
-        Modify collection settings.
-    set_validator(validator, level)
-        Set a validator for the collection.
-    insert(ivalue, ...)
-        Insert documents into the collection.
-    update(*updates, ...)
-        Update documents in the collection.
-    delete(*deletes, ...)
-        Delete documents from the collection.
-    clear()
-        Delete all documents from the collection.
-    find_one(filter_, cls, ...)
-        Find a single document.
-    find(filter_, cls, ...)
-        Find documents.
-    aggregate(pipeline, ...)
-        Run an aggregation pipeline.
-    distinct(key, ...)
-        Get distinct values for a key.
-    count(query, ...)
-        Count documents matching a query.
-    convert_to_capped(size, ...)
-        Convert the collection to capped.
-    create_indexes(*indexes, ...)
-        Create indexes.
-    list_indexes()
-        List all indexes.
-    re_index()
-        Rebuild all indexes.
-    drop_indexes(indexes, drop_all)
-        Drop indexes.
-    drop()
-        Drop the collection.
+        name : The name of the collection.
+        database : The database instance to which the collection belongs.
+        options : Optional collection options.
+        info : Optional collection metadata.
     """
 
     def __init__(
@@ -108,13 +61,11 @@ class Collection:
         return self.database.get_collection(f"{self.name}.{name}")
 
     async def create_if_not_exists(self) -> Collection:
-        """Create the collection if it does not exist, otherwise return the existing collection.
+        """Return the created collection or return the existing collection.
 
         Returns:
-        -------
-        Collection
             The created or existing collection.
-        """  # noqa: E501
+        """
         coll = await self.database.list_collections({"name": self.name})
         if not coll:
             return await self.database.create_collection(self.name)
@@ -124,14 +75,11 @@ class Collection:
         """Retrieve the collection with its options from the database.
 
         Returns:
-        -------
-        Collection
             The collection object with its options.
 
         Raises:
-        ------
-        NameSpaceNotFoundError
-            If the collection namespace is not found in the database.
+            ValueError : If the collection
+                namespace is not found in the database.
         """
         infos = await self.database.list_collections({"name": self.name})
         if not infos:
@@ -145,13 +93,7 @@ class Collection:
         """Modify collection settings using the collMod command.
 
         Parameters:
-        ----------
-        params : xJsonT
-            Dictionary of parameters to pass to the collMod command.
-
-        Returns:
-        -------
-        None
+            params : Dictionary of parameters to pass to the collMod command.
         """
         await self.database.command({
             "collMod": self.name,
@@ -167,15 +109,9 @@ class Collection:
         """Set a validator for the collection.
 
         Parameters:
-        ----------
-        validator : xJsonT
-            The validation rules to apply to documents in the collection.
-        level : ValidationLevel, optional
-            The validation level to use (default is MODERATE).
-
-        Returns:
-        -------
-        None
+            validator : The validation rules to apply
+                to documents in the collection.
+            level : The validation level to use (default is MODERATE).
         """
         await self.coll_mod({
             "validator": validator,
@@ -185,7 +121,7 @@ class Collection:
     @overload
     async def insert(
         self,
-        ivalue: MaybeDocument,
+        ivalue: xJsonT | Document,
         /,
         *,
         ordered: bool = True,
@@ -199,7 +135,7 @@ class Collection:
     @overload
     async def insert(
         self,
-        ivalue: Sequence[MaybeDocument],
+        ivalue: Sequence[xJsonT | Document],
         /,
         *,
         ordered: bool = True,
@@ -213,7 +149,7 @@ class Collection:
     # https://www.mongodb.com/docs/manual/reference/command/insert/
     async def insert(
         self,
-        ivalue: MaybeDocument | Sequence[MaybeDocument],
+        ivalue: xJsonT | Document | Sequence[xJsonT | Document],
         /,
         *,
         ordered: bool = True,
@@ -225,25 +161,19 @@ class Collection:
         """Insert one or more documents into the collection.
 
         Parameters:
-        ----------
-        ivalue : MaybeDocument or Sequence[MaybeDocument]
-            The document or sequence of documents to insert.
-        ordered : bool, optional
-            Whether the inserts should be processed in order (default is True).
-        max_time_ms : int, optional
-            The maximum time in milliseconds for the operation (default is 0).
-        bypass_document_validation : bool, optional
-            Allows the write to circumvent document validation (default is False).
-        comment : str or None, optional
-            A comment to attach to the operation.
-        transaction : Transaction or None, optional
-            The transaction context for the operation.
+            ivalue : The document or sequence of documents to insert.
+            ordered : Whether the inserts should be
+                processedin order (default is True).
+            max_time_ms : The maximum time in milliseconds
+                for the operation (default is 0).
+            bypass_document_validation : Allows the write to circumvent
+                document validation (default is False).
+            comment : A comment to attach to the operation.
+            transaction : The transaction context for the operation.
 
         Returns:
-        -------
-        ObjectId or list[ObjectId]
             The ObjectId(s) of the inserted document(s).
-        """  # noqa: E501
+        """
         multi = isinstance(ivalue, Sequence)
         if multi:
             docs = [
@@ -278,30 +208,24 @@ class Collection:
         let: xJsonT | None = None,
         transaction: Transaction | None = None,
     ) -> int:
-        """Update documents in the collection according to the specified update operations.
+        """Update documents in the collection.
 
         Parameters:
-        ----------
-        updates : Update
-            One or more Update objects specifying the update criteria and modifications.
-        ordered : bool, optional
-            Whether the updates should be processed in order (default is True).
-        max_time_ms : int, optional
-            The maximum time in milliseconds for the operation (default is 0).
-        bypass_document_validation : bool, optional
-            Allows the write to circumvent document validation (default is False).
-        comment : str or None, optional
-            A comment to attach to the operation.
-        let : xJsonT or None, optional
-            Variables that can be used in the update expressions.
-        transaction : Transaction or None, optional
-            The transaction context for the operation.
+            updates : One or more Update objects specifying
+                the update criteria and modifications.
+            ordered : Whether the updates should
+                be processed in order (default is True).
+            max_time_ms : The maximum time in milliseconds
+                for the operation (default is 0).
+            bypass_document_validation : Allows the write
+                to circumvent document validation (default is False).
+            comment : A comment to attach to the operation.
+            let : Variables that can be used in the update expressions.
+            transaction : The transaction context for the operation.
 
         Returns:
-        -------
-        int
             The number of documents updated.
-        """  # noqa: E501
+        """
         command = filter_non_null({
             "update": self.name,
             "updates": [update.to_dict() for update in updates],
@@ -329,30 +253,22 @@ class Collection:
         max_time_ms: int = 0,
         transaction: Transaction | None = None,
     ) -> int:
-        """Delete documents from the collection according to the specified delete operations.
+        """Delete documents from the collection.
 
         Parameters:
-        ----------
-        deletes : Delete
-            One or more Delete objects specifying the deletion criteria.
-        comment : str, optional
-            A comment to attach to the operation.
-        let : xJsonT, optional
-            Variables that can be used in the delete expressions.
-        ordered : bool, optional
-            Whether the deletes should be processed in order.
-        write_concern : WriteConcern, optional
-            The write concern for the operation.
-        max_time_ms : int, optional
-            The maximum amount of time to allow the operation to run.
-        transaction : Transaction, optional
-            The transaction context for the operation.
+            deletes : One or more Delete objects
+                specifying the deletion criteria.
+            comment : A comment to attach to the operation.
+            let : Variables that can be used in the delete expressions.
+            ordered : Whether the deletes should be processed in order.
+            write_concern : The write concern for the operation.
+            max_time_ms : The maximum amount of time
+                to allow the operation to run.
+            transaction : The transaction context for the operation.
 
         Returns:
-        -------
-        int
             The number of documents deleted.
-        """  # noqa: E501
+        """
         command = filter_non_null({
             "delete": self.name,
             "deletes": [delete.to_dict() for delete in deletes],
@@ -371,8 +287,6 @@ class Collection:
         """Delete all documents from the collection.
 
         Returns:
-        -------
-        int
             The number of documents deleted.
         """
         deletion = Delete({}, limit=0)
@@ -406,17 +320,11 @@ class Collection:
         """Find a single document in the collection matching the filter.
 
         Parameters:
-        ----------
-        filter_ : xJsonT or None, optional
-            The filter criteria for selecting the document.
-        cls : type[T] or None, optional
-            The class to deserialize the document into.
-        transaction : Transaction or None, optional
-            The transaction context for the operation.
+            filter_ : The filter criteria for selecting the document.
+            cls : The class to deserialize the document into.
+            transaction : The transaction context for the operation.
 
         Returns:
-        -------
-        T or xJsonT or None
             The first matching document or None if no document matches.
         """
         documents = await self.find(
@@ -455,17 +363,11 @@ class Collection:
         """Find documents in the collection matching the filter.
 
         Parameters:
-        ----------
-        filter_ : xJsonT or None, optional
-            The filter criteria for selecting documents.
-        cls : type[T] or None, optional
-            The class to deserialize the documents into.
-        transaction : Transaction or None, optional
-            The transaction context for the operation.
+            filter_ : The filter criteria for selecting documents.
+            cls : The class to deserialize the documents into.
+            transaction : The transaction context for the operation.
 
         Returns:
-        -------
-        Cursor[T] or Cursor[xJsonT]
             A cursor for iterating over the matching documents.
         """
         return Cursor(
@@ -475,7 +377,7 @@ class Collection:
             transaction=transaction,
         )
 
-    # TODO @megawattka: prob make overloads for cls like in "find"
+    # TODO @megawattka: prob make overloads for cls like in "find"?
     # https://www.mongodb.com/docs/manual/reference/command/aggregate/
     async def aggregate(
         self,
@@ -493,41 +395,27 @@ class Collection:
         write_concern: WriteConcern | None = None,
         let: xJsonT | None = None,
         transaction: Transaction | None = None,
-    ) -> list[xJsonT]:
+    ) -> list[Any]:
         """Run an aggregation pipeline on the collection.
 
         Parameters:
-        ----------
-        pipeline : list[xJsonT]
-            The aggregation pipeline stages.
-        explain : bool, optional
-            Whether to return information on the execution of the pipeline.
-        allow_disk_use : bool, optional
-            Enables writing to temporary files.
-        cursor : xJsonT or None, optional
-            The cursor options.
-        max_time_ms : int, optional
-            The maximum time in milliseconds for the operation.
-        bypass_document_validation : bool, optional
-            Allows the write to circumvent document validation.
-        read_concern : ReadConcern or None, optional
-            The read concern for the operation.
-        collation : Collation or None, optional
-            The collation to use for string comparison.
-        hint : str or None, optional
-            Index to use.
-        comment : str or None, optional
-            Comment to attach to the operation.
-        write_concern : WriteConcern or None, optional
-            The write concern for the operation.
-        let : xJsonT or None, optional
-            Variables for use in the pipeline.
-        transaction : Transaction or None, optional
-            The transaction context.
+            pipeline : The aggregation pipeline stages.
+            explain : Whether to return information on
+                the execution of the pipeline.
+            allow_disk_use : Enables writing to temporary files.
+            cursor : The cursor options.
+            max_time_ms : The maximum time in milliseconds for the operation.
+            bypass_document_validation : Allows the write
+                to circumvent document validation.
+            read_concern : The read concern for the operation.
+            collation : The collation to use for string comparison.
+            hint : Index to use.
+            comment : Comment to attach to the operation.
+            write_concern : The write concern for the operation.
+            let : Variables for use in the pipeline.
+            transaction : The transaction context.
 
         Returns:
-        -------
-        list[xJsonT]
             The result documents from the aggregation.
         """
         command = filter_non_null({
@@ -570,30 +458,21 @@ class Collection:
         hint: str | None = None,
         transaction: Transaction | None = None,
     ) -> list[object]:
-        """Return a list of distinct values for the specified key in the collection.
+        """Return a list of distinct values for the specified key.
 
         Parameters:
-        ----------
-        key : str
-            The field for which to return distinct values.
-        query : xJsonT or None, optional
-            A query that specifies the documents from which to retrieve distinct values.
-        collation : Collation or None, optional
-            Specifies a collation for string comparison.
-        comment : str or None, optional
-            A comment to attach to the operation.
-        read_concern : ReadConcern or None, optional
-            The read concern for the operation.
-        hint : str or None, optional
-            Index to use.
-        transaction : Transaction or None, optional
-            The transaction context for the operation.
+            key : The field for which to return distinct values.
+            query : A query that specifies the documents from
+                which to retrieve distinct values.
+            collation : Specifies a collation for string comparison.
+            comment : A comment to attach to the operation.
+            read_concern : The read concern for the operation.
+            hint : Index to use.
+            transaction : The transaction context for the operation.
 
         Returns:
-        -------
-        list[object]
             The list of distinct values for the specified key.
-        """  # noqa: E501
+        """
         command = filter_non_null({
             "distinct": self.name,
             "key": key,
@@ -625,29 +504,17 @@ class Collection:
         """Count the number of documents in the collection matching the query.
 
         Parameters:
-        ----------
-        query : xJsonT or None, optional
-            The filter criteria for selecting documents.
-        limit : int, optional
-            The maximum number of documents to count.
-        skip : int, optional
-            The number of documents to skip before counting.
-        hint : str or None, optional
-            Index to use.
-        collation : Collation or None, optional
-            Specifies a collation for string comparison.
-        comment : str or None, optional
-            A comment to attach to the operation.
-        max_time_ms : int, optional
-            The maximum time in milliseconds for the operation.
-        read_concern : ReadConcern or None, optional
-            The read concern for the operation.
-        transaction : Transaction or None, optional
-            The transaction context for the operation.
+            query : The filter criteria for selecting documents.
+            limit : The maximum number of documents to count.
+            skip : The number of documents to skip before counting.
+            hint : Index to use.
+            collation : Specifies a collation for string comparison.
+            comment : A comment to attach to the operation.
+            max_time_ms : The maximum time in milliseconds for the operation.
+            read_concern : The read concern for the operation.
+            transaction : The transaction context for the operation.
 
         Returns:
-        -------
-        int
             The number of documents matching the query.
         """
         command = filter_non_null({
@@ -671,22 +538,16 @@ class Collection:
         write_concern: WriteConcern | None = None,
         comment: str | None = None,
     ) -> None:
-        """Convert the collection to a capped collection with the specified size.
+        """Convert the collection to a capped with the specified size.
 
         Parameters:
-        ----------
-        size : int
-            The maximum size in bytes for the capped collection.
-        write_concern : WriteConcern or None, optional
-            The write concern for the operation.
-        comment : str or None, optional
-            A comment to attach to the operation.
+            size : The maximum size in bytes for the capped collection.
+            write_concern : The write concern for the operation.
+            comment : A comment to attach to the operation.
 
         Raises:
-        ------
-        ValueError
-            If the specified size is less than or equal to zero.
-        """  # noqa: E501
+            ValueError : If the specified size is less than or equal to zero.
+        """
         if size <= 0:
             raise ValueError("Cannot set size below zero.")
         command = filter_non_null({
@@ -706,16 +567,12 @@ class Collection:
         """Create one or more indexes on the collection.
 
         Parameters:
-        ----------
-        indexes : Index
-            One or more Index objects specifying the indexes to create.
-        comment : str or None, optional
-            A comment to attach to the operation.
+            indexes : One or more Index objects
+                specifying the indexes to create.
+            comment : A comment to attach to the operation.
 
         Raises:
-        ------
-        ValueError
-            If no indexes are provided.
+            ValueError : If no indexes are provided.
         """
         if len(indexes) == 0:
             raise ValueError("Empty sequence of indexes")
@@ -733,8 +590,6 @@ class Collection:
         """List all indexes on the collection.
 
         Returns:
-        -------
-        list[Index]
             A list of Index objects representing the indexes on the collection.
         """
         r = await self.database.command({"listIndexes": self.name})
@@ -766,16 +621,11 @@ class Collection:
         """Drop one or more indexes from the collection.
 
         Parameters:
-        ----------
-        indexes : str or list[str] or None, optional
-            The name(s) of the index(es) to drop. If None and drop_all is True, all indexes are dropped.
-        drop_all : bool, optional
-            If True and indexes is None, all indexes will be dropped.
-
-        Returns:
-        -------
-        None
-        """  # noqa: E501
+            indexes : The name(s) of the index(es) to drop.
+                If None and drop_all is True, all indexes are dropped.
+            drop_all : If True and indexes is None,
+                all indexes will be dropped.
+        """
         if drop_all and indexes is None:
             indexes = "*"
         await self.database.command({
