@@ -3,8 +3,8 @@ from __future__ import annotations
 from pydantic import Field
 
 from .._internals._mixins import ModelMixin as _ModelMixin
-from ..bson import ObjectId
-from ..typings import xJsonT
+from ..bson import ObjectId  # noqa: TC001
+from ..typings import xJsonT  # noqa: TC001
 
 
 # https://www.mongodb.com/docs/manual/reference/replica-configuration/#members

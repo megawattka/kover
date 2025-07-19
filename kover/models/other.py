@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-import datetime
+import datetime  # noqa: TC003
 from typing import Literal
 
 from pydantic import Field, model_validator
-from pydantic.functional_validators import ModelWrapValidatorHandler
+from pydantic.functional_validators import (
+    ModelWrapValidatorHandler,  # noqa: TC002
+)
 from typing_extensions import Self
 
 from .._internals._mixins import ModelMixin as _ModelMixin
-from ..bson import Binary
-from ..enums import CollationStrength, IndexDirection, IndexType
+from ..bson import Binary  # noqa: TC001
+from ..enums import CollationStrength, IndexDirection, IndexType  # noqa: TC001
 from ..typings import COMPRESSION_T, xJsonT
 
 

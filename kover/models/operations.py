@@ -5,8 +5,8 @@ from typing import Literal
 from pydantic import BaseModel
 
 from .._internals._mixins import ModelMixin as _ModelMixin
-from ..typings import xJsonT
-from .other import Collation
+from ..typings import xJsonT  # noqa: TC001
+from .other import Collation  # noqa: TC001
 
 
 # https://www.mongodb.com/docs/manual/reference/command/update/#syntax
