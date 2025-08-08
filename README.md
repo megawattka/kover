@@ -7,7 +7,7 @@
 ![Last Commit](https://img.shields.io/github/last-commit/megawattka/kover)
 ![MongoDB](https://img.shields.io/badge/MongoDB-6.0+-green)
 
-**Kover** is a model-orientied strict typed mongodb driver supporting local mongod and replica sets. Battle tests are still required*<br>
+**Kover** is a model-orientied strictly typed mongodb driver supporting local mongod, replica sets and remote atlases. Battle tests are still required*<br>
 this library was inspired by <a href=https://github.com/sakal/aiomongo>this project</a> i like it very much. Though its 8 years old.
 Kover is linted by Ruff and supports pyright strict type checking mode.
 
@@ -36,14 +36,15 @@ The main reason why i created this project is that Motor - official async wrappe
 
 # Status
 it still missing features. <br>
-e.g: **bulk write API**
+e.g: **bulk write API** and **Encryption**
 but its already very cool! <br>
 
 # Dependencies
 - All platforms.
-- python 3.10
+- python 3.10+
 - MongoDB 6.0+ (not sure about older versions)
 - pydantic 2.10.6 or later
+- dnspython 2.7.0 or later
 
 # Features
 Almost all features from pymongo. All auth types are supported. Integration with Pydantic supported.
