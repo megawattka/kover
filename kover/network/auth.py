@@ -1,43 +1,42 @@
 from __future__ import annotations
 
 import base64
-from dataclasses import dataclass, field
 import hashlib
 from hmac import HMAC, compare_digest
 import os
 from typing import TYPE_CHECKING
 
+from pydantic import BaseModel, Field
+
 from ..bson import Binary
 from ..exceptions import CredentialsException
-from .saslprep import saslprep
 
 if TYPE_CHECKING:
-    from ..client import MongoSocket
+    from ..client import MongoTransport
     from ..typings import xJsonT
 
 
-@dataclass(frozen=True)
-class AuthCredentials:
+class AuthCredentials(BaseModel):
     """Stores authentication credentials for MongoDB.
 
     Attributes:
-        username : str
-            The username for authentication.
-        password : str
-            The password for authentication.
-        db_name : str
-            The database name to authenticate against (default is "admin").
+        username : The username for authentication.
+        password : The password for authentication.
+        db_name : The database name to authenticate against
+            (default is "admin").
     """
 
     username: str
-    password: str = field(repr=False)
-    db_name: str = field(default="admin")
+    password: str = Field(repr=False)
+    db_name: str = Field(default="admin")
 
-    def md5_hash(self) -> bytes:  # noqa: D102
+    def md5_hash(self) -> bytes:
+        """Returns md5 hashed string for MongoDB. Internal use."""
         hashed = hashlib.md5(f"{self.username}:mongo:{self.password}".encode())
         return hashed.hexdigest().encode("u8")
 
-    def apply_to(self, document: xJsonT) -> None:  # noqa: D102
+    def apply_to(self, document: xJsonT) -> None:
+        """Internal use only. Applies auth credentials to hello payload."""
         document["saslSupportedMechs"] = f"{self.db_name}.{self.username}"
 
     @classmethod
@@ -55,7 +54,7 @@ class AuthCredentials:
         user, password = os.environ.get("MONGO_USER"), \
             os.environ.get("MONGO_PASSWORD")
         if user is not None and password is not None:
-            return cls(user, password)
+            return cls(username=user, password=password)
         if (user and not password) or (password and not user):
             raise CredentialsException
         return None  # ruff force
@@ -65,11 +64,12 @@ class Auth:
     """Handles authentication mechanisms for MongoDB connections.
 
     Attributes:
-        socket : The socket used for communication with the MongoDB server.
+        transport : The transport used for communication
+            with the MongoDB server.
     """
 
-    def __init__(self, socket: MongoSocket) -> None:
-        self.socket: MongoSocket = socket
+    def __init__(self, transport: MongoTransport) -> None:
+        self.transport = transport
 
     @staticmethod
     def _parse_scram_response(payload: bytes) -> dict[str, bytes]:
@@ -113,7 +113,7 @@ class Auth:
                 "skipEmptyExchange": True,
             },
         }
-        request = await self.socket.request(command, db_name=db_name)
+        request = await self.transport.request(command, db_name=db_name)
         return nonce, request["payload"], first_bare, request["conversationId"]
 
     async def create(  # noqa: PLR0914
@@ -144,7 +144,7 @@ class Auth:
         else:
             digest = "sha256"
             digestmod = hashlib.sha256
-            data = saslprep(credentials.password).encode()
+            data = credentials.password.encode()
 
         nonce, server_first, first_bare, cid = await self._sasl_start(
             mechanism,
@@ -183,7 +183,10 @@ class Auth:
             "conversationId": cid,
             "payload": Binary(client_final),
         }
-        request = await self.socket.request(cmd, db_name=credentials.db_name)
+        request = await self.transport.request(
+            cmd,
+            db_name=credentials.db_name,
+        )
         parsed = self._parse_scram_response(request["payload"])
 
         assert request["done"]

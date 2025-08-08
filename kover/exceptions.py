@@ -2,16 +2,20 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from kover.helpers import classrepr
+
 if TYPE_CHECKING:
     from .typings import xJsonT
 
 
+@classrepr("code", "message")
 class OperationFailure(Exception):
     """General operation failure."""
 
     def __init__(self, code: int, message: xJsonT) -> None:
         self.code = code
         self.message = message
+        self.err_info = None
 
 
 class SchemaGenerationException(Exception):

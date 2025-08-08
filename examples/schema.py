@@ -54,7 +54,8 @@ class User(Document):  # noqa: D101
     friend: Friend | None
 
 
-async def main() -> None:  # noqa: D103
+async def main() -> None:
+    """Entrypoint."""
     credentials = AuthCredentials.from_environ()
     kover = await Kover.make_client(credentials=credentials)
 

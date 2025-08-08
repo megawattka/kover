@@ -9,3 +9,5 @@ dist
 .ruff_cache
 .python-version
 .token
+uv.lock
+kover/bulk

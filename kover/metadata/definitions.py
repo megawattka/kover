@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING
 
 from annotated_types import GroupedMetadata
 from pydantic import Field
 from pydantic.alias_generators import to_camel
 
-from .._internals import ReprMixin as _ReprMixin
+from .._internals import EmptyReprMixin as _ReprMixin
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -30,23 +30,23 @@ class ExcludeIfNone(_ReprMixin):
 
 
 @dataclass(frozen=True)
-class SchemaMetadata(GroupedMetadata, _ReprMixin):
+class SchemaMetadata(GroupedMetadata):
     """Specify additional jsonSchema metadata for MongoDB Schema generation.
 
     https://www.mongodb.com/docs/manual/reference/operator/query/jsonSchema/
     https://www.mongodb.com/docs/manual/reference/operator/query/jsonSchema/#available-keywords
     """
 
-    title: str | None = None
-    description: str | None = None
-    minimum: int | None = None
-    maximum: int | None = None
-    min_items: int | None = None
-    max_items: int | None = None
-    min_length: int | None = None
-    max_length: int | None = None
-    pattern: str | None = None
-    unique_items: bool | None = None
+    title: str | None = field(default=None)
+    description: str | None = field(default=None)
+    minimum: int | None = field(default=None)
+    maximum: int | None = field(default=None)
+    min_items: int | None = field(default=None)
+    max_items: int | None = field(default=None)
+    min_length: int | None = field(default=None)
+    max_length: int | None = field(default=None)
+    pattern: str | None = field(default=None)
+    unique_items: bool | None = field(default=None)
 
     def serialize(self) -> xJsonT:
         """Serialize the SchemaMetadata instance.

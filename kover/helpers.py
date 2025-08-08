@@ -8,7 +8,7 @@ from typing import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
     from .typings import HasToDict, xJsonT
 
@@ -41,6 +41,20 @@ def maybe_to_dict(obj: HasToDict | xJsonT | None) -> xJsonT | None:
     Converts the object using its `to_dict` method if it has one,
     otherwise returns the object as is if it is already a dictionary or None.
     """
-    if (obj is not None and isinstance(obj, dict)) or obj is None:
+    if obj is None or isinstance(obj, dict):
         return obj
     return obj.to_dict()
+
+
+def classrepr(*attributes: str) -> Callable[[type[T]], type[T]]:
+    """Add a repr to class by decorator."""
+    def inner(cls: type[T]) -> type[T]:
+        def _gen_parts(obj: T) -> str:
+            return ", ".join([f"{x}={getattr(obj, x)}" for x in attributes])
+
+        def _cls_name(obj: T) -> str:
+            return obj.__class__.__name__
+        cls.__repr__ = lambda self: f"{_cls_name(self)}({_gen_parts(self)})"
+        cls.__str__ = cls.__repr__
+        return cls
+    return inner

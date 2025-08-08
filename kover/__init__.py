@@ -20,8 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-__version__ = "2.3.0"
-__author__ = "oMegaPB"
+__version__ = "2.4.0"
+__author__ = "megawattka"
 __license__ = "MIT"
 __copyright__ = "Copyright (C) 2024-present megawattka"
 
@@ -41,6 +41,7 @@ from .exceptions import (
     OperationFailure,
     SchemaGenerationException,
 )
+from .helpers import chain, filter_non_null, maybe_to_dict
 from .models import (
     BuildInfo,
     Collation,
@@ -59,9 +60,8 @@ from .network import AuthCredentials
 from .schema import Document, SchemaGenerator
 from .session import Session, Transaction
 from .typings import xJsonT
-from .utils import chain, filter_non_null, maybe_to_dict
 
-__all__ = [
+__all__ = (
     "AuthCredentials",
     "BuildInfo",
     "Collation",
@@ -95,4 +95,4 @@ __all__ = [
     "filter_non_null",
     "maybe_to_dict",
     "xJsonT",
-]
+)

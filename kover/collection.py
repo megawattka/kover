@@ -8,27 +8,23 @@ from typing_extensions import overload
 from .bson import ObjectId
 from .cursor import Cursor
 from .enums import IndexDirection, IndexType, ValidationLevel
+from .helpers import classrepr, filter_non_null, maybe_to_dict
 from .models import (
     Delete,
     Index,
 )
 from .schema import Document
-from .utils import filter_non_null, maybe_to_dict
 
 if TYPE_CHECKING:
     from .database import Database
-    from .models import (
-        Collation,
-        ReadConcern,
-        Update,
-        WriteConcern,
-    )
+    from .models import Collation, ReadConcern, Update, WriteConcern
     from .session import Transaction
     from .typings import xJsonT
 
 T = TypeVar("T", bound=Document)
 
 
+@classrepr("name", "database")
 class Collection:
     """Collection.
 
@@ -53,9 +49,6 @@ class Collection:
         self.database = database
         self.options = options
         self.info = info
-
-    def __repr__(self) -> str:
-        return f"Collection(name={self.name})"
 
     def __getattr__(self, name: str) -> Collection:
         return self.database.get_collection(f"{self.name}.{name}")
@@ -121,7 +114,7 @@ class Collection:
     @overload
     async def insert(
         self,
-        ivalue: xJsonT | Document,
+        insertable: xJsonT | Document,
         /,
         *,
         ordered: bool = True,
@@ -135,7 +128,7 @@ class Collection:
     @overload
     async def insert(
         self,
-        ivalue: Sequence[xJsonT | Document],
+        insertable: Sequence[xJsonT | Document],
         /,
         *,
         ordered: bool = True,
@@ -149,7 +142,7 @@ class Collection:
     # https://www.mongodb.com/docs/manual/reference/command/insert/
     async def insert(
         self,
-        ivalue: xJsonT | Document | Sequence[xJsonT | Document],
+        insertable: xJsonT | Document | Sequence[xJsonT | Document],
         /,
         *,
         ordered: bool = True,
@@ -157,11 +150,11 @@ class Collection:
         bypass_document_validation: bool = False,
         comment: str | None = None,
         transaction: Transaction | None = None,
-    ) -> list[ObjectId] | ObjectId:
+    ) -> ObjectId | list[ObjectId]:
         """Insert one or more documents into the collection.
 
         Parameters:
-            ivalue : The document or sequence of documents to insert.
+            d : The documents to insert. Non-positional argument.
             ordered : Whether the inserts should be
                 processedin order (default is True).
             max_time_ms : The maximum time in milliseconds
@@ -174,28 +167,28 @@ class Collection:
         Returns:
             The ObjectId(s) of the inserted document(s).
         """
-        multi = isinstance(ivalue, Sequence)
-        if multi:
-            docs = [
-                doc.to_dict() if isinstance(doc, Document) else doc for doc in ivalue   # noqa: E501
-            ]
-        else:
-            docs = [ivalue.to_dict() if isinstance(ivalue, Document) else ivalue]  # noqa: E501
-        for doc in docs:
+        multi = isinstance(insertable, Sequence)
+        if not multi:
+            insertable = [insertable]
+        documents = [
+            doc.to_dict()
+            if isinstance(doc, Document) else doc
+            for doc in insertable
+        ]
+        for doc in documents:
             doc.setdefault("_id", ObjectId())
         command: xJsonT = filter_non_null({
             "insert": self.name,
             "ordered": ordered,
-            "documents": docs,
+            "documents": documents,
             "maxTimeMS": max_time_ms,
             "bypassDocumentValidation": bypass_document_validation,
             "comment": comment,
         })
         await self.database.command(command, transaction=transaction)
-        inserted = [
-            doc["_id"] for doc in docs
-        ]
-        return inserted[0] if not multi else inserted
+
+        inserted_ids = [doc["_id"] for doc in documents]
+        return inserted_ids if multi else inserted_ids[0]
 
     # https://www.mongodb.com/docs/manual/reference/command/update/
     async def update(
@@ -616,6 +609,7 @@ class Collection:
     async def drop_indexes(
         self,
         indexes: str | list[str] | None = None,
+        *,
         drop_all: bool = False,
     ) -> None:
         """Drop one or more indexes from the collection.

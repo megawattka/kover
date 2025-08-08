@@ -8,11 +8,14 @@ from typing import (
     Literal,
     get_origin,
 )
+from typing import is_typeddict as t_is_typeddict
 from uuid import UUID
 
+from typing_extensions import is_typeddict as te_is_typeddict
+
 from ..bson import Binary, Int64, ObjectId, Timestamp
-from ..exceptions import UnsupportedAnnotation
-from ..utils import chain
+from ..exceptions import SchemaGenerationException, UnsupportedAnnotation
+from ..helpers import chain
 
 if TYPE_CHECKING:
     from types import UnionType
@@ -60,20 +63,27 @@ def _serialize_literal(
     }
 
 
+def _is_typeddict_ex(attr_t: type[object]) -> bool:
+    return t_is_typeddict(attr_t) or te_is_typeddict(attr_t)
+
+
 # passing type data to dict unsupported and ignored
 # use Document for that
 # in that case it just creates AnyDict
 # accepting any data passed to it. e.g custom metadata
-# TODO @megawattka: probably add something here?
+# TODO @megawattka: TypedDict support
 def _serialize_dict(
-    attr_t: type[object],  # noqa: ARG001
+    attr_t: type[object],
     /,
     *,
     is_optional: bool = False,
 ) -> xJsonT:
-    return {
-        "bsonType": ["object"] + (["null"] if is_optional else []),
-    }
+    if not _is_typeddict_ex(attr_t):
+        return {
+            "bsonType": ["object"] + (["null"] if is_optional else []),
+        }
+    comment = "TypedDict currently not supported. Use Document."
+    raise SchemaGenerationException(comment)
 
 
 def _serialize_enum(
@@ -105,12 +115,15 @@ def _serialize_simple_type(
 
 
 def value_to_json_schema(
-    attr_t: object,
+    attr_t: type[object],
     /,
     *,
     is_optional: bool = False,
 ) -> xJsonT | None:
     origin = get_origin(attr_t)
+    if origin is None and _is_typeddict_ex(attr_t):
+        origin = dict
+
     func = None
     origin_map: dict[Any, Any] = {
         Literal: _serialize_literal,
@@ -119,12 +132,11 @@ def value_to_json_schema(
     if origin in origin_map:
         func = origin_map[origin]  # type: ignore
 
-    elif isinstance(attr_t, type) and issubclass(attr_t, Enum):
+    elif isinstance(attr_t, type) and issubclass(attr_t, Enum):  # type: ignore
         func = _serialize_enum
 
     elif attr_t in _TYPE_MAP:
         func = _serialize_simple_type
-
     if func is not None:
         return func(attr_t, is_optional=is_optional)  # type: ignore
 

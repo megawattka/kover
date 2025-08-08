@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from ..typings import xJsonT
 
 
-class ReprMixin:
+class EmptyReprMixin:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
 

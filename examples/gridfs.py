@@ -14,7 +14,8 @@ log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-async def main() -> None:  # noqa: D103
+async def main() -> None:
+    """Entrypoint."""
     credentials = AuthCredentials.from_environ()
     kover = await Kover.make_client(credentials=credentials)
 

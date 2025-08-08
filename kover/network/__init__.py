@@ -1,12 +1,14 @@
 from .auth import Auth, AuthCredentials
 from .compressors import get_context_by_id
-from .msocket import MongoSocket
-from .serializer import Serializer
+from .resolver import SrvResolver
+from .transport import MongoTransport
+from .wirehelper import WireHelper
 
-__all__ = [
+__all__ = (
     "Auth",
     "AuthCredentials",
-    "MongoSocket",
-    "Serializer",
+    "MongoTransport",
+    "SrvResolver",
+    "WireHelper",
     "get_context_by_id",
-]
+)

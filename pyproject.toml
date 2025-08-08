@@ -1,6 +1,6 @@
 [project]
 name = "kover"
-version = "2.3.0"
+version = "2.4.0"
 description = "Fully async mongodb driver for mongod and replica sets."
 readme = "README.md"
 authors = [{ name = "megawattka", email = "gunter56741@gmail.com" }]
@@ -19,7 +19,6 @@ classifiers = [
     "Typing :: Typed",
 ]
 keywords = [
-    "megawattka",
     "kover",
     "mongodb",
     "mongo kover",
@@ -31,7 +30,7 @@ keywords = [
     "kover mongodb",
 ]
 dependencies = [
-    "dnspython>=1.16.0,<3.0.0",
+    "dnspython >= 2.7.0",
     "pydantic >= 2.10.6",
     "typing-extensions >= 4.12.2",
 ]
@@ -55,10 +54,7 @@ indent-style = "space"
 docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint]
-exclude = [
-    "kover/bson",
-    "kover/network/saslprep.py"
-]
+exclude = ["kover/bson"]
 ignore = [
     "G004",  # f-string in logging statement
     "PGH003",  # type: ignore warnings
@@ -72,7 +68,6 @@ ignore = [
     "S324",  # I want to use sha1 please
     "D105",  # undocumented-magic-method
     "D107",  # undocumented-public-init
-    "FBT001", "FBT002",  # boolean typed args
     "CPY001",  # Copyright notice at the top
     "DOC202", "DOC501",  # docs issues
     "PLR0913",  # too many arguments in function def
@@ -97,10 +92,8 @@ preview = true
 strict-checking = true
 
 [tool.ruff.lint.per-file-ignores]
-"kover/network/msocket.py" = ["E501"]  # line too long
 "kover/__init__.py" = ["E501"]
 "kover/metadata/definitions.py" = ["DOC402"]  # undocumented yield
-"kover/network/serializer.py" = ["SLF001", "ERA001"]  # private member access, commented code
 "tests/*" = ["D101", "D102", "S106", "TC003", "TC002", "N802", "PT027"]  # undocumented public class/method, hardcoded password, type checking blocks uninitialized vars, lowercase names, unittest style
 "main.py" = ["ERA001", "S106", "T201"]
 "kover/network/compressors.py" = ["PLR6301"]  # Could be staticmethod no self
@@ -127,6 +120,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "flake8 >= 7.3.0",
+    "pymongo >= 4.14.0",
     "pyright >= 1.1.403",
     "ruff >= 0.12.3",
     "setuptools >= 80.9.0",
@@ -147,7 +141,5 @@ exclude = [
 ]
 
 [tool.pyright]
-exclude = [
-    "kover/bson",
-    "kover/network/saslprep.py"
-]
+exclude = ["kover/bson"]
+typeCheckingMode = "strict"

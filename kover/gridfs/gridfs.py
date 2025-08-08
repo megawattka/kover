@@ -11,9 +11,8 @@ from typing_extensions import Self
 
 from ..bson import Binary, ObjectId
 from ..enums import IndexDirection
-from ..models import Delete, Index
+from ..models import Chunk, Delete, File, Index
 from .exceptions import GridFSFileNotFound, IncorrectGridFSData
-from .models import Chunk, File
 
 if TYPE_CHECKING:
     from ..database import Database
@@ -176,6 +175,7 @@ class GridFS:
     async def get_by_file_id(
         self,
         file_id: ObjectId,
+        *,
         check_sha1: bool = True,
     ) -> tuple[File, BytesIO]:
         """Retrieve a file and its binary data from GridFS by file ID.
@@ -201,7 +201,7 @@ class GridFS:
             ])
             binary = BytesIO()
             for chunk in chunks:
-                binary.write(chunk.pop("data"))
+                binary.write(chunk["data"])
             binary.seek(0)
             if check_sha1:
                 stored_sha1 = file.metadata.get("sha1")

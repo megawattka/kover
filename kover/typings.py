@@ -8,7 +8,6 @@ xJsonT = dict[str, Any]  # noqa: N816
 DocumentT = xJsonT | SON[str, Any]
 
 COMPRESSION_T = list[Literal["zlib", "zstd", "snappy"]]
-
 GridFSPayloadT = bytes | str | BinaryIO | TextIO | Path
 
 

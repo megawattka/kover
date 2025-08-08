@@ -36,7 +36,7 @@ The main reason why i created this project is that Motor - official async wrappe
 
 # Status
 it still missing features. <br>
-e.g: **bulk write API** and **Compression**<br>
+e.g: **bulk write API**
 but its already very cool! <br>
 
 # Dependencies

@@ -11,7 +11,7 @@ from typing import (
 from typing_extensions import Self
 
 from .bson import Int64
-from .utils import filter_non_null
+from .helpers import filter_non_null
 
 if TYPE_CHECKING:
     from .collection import Collection

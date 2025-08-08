@@ -1,3 +1,4 @@
+from .gridfs import Chunk, File
 from .operations import Delete, Update
 from .other import (
     BuildInfo,
@@ -8,16 +9,18 @@ from .other import (
     User,
     WriteConcern,
 )
-from .replica_set import (
+from .replset import (
     ReplicaSetConfig,
     ReplicaSetConfigSettings,
     ReplicaSetMember,
 )
 
-__all__ = [
+__all__ = (
     "BuildInfo",
+    "Chunk",
     "Collation",
     "Delete",
+    "File",
     "HelloResult",
     "Index",
     "ReadConcern",
@@ -27,4 +30,4 @@ __all__ = [
     "Update",
     "User",
     "WriteConcern",
-]
+)

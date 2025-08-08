@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from enum import Enum
-from functools import partial
 from types import UnionType
 from typing import (
     TYPE_CHECKING,
     Any,
     Literal,
+    ParamSpec,
     TypeVar,
     Union,
     get_origin,
@@ -25,8 +25,8 @@ from typing_extensions import Self
 from ._internals import value_to_json_schema
 from .bson import Binary, ObjectId  # noqa: TC001
 from .exceptions import SchemaGenerationException
+from .helpers import classrepr, is_origin_ex, isinstance_ex
 from .metadata import ExcludeIfNone, SchemaMetadata
-from .utils import is_origin_ex, isinstance_ex
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -35,7 +35,10 @@ if TYPE_CHECKING:
 
     from .typings import xJsonT
 
+P = ParamSpec("P")
 
+
+@classrepr("additional_properties")
 class SchemaGenerator:
     """Kover's Schema Generator.
 
@@ -68,7 +71,9 @@ class SchemaGenerator:
 
     def _generate_type_data(
         self,
-        attr_t: object,
+        attr_t: type[object] | None,
+        /,
+        *,
         attr_name: str,
         is_optional: bool = False,
     ) -> xJsonT:
@@ -97,20 +102,19 @@ class SchemaGenerator:
         args: list[type] = self._extract_args(attr_t)
         is_optional = type(None) in args
 
-        for func in [
-            partial(isinstance_ex, argument=Document),
-            partial(isinstance_ex, argument=Enum),
-            partial(is_origin_ex, argument=Literal),
+        for func, carg in [
+            (isinstance_ex, Document),
+            (isinstance_ex, Enum),
+            (is_origin_ex, Literal),
         ]:
-            condition = any(func(cls) for cls in args)
+            condition = any(func(cls, carg) for cls in args)  # type: ignore
             if condition and len(args) != (1 + is_optional):
-                kw = func.keywords["argument"]
-                msg = f"Cannot specify other annotations with {kw}"
-                raise SchemaGenerationException(msg)
+                raise SchemaGenerationException(
+                    f"Cannot specify other annotations with {carg}")
 
         if sum(is_origin_ex(cls, list) for cls in args) > 1:
-            msg = "Multiple Lists are not allowed in Union"
-            raise SchemaGenerationException(msg)
+            raise SchemaGenerationException(
+                "Multiple Lists are not allowed in Union")
 
         payloads = [self._generate_type_data(
             cls,
@@ -144,11 +148,12 @@ class SchemaGenerator:
 
         Parameters:
             cls : The Document subclass to generate the schema for.
-            child : If True, generates schema for nested documents (default is False).
+            child : If True, generates schema for
+                nested documents (default is False).
 
         Returns:
             The generated JSON schema as a dictionary.
-        """  # noqa: E501
+        """
         fields = cls.model_fields.items()
         required = [
             v.alias or k
@@ -165,7 +170,7 @@ class SchemaGenerator:
         for k, v in fields:
             key = v.alias or k
             payload["properties"][key] = {
-                **self._generate_type_data(v.annotation, k),
+                **self._generate_type_data(v.annotation, attr_name=k),
                 **self._generate_metadata(v.metadata),
             }
         if not child:
@@ -234,7 +239,7 @@ class Document(BaseModel):
         """Create a Document instance from a dictionary."""
         return cls.model_validate(payload)
 
-    def to_dict(self, exclude_id: bool = False) -> xJsonT:
+    def to_dict(self, *, exclude_id: bool = False) -> xJsonT:
         """Convert the document to a dictionary."""
         dumped: xJsonT = self.model_dump(by_alias=True)
         if not exclude_id and self._id is not None:
@@ -278,7 +283,7 @@ class Document(BaseModel):
 T = TypeVar("T", bound=Document)
 
 
-def model_configure(config: ConfigDict) -> Callable[[type[T]], Callable[..., T]]:  # noqa: E501
+def model_configure(config: ConfigDict) -> Callable[[type[T]], Callable[P, T]]:
     """Use this decorator on a class to change its model config.
 
     ```
@@ -294,11 +299,11 @@ def model_configure(config: ConfigDict) -> Callable[[type[T]], Callable[..., T]]
     Changed(test=<MyEnum.FIRST: '1'>)
     ```
     """
-    def outer(cls: type[T]) -> Callable[..., T]:
+    def outer(cls: type[T]) -> Callable[P, T]:
         cls.model_config.update(config)
         cls.model_rebuild(force=True)
 
-        def inner(*args: object, **kwargs: object) -> T:
+        def inner(*args: P.args, **kwargs: P.kwargs) -> T:
             return cls(*args, **kwargs)
         return inner
     return outer

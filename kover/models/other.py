@@ -23,6 +23,7 @@ class HelloResult(_ModelMixin):
     read_only: bool
     sasl_supported_mechs: list[str] = Field(default_factory=list[str])
     compression: COMPRESSION_T = Field(default_factory=COMPRESSION_T)
+    is_primary: bool = Field(alias="isWritablePrimary")
 
     @property
     def requires_auth(self) -> bool:

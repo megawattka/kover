@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .collection import Collection
+from .helpers import classrepr, filter_non_null
 from .models import User
-from .utils import filter_non_null
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from .typings import xJsonT
 
 
+@classrepr("name")
 class Database:
     """Represents a database instance, providing methods to manage database.
 
@@ -43,6 +44,7 @@ class Database:
     async def list_collections(
         self,
         filter_: xJsonT | None = None,
+        *,
         name_only: bool = False,
         authorized_collections: bool = False,
         comment: str | None = None,
@@ -109,6 +111,7 @@ class Database:
         self,
         name: str,
         password: str,
+        *,
         roles: Sequence[xJsonT | str] | None = None,
         custom_data: xJsonT | None = None,
         mechanisms: list[str] | None = None,
@@ -152,6 +155,7 @@ class Database:
     async def users_info(
         self,
         query: str | xJsonT | list[xJsonT] | None = None,
+        *,
         show_credentials: bool = False,
         show_custom_data: bool = False,
         show_privileges: bool = False,
@@ -240,7 +244,7 @@ class Database:
         Returns:
             The response from the database.
         """
-        return await self.client.socket.request(
+        return await self.client.transport.request(
             doc=doc,
             transaction=transaction,
             db_name=self.name,

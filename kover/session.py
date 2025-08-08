@@ -7,11 +7,12 @@ from typing import TYPE_CHECKING
 from typing_extensions import Self
 
 from .bson import Int64
+from .helpers import classrepr
 
 if TYPE_CHECKING:
     from types import TracebackType
 
-    from .client import MongoSocket
+    from .client import MongoTransport
     from .typings import xJsonT
 
 
@@ -27,7 +28,7 @@ class Transaction:
     """Represents a MongoDB transaction.
 
     Attributes:
-        socket : The socket used to communicate with MongoDB.
+        transport : The transport used to communicate with MongoDB.
         session_document : The transaction's session document.
         id : The transaction identifier.
         state : The current state of the transaction.
@@ -37,10 +38,10 @@ class Transaction:
 
     def __init__(
         self,
-        socket: MongoSocket,
+        transport: MongoTransport,
         session_document: xJsonT,
     ) -> None:
-        self.socket: MongoSocket = socket
+        self.transport = transport
         self.session_document: xJsonT = session_document
         self.id: Int64 = Int64(-1)
         self.state: TxnState = TxnState.NONE
@@ -82,7 +83,7 @@ class Transaction:
             "txnNumber": self.id,
             "autocommit": False,
         }
-        await self.socket.request(command)
+        await self.transport.request(command)
 
     async def abort(self) -> None:
         """Abort the transaction."""
@@ -94,7 +95,7 @@ class Transaction:
             "txnNumber": self.id,
             "autocommit": False,
         }
-        await self.socket.request(command)
+        await self.transport.request(command)
 
     async def __aenter__(self) -> Self:
         if not self.is_active:
@@ -131,24 +132,22 @@ class Transaction:
         })
 
 
+@classrepr("document")
 class Session:
     """Represents a MongoDB session.
 
     Attributes:
         document : The session document associated with the session.
-        socket : The socket used to communicate with MongoDB.
+        transport : The transport used to communicate with MongoDB.
     """
 
-    def __init__(self, document: xJsonT, socket: MongoSocket) -> None:
+    def __init__(self, document: xJsonT, transport: MongoTransport) -> None:
         self.document: xJsonT = document
-        self.socket: MongoSocket = socket
+        self.transport = transport
 
     def start_transaction(self) -> Transaction:
         """Start a new transaction for this session."""
         return Transaction(
-            socket=self.socket,
+            transport=self.transport,
             session_document=self.document,
         )
-
-    def __repr__(self) -> str:
-        return f"Session({self.document})"

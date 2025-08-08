@@ -1,6 +1,6 @@
 from .definitions import ExcludeIfNone, SchemaMetadata
 
-__all__ = [
+__all__ = (
     "ExcludeIfNone",
     "SchemaMetadata",
-]
+)

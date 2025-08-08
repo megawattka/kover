@@ -1,25 +1,30 @@
 from __future__ import annotations
 
 import os
+import platform as _platform
 import struct
+import sys
 from typing import TYPE_CHECKING, Any, Literal
 
+from .. import __version__
 from ..bson import (
     DEFAULT_CODEC_OPTIONS,
-    _decode_all_selective,
-    _make_c_string,
+    _decode_all_selective,  # type: ignore
+    _make_c_string,  # type: ignore
     encode,
 )
-from ..network import get_context_by_id
+from ..codes import get_exception_name
+from ..exceptions import OperationFailure
+from . import get_context_by_id
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from ..typings import xJsonT
+    from ..typings import COMPRESSION_T, xJsonT
 
 
-class Serializer:
-    """Serializer for MongoDB messages."""
+class WireHelper:
+    """Helpers and serializers for MongoDB transport."""
 
     @staticmethod
     def _randint() -> int:  # request_id must be any integer
@@ -89,10 +94,10 @@ class Serializer:
         op_code: int,
     ) -> xJsonT:
         if op_code == 1:  # manual/legacy-opcodes/#op_reply
-            # flags, cursor, starting, docs = struct.unpack_from("<iqii", msg)
+            # flags, cursor, starting, docs = unpack from "<iqii"
             message = msg[20:]
         elif op_code == 2013:  # manual/reference/mongodb-wire-protocol/#op_msg
-            # flags, section = struct.unpack_from("<IB", msg)
+            # flags, section = unpack from "<IB"
             message = msg[5:]
         elif op_code == 2012:
             # manual/reference/mongodb-wire-protocol/#op_compressed
@@ -108,11 +113,12 @@ class Serializer:
             fields=None,
         )[0]
 
-    def get_message(  # noqa: D102
+    def get_message(
         self,
         doc: xJsonT,
         compressor: Literal["zlib", "zstd", "snappy"] | None = None,
     ) -> tuple[int, bytes]:
+        """Gets the prepaired message bytes and request_id."""
         op_msg_m = self._op_msg_impl(doc)
         if compressor is None:
             return self._pack_message(
@@ -135,14 +141,83 @@ class Serializer:
         )
         return rid, header + compressed
 
+    # https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/#standard-message-header
     @staticmethod
-    def verify_rid(  # noqa: D102
+    def verify_rid(
         data: bytes,
         rid: int,
     ) -> tuple[int, int]:
-        # https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/#standard-message-header
+        """Verify that the request_id is correct."""
         length, _, response_to, op_code = struct.unpack("<iiii", data)
         if response_to != rid:
             exc_t = f"wrong r_id. expected ({rid}) but found ({response_to})"
             raise AssertionError(exc_t)
         return length, op_code
+
+    @staticmethod
+    def get_hello_payload(
+        compression: COMPRESSION_T | None = None,
+        application: xJsonT | None = None
+    ) -> xJsonT:
+        """Create a hello payload for the MongoDB server."""
+        uname = _platform.uname()
+        impl = sys.implementation
+        if compression is None:
+            compression = []
+        platform = impl.name + " " + ".".join(map(str, impl.version))
+        payload: xJsonT = {
+            "hello": 1.0,
+            "client": {
+                "driver": {
+                    "name": "Kover",
+                    "version": __version__,
+                },
+                "os": {
+                    "type": os.name,
+                    "name": uname.system,
+                    "architecture": uname.machine,
+                    "version": uname.release,
+                },
+                "platform": platform,
+            },
+            "compression": compression,
+        }
+        if application is not None:
+            payload["application"] = application
+        return payload
+
+    @staticmethod
+    def _has_error_label(label: str, reply: xJsonT) -> bool:
+        return label in reply.get("errorLabels", [])
+
+    @staticmethod
+    def _construct_exception(
+        name: str,
+        info: xJsonT | None = None,
+    ) -> type[OperationFailure]:
+        return type(name, (OperationFailure,), {
+            "err_info": info,
+            "__module__": "kover.exceptions",
+        })
+
+    def get_exception(self, reply: xJsonT) -> OperationFailure:
+        """Construct an exception based on server reply."""
+        write_errors = reply.get("writeErrors", [])
+        if write_errors:
+            reply = write_errors[0]
+
+        if "code" in reply:
+            code: int = reply["code"]
+            exc_name = get_exception_name(code=code)
+            if exc_name is not None:
+                exception = self._construct_exception(
+                    exc_name,
+                    info=reply.get("errInfo"),
+                )
+                return exception(code, reply["errmsg"])
+
+        if self._has_error_label("TransientTransactionError", reply):
+            exception = self._construct_exception(reply["codeName"])
+            return exception(reply["code"], reply["errmsg"])
+
+        return OperationFailure(-1, reply)

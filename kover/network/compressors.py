@@ -56,6 +56,7 @@ class _SnappyContext(BaseModel):
         return _get_module("snappy").decompress(payload)
 
 
+@lru_cache
 def get_context_by_id(compressor_id: int) -> CompressionContext:
     """Get the compression context by the compressor id."""
     compressors = {
