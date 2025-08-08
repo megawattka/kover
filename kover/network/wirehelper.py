@@ -157,7 +157,7 @@ class WireHelper:
     @staticmethod
     def get_hello_payload(
         compression: COMPRESSION_T | None = None,
-        application: xJsonT | None = None
+        application: xJsonT | None = None,
     ) -> xJsonT:
         """Create a hello payload for the MongoDB server."""
         uname = _platform.uname()
