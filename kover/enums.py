@@ -31,3 +31,11 @@ class CollationStrength(Enum):
     TERTIARY = 3
     QUATERNARY = 4
     IDENTICAL = 5
+
+
+class TxnState(Enum):
+    """Transaction states for MongoDB transactions."""
+    NONE = "NONE"
+    STARTED = "STARTED"
+    ABORTED = "ABORTED"
+    COMMITED = "COMMITED"

@@ -9,6 +9,7 @@ DocumentT = xJsonT | SON[str, Any]
 
 COMPRESSION_T = list[Literal["zlib", "zstd", "snappy"]]
 GridFSPayloadT = bytes | str | BinaryIO | TextIO | Path
+AuthTypesT = Literal["SCRAM-SHA-1", "SCRAM-SHA-256"]
 
 
 @runtime_checkable

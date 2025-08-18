@@ -81,10 +81,12 @@ class SchemaGenerator:
             return {"bsonType": ["null"]}
         origin = get_origin(attr_t)
         is_union: bool = origin in {UnionType, Union}
+
         if not is_union:
             schema = value_to_json_schema(attr_t, is_optional=is_optional)
             if schema is not None:
                 return schema
+
             if origin is list:
                 cls_: type = self._extract_args(attr_t)[0]
                 return {
@@ -95,10 +97,12 @@ class SchemaGenerator:
                 }
             if isinstance_ex(attr_t, Document):
                 return self.generate(attr_t, child=True)  # type: ignore
+
             # TODO @megawattka: deal with ForwardRef's
             args_ = attr_t.__class__, attr_t
             msg = "Unsupported annotation found: {}, {}".format(*args_)
             raise SchemaGenerationException(msg)
+
         args: list[type] = self._extract_args(attr_t)
         is_optional = type(None) in args
 
@@ -121,6 +125,7 @@ class SchemaGenerator:
             attr_name=attr_name,
             is_optional=is_optional,
         ) for cls in args]
+
         return self._merge_payloads(payloads)
 
     @staticmethod
@@ -161,6 +166,7 @@ class SchemaGenerator:
         ]
         if "_id" in required:
             required.remove("_id")
+
         payload: xJsonT = {
             "bsonType": ["object"],
             "required": required,  # make all fields required
@@ -182,9 +188,11 @@ class SchemaGenerator:
     def _maybe_add_object_id_signature(self, payload: xJsonT, /) -> xJsonT:
         if self.additional_properties:
             return payload
+
         required: list[str] = payload["$jsonSchema"]["required"]
         if "_id" not in required:
             required.append("_id")
+
         payload["$jsonSchema"]["properties"]["_id"] = {
             "bsonType": ["objectId"],
         }
@@ -208,7 +216,7 @@ class Document(BaseModel):
         extra="allow",
         use_enum_values=True,
         arbitrary_types_allowed=True,
-        alias_generator=to_camel,
+        alias_generator=to_camel,  # uses alias generator, be careful!
         populate_by_name=True,
         validate_assignment=True,
     )
@@ -226,12 +234,15 @@ class Document(BaseModel):
                 key = (v.alias or k) if info.by_alias else k
                 if getattr(self, k) is None:
                     wrapped.pop(key, None)
+
         if self.model_extra:
             for k in self.model_extra:
                 wrapped.pop(k, None)
+
         for k, v in wrapped.items():
             if isinstance(v, UUID):
                 wrapped[k] = Binary.from_uuid(v)
+
         return wrapped
 
     @classmethod

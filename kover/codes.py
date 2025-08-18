@@ -424,6 +424,7 @@ _codes_to_exc_name: dict[str, str] = {
     "457": "ReplayClientInternalError",
     "458": "ReplayClientSessionSchedulerError",
     "459": "ReplayClientSessionSimulationError",
+    "8000": "AtlasError",
     "9001": "SocketException",
     "10003": "CannotGrowDocumentInCappedNamespace",
     "10058": "LegacyNotPrimary",

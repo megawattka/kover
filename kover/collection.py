@@ -9,10 +9,7 @@ from .bson import ObjectId
 from .cursor import Cursor
 from .enums import IndexDirection, IndexType, ValidationLevel
 from .helpers import classrepr, filter_non_null, maybe_to_dict
-from .models import (
-    Delete,
-    Index,
-)
+from .models import Delete, Index
 from .schema import Document
 
 if TYPE_CHECKING:

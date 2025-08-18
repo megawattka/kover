@@ -7,8 +7,8 @@
 ![Last Commit](https://img.shields.io/github/last-commit/megawattka/kover)
 ![MongoDB](https://img.shields.io/badge/MongoDB-6.0+-green)
 
-**Kover** is a model-orientied strictly typed mongodb driver supporting local mongod, replica sets and remote atlases. Battle tests are still required*<br>
-this library was inspired by <a href=https://github.com/sakal/aiomongo>this project</a> i like it very much. Though its 8 years old.
+**Kover** is a model-orientied strictly typed mongodb driver supporting local mongod, replica sets and remote atlases.<br>
+this library was inspired by <a href=https://github.com/sakal/aiomongo>this project</a> i like it very much. Though its 9 years old.
 Kover is linted by Ruff and supports pyright strict type checking mode.
 
 ```py
@@ -49,7 +49,7 @@ but its already very cool! <br>
 # Features
 Almost all features from pymongo. All auth types are supported. Integration with Pydantic supported.
 this lib was built for new mongod versions. All features that were marked as DEPRECATED in docs
-were NOT added. See docs for references. The kover.bson package was entirely copied from pymongo source code. Also pymongo.saslprep was copied for internal purposes, i do not own these files.
+were NOT added. See docs for references. The kover.bson package was entirely copied from pymongo source code. I do not own these files.
 
 ### Cursors
 if you just need list:
@@ -317,4 +317,4 @@ if __name__ == "__main__":
 
 ```
 
-# If you found a bug, go ahead and open an issue, or even better a pull request, thx ❤️
+# If you found a bug, open an issue, or even better create a pull request, thx ❤️

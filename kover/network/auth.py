@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import base64
+from base64 import b64decode, b64encode
 import hashlib
 from hmac import HMAC, compare_digest
 import os
 from typing import TYPE_CHECKING
+from urllib.parse import unquote_plus
 
 from pydantic import BaseModel, Field
 
@@ -12,6 +13,8 @@ from ..bson import Binary
 from ..exceptions import CredentialsException
 
 if TYPE_CHECKING:
+    from urllib.parse import ParseResult
+
     from ..client import MongoTransport
     from ..typings import xJsonT
 
@@ -28,7 +31,7 @@ class AuthCredentials(BaseModel):
 
     username: str
     password: str = Field(repr=False)
-    db_name: str = Field(default="admin")
+    auth_database: str = Field(default="admin")
 
     def md5_hash(self) -> bytes:
         """Returns md5 hashed string for MongoDB. Internal use."""
@@ -37,7 +40,8 @@ class AuthCredentials(BaseModel):
 
     def apply_to(self, document: xJsonT) -> None:
         """Internal use only. Applies auth credentials to hello payload."""
-        document["saslSupportedMechs"] = f"{self.db_name}.{self.username}"
+        formatted = f"{self.auth_database}.{self.username}"
+        document["saslSupportedMechs"] = formatted
 
     @classmethod
     def from_environ(cls) -> AuthCredentials | None:
@@ -53,11 +57,29 @@ class AuthCredentials(BaseModel):
         """
         user, password = os.environ.get("MONGO_USER"), \
             os.environ.get("MONGO_PASSWORD")
+
         if user is not None and password is not None:
             return cls(username=user, password=password)
+
         if (user and not password) or (password and not user):
             raise CredentialsException
-        return None  # ruff force
+
+        return None
+
+    @classmethod
+    def from_parts(cls, parts: ParseResult) -> AuthCredentials | None:
+        """Return auth credentials based on uri UserInfo."""
+        if parts.username is not None and parts.password is not None:
+            if len(parts.path) > 1:
+                auth_database = unquote_plus(parts.path[1:])
+            else:
+                auth_database = "admin"
+            return cls(
+                username=parts.username,
+                password=parts.password,
+                auth_database=auth_database,
+            )
+        return None
 
 
 class Auth:
@@ -69,7 +91,7 @@ class Auth:
     """
 
     def __init__(self, transport: MongoTransport) -> None:
-        self.transport = transport
+        self._transport = transport
 
     @staticmethod
     def _parse_scram_response(payload: bytes) -> dict[str, bytes]:
@@ -98,11 +120,10 @@ class Auth:
     async def _sasl_start(
         self,
         mechanism: str,
-        username: str,
-        db_name: str,
+        credentials: AuthCredentials,
     ) -> tuple[bytes, bytes, bytes, int]:
-        user = self._clear_username(username.encode("u8"))
-        nonce = base64.b64encode(os.urandom(32))
+        user = self._clear_username(credentials.username.encode("u8"))
+        nonce = b64encode(os.urandom(32))
         first_bare = b"n=" + user + b",r=" + nonce
         command: xJsonT = {
             "saslStart": 1.0,
@@ -113,10 +134,30 @@ class Auth:
                 "skipEmptyExchange": True,
             },
         }
-        request = await self.transport.request(command, db_name=db_name)
+        request = await self._transport.request(
+            doc=command,
+            db_name=credentials.auth_database,
+        )
         return nonce, request["payload"], first_bare, request["conversationId"]
 
-    async def create(  # noqa: PLR0914
+    async def _sasl_continue(
+        self,
+        client_final: bytes,
+        cid: int,
+        credentials: AuthCredentials,
+    ) -> xJsonT:
+        cmd: xJsonT = {
+            "saslContinue": 1.0,
+            "conversationId": cid,
+            "payload": Binary(client_final),
+        }
+        request = await self._transport.request(
+            cmd, db_name=credentials.auth_database)
+
+        assert request["done"], "SASL conversation not completed."
+        return self._parse_scram_response(request["payload"])
+
+    async def create(
         self,
         mechanism: str,
         credentials: AuthCredentials,
@@ -148,48 +189,43 @@ class Auth:
 
         nonce, server_first, first_bare, cid = await self._sasl_start(
             mechanism,
-            credentials.username,
-            credentials.db_name,
+            credentials,
         )
-
         parsed = self._parse_scram_response(server_first)
         iterations = int(parsed["i"])
         assert iterations > 4096, "Server returned an invalid iteration count."
-        salt, rnonce = parsed["s"], parsed["r"]
-        assert rnonce.startswith(nonce), "Server returned an invalid nonce."
+        assert parsed["r"].startswith(nonce), "Server gave an invalid nonce."
 
-        without_proof = b"c=biws,r=" + rnonce
         salted_pass = hashlib.pbkdf2_hmac(
             digest,
             data,
-            base64.b64decode(salt),
+            b64decode(parsed["s"]),
             iterations,
         )
-        client_key = HMAC(salted_pass, b"Client Key", digestmod).digest()
-        server_key = HMAC(salted_pass, b"Server Key", digestmod).digest()
+        keys = (
+            HMAC(salted_pass, b"Client Key", digestmod).digest(),
+            HMAC(salted_pass, b"Server Key", digestmod).digest(),
+        )
 
-        stored_key = digestmod(client_key).digest()
-        auth_msg = b",".join((first_bare, server_first, without_proof))
-        client_sig = HMAC(stored_key, auth_msg, digestmod).digest()
-        client_proof = b"p=" + base64.b64encode(
-            self.xor(client_key, client_sig),
-        )
-        client_final = b",".join((without_proof, client_proof))
-        server_sig = base64.b64encode(
-            HMAC(server_key, auth_msg, digestmod).digest(),
-        )
-        cmd: xJsonT = {
-            "saslContinue": 1.0,
-            "conversationId": cid,
-            "payload": Binary(client_final),
-        }
-        request = await self.transport.request(
-            cmd,
-            db_name=credentials.db_name,
-        )
-        parsed = self._parse_scram_response(request["payload"])
+        auth_msg = b",".join((
+            first_bare,
+            server_first,
+            b"c=biws,r=" + parsed["r"],
+        ))
+        client_sig = HMAC(
+            digestmod(keys[0]).digest(),  # stored_key
+            auth_msg,
+            digestmod,
+        ).digest()
 
-        assert request["done"]
+        client_final = b",".join((
+            b"c=biws,r=" + parsed["r"],  # and client_proof
+            b"p=" + b64encode(self.xor(keys[0], client_sig)),
+        ))
+        server_sig = b64encode(
+            HMAC(keys[1], auth_msg, digestmod).digest(),
+        )
+        parsed = await self._sasl_continue(client_final, cid, credentials)
         assert compare_digest(parsed["v"], server_sig)
 
         return parsed["v"]

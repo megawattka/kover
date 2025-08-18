@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-import asyncio
 import json
-import random
-import ssl
-from typing import TYPE_CHECKING, Literal, cast
-from urllib.parse import parse_qs, urlparse
+from typing import TYPE_CHECKING, Literal
 
 from typing_extensions import Self
 
 from .database import Database
 from .helpers import classrepr, filter_non_null, maybe_to_dict
-from .models import BuildInfo
-from .network import Auth, AuthCredentials, MongoTransport, SrvResolver
+from .models import BuildInfo, WriteConcern
+from .network import MongoTransport, SrvResolver
 from .session import Session
+from .uri_parser import parse_uri
 
 if TYPE_CHECKING:
+    import asyncio
+
     from .models import ReplicaSetConfig
+    from .network import AuthCredentials
     from .typings import COMPRESSION_T, xJsonT
 
 
@@ -36,14 +36,14 @@ class Kover:
         self,
         transport: MongoTransport,
         signature: bytes | None,
-        default_database: str | None = None,
         *,
         is_primary: bool = False,
+        w: str | int = "majority",
     ) -> None:
         self.transport = transport
         self.signature = signature
-        self._default_database = default_database
         self._is_primary = is_primary
+        self._write_concern = WriteConcern(w=w)
 
     async def __aenter__(self) -> Self:
         return self
@@ -82,45 +82,61 @@ class Kover:
     def __getattr__(self, name: str) -> Database:
         return self.get_database(name=name)
 
+    def set_write_concern(
+        self,
+        /,
+        *,
+        w: str | int,
+        j: bool | None = None,
+        wtimeout: int = 0,
+    ) -> Self:
+        """This sets a WriteConcern for all requests."""
+        self._write_concern = WriteConcern(w=w, j=j, wtimeout=wtimeout)
+        return self
+
     @classmethod
-    async def from_uri(cls, uri: str) -> Kover:
+    async def from_uri(
+        cls,
+        uri: str,
+        loop: asyncio.AbstractEventLoop | None = None,
+    ) -> Kover:
         """Create an instance of Kover client by passing a uri."""
-        parts = urlparse(uri)
-        if parts.hostname is None:
-            raise ValueError("Incorrect uri passed.")
-
-        parameters = parse_qs(parts.query)
-
-        tls = parameters.get("tls", ["true"])[0] == "true"
-        default_database = parts.path[1:] if len(parts.path) > 1 else None
-        app_name = parameters.get("appName", [None])[0]
-
-        if parts.username is not None and parts.password is not None:
-            credentials = AuthCredentials(
-                username=parts.username,
-                password=parts.password,
-            )
-        else:
-            credentials = None
+        parsed = parse_uri(uri)
 
         resolver = SrvResolver()
-        nodes = await resolver.get_nodes(parts.hostname)
-        compressors = parameters.get("compressors", [])
-        if compressors:
-            compressors = compressors[0].split(",")
+        nodes = await resolver.get_nodes(parsed.hostname)
+        assert nodes, "Node resolution failed."
 
-        # TODO @megawattka: proper primary discovery.
-        clients = await asyncio.gather(*[cls.make_client(
-            node,
-            parts.port or 27017,
-            credentials=credentials,
-            compression=cast("COMPRESSION_T", compressors),
-            tls=tls,
-            default_database=default_database,
-            application={"name": app_name},
-        ) for node in nodes])
+        transport = await MongoTransport.make(
+            nodes[0], port=parsed.port, tls=parsed.tls, loop=loop)
 
-        return next(filter(lambda k: k.is_primary, clients))
+        hello = await transport.hello(
+            parsed.compressors, parsed.credentials, parsed.application)
+
+        if not hello.is_primary:
+            assert hello.primary_node, "Primary node resolution failed."
+
+            host, _ = hello.primary_node.split(":")
+            return await cls.make_client(
+                host=host,
+                port=parsed.port,
+                credentials=parsed.credentials,
+                loop=loop,
+                compression=parsed.compressors,
+                tls=parsed.tls,
+                application=parsed.application,
+                write_concern=parsed.write_concern,
+            )
+
+        mechanism = hello.get_auth_mechanism()
+        signature = await transport.authorize(mechanism, parsed.credentials)
+
+        return cls(
+            transport=transport,
+            signature=signature,
+            is_primary=hello.is_primary,
+            w=parsed.write_concern,
+        )
 
     @classmethod
     async def make_client(
@@ -131,9 +147,9 @@ class Kover:
         credentials: AuthCredentials | None = None,
         loop: asyncio.AbstractEventLoop | None = None,
         compression: COMPRESSION_T | None = None,
-        default_database: str | None = None,
         tls: bool = False,
         application: xJsonT | None = None,
+        write_concern: str | int = "majority",
     ) -> Kover:
         """Create and return a new Kover client instance.
 
@@ -148,50 +164,28 @@ class Kover:
             tls : the boolean value that indicated whether to use tls or no.
             application : document that will be included in hello payload
                 under the "application" field.
+            write_concern : the value of default write concern used.
 
         Returns:
             An instance of the Kover client.
         """
-        ssl_ctx = ssl.create_default_context() if tls else None
         transport = await MongoTransport.make(
-            host=host,
-            port=port,
-            loop=loop,
-            ssl_ctx=ssl_ctx,
-        )
+            host=host, port=port, loop=loop, tls=tls)
+
         hello = await transport.hello(
             credentials=credentials,
             compression=compression,
             application=application,
         )
-        if hello.requires_auth and credentials:
-            mechanism = random.choice(hello.sasl_supported_mechs or [])  # noqa: S311
-            signature = await Auth(transport).create(mechanism, credentials)
-        else:
-            signature = None
-
-        if hello.compression:
-            transport.set_compressor(hello.compression[0])
+        mechanism = hello.get_auth_mechanism()
+        signature = await transport.authorize(mechanism, credentials)
 
         return cls(
             transport,
             signature,
-            default_database,
             is_primary=hello.is_primary,
+            w=write_concern,
         )
-
-    def get_default_database(self) -> Database:
-        """Get the default database if default name was provided.
-
-        Returns:
-            An instance of `Database` with specified default name
-        """
-        if self._default_database is not None:
-            return self.get_database(self._default_database)
-
-        message = "Cannot get the default database. "
-        message += "No default name was provided."
-        raise ValueError(message)
 
     async def refresh_sessions(self, sessions: list[Session]) -> None:
         """Refresh the provided list of sessions.

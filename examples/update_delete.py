@@ -17,7 +17,9 @@ log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-class User(Document):  # noqa: D101
+class User(Document):
+    """Base user document."""
+
     name: str
     age: int
 

@@ -1,6 +1,6 @@
 [project]
 name = "kover"
-version = "2.6.0"
+version = "2.6.2"
 description = "Fully async mongodb driver for mongod and replica sets."
 readme = "README.md"
 authors = [{ name = "megawattka", email = "gunter56741@gmail.com" }]

@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
+import ssl
 from typing import TYPE_CHECKING, Literal
 
+from ..enums import TxnState
 from ..helpers import classrepr
 from ..models import HelloResult
-from ..session import TxnState
+from .auth import Auth
 from .wirehelper import WireHelper
 
 if TYPE_CHECKING:
-    import ssl
-
     from ..session import Transaction
     from ..typings import COMPRESSION_T, DocumentT, xJsonT
     from .auth import AuthCredentials
@@ -52,12 +52,14 @@ class MongoTransport:
         port: int,
         *,
         loop: asyncio.AbstractEventLoop | None = None,
-        ssl_ctx: ssl.SSLContext | None = None,
+        tls: bool = False,
     ) -> MongoTransport:
         """Create a MongoTransport instance."""
         loop = loop or asyncio.get_running_loop()
         reader = asyncio.StreamReader(limit=2 ** 16, loop=loop)
         protocol = asyncio.StreamReaderProtocol(reader, loop=loop)
+
+        ssl_ctx = ssl.create_default_context() if tls else None
         transport, _ = await loop.create_connection(
             lambda: protocol, host, port, ssl=ssl_ctx,
         )
@@ -121,5 +123,21 @@ class MongoTransport:
         if credentials is not None:
             credentials.apply_to(payload)
 
-        hello = await self.request(payload)
-        return HelloResult.model_validate(hello)
+        document = await self.request(payload)
+        hello = HelloResult.model_validate(document)
+
+        if hello.compression:
+            self.set_compressor(hello.compression[0])
+
+        return hello
+
+    async def authorize(
+        self,
+        mechanism: Literal["SCRAM-SHA-256", "SCRAM-SHA-1"] | None,
+        credentials: AuthCredentials | None,
+    ) -> bytes | None:
+        """Perform authorization request and return a signature."""
+        if mechanism is not None and credentials is not None:
+            return await Auth(self).create(
+                mechanism=mechanism, credentials=credentials)
+        return None

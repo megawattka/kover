@@ -1,4 +1,3 @@
-from .gridfs import Chunk, File
 from .operations import Delete, Update
 from .other import (
     BuildInfo,
@@ -17,10 +16,8 @@ from .replset import (
 
 __all__ = (
     "BuildInfo",
-    "Chunk",
     "Collation",
     "Delete",
-    "File",
     "HelloResult",
     "Index",
     "ReadConcern",

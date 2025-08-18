@@ -9,10 +9,11 @@ from typing import TYPE_CHECKING, Final
 
 from typing_extensions import Self
 
+from .. import Delete, Index
 from ..bson import Binary, ObjectId
 from ..enums import IndexDirection
-from ..models import Chunk, Delete, File, Index
 from .exceptions import GridFSFileNotFound, IncorrectGridFSData
+from .models import Chunk, File
 
 if TYPE_CHECKING:
     from ..database import Database

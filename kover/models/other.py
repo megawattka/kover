@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime  # noqa: TC003
+import secrets
 from typing import Literal
 
 from pydantic import Field, model_validator
@@ -12,23 +13,33 @@ from typing_extensions import Self
 from .._internals._mixins import ModelMixin as _ModelMixin
 from ..bson import Binary  # noqa: TC001
 from ..enums import CollationStrength, IndexDirection, IndexType  # noqa: TC001
-from ..typings import COMPRESSION_T, xJsonT
+from ..typings import COMPRESSION_T, AuthTypesT, xJsonT
 
 
 class HelloResult(_ModelMixin):
     """Represents the result of a hello command."""
 
+    me: str
     local_time: datetime.datetime
     connection_id: int
     read_only: bool
-    sasl_supported_mechs: list[str] = Field(default_factory=list[str])
+    sasl_supported_mechs: list[AuthTypesT] = Field(
+        default_factory=list[AuthTypesT])
     compression: COMPRESSION_T = Field(default_factory=COMPRESSION_T)
     is_primary: bool = Field(alias="isWritablePrimary")
+    primary_node: str | None = Field(default=None, alias="primary")
+    hosts: list[str] | None = None
+    set_name: str | None = None
+    set_version: int | None = None
 
     @property
     def requires_auth(self) -> bool:
         """Check if the server requires authentication."""
         return len(self.sasl_supported_mechs) > 0
+
+    def get_auth_mechanism(self) -> AuthTypesT:
+        """Returns a random mechanism from result mechanisms."""
+        return secrets.choice(self.sasl_supported_mechs)
 
 
 class BuildInfo(_ModelMixin):
