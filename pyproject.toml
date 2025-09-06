@@ -1,6 +1,6 @@
 [project]
 name = "kover"
-version = "2.6.2"
+version = "2.7.0"
 description = "Fully async mongodb driver for mongod and replica sets."
 readme = "README.md"
 authors = [{ name = "megawattka", email = "gunter56741@gmail.com" }]
@@ -56,11 +56,8 @@ docstring-code-line-length = "dynamic"
 [tool.ruff.lint]
 exclude = ["kover/bson"]
 ignore = [
-    "G004",  # f-string in logging statement
-    "PGH003",  # type: ignore warnings
     "INP001",  # __init__.py in public namespaces
     "TD003",  # issue links for todos
-    "D100",  # undocumented-public-module
     "FIX002",  # TODOs
     "TID252",  # fvck absolute imports
     "N818",  # "Error" suffix in exception class
@@ -69,16 +66,11 @@ ignore = [
     "D105",  # undocumented-magic-method
     "D107",  # undocumented-public-init
     "CPY001",  # Copyright notice at the top
-    "DOC202", "DOC501",  # docs issues
     "PLR0913",  # too many arguments in function def
     "PLR0917",  # too many positional arguments in function def
     "PLR0904",  # too many public methods
-    "PLR2004",  # int comparisons
     "EM101", "EM102", "TRY003",  # string literal in exception
     "D104",  # undocumented public package
-    "DOC201",  # return not documented
-    "DOC502",  # explicitly raised exceptions in docstrings
-    # "TC001", "TC002", "TC003"  # move in if_type_checking block
 ]
 select = ["ALL"]
 unfixable = [
@@ -92,12 +84,26 @@ preview = true
 strict-checking = true
 
 [tool.ruff.lint.per-file-ignores]
-"kover/__init__.py" = ["E501"]
+"kover/__init__.py" = ["E501"]  # line too long
 "kover/metadata/definitions.py" = ["DOC402"]  # undocumented yield
-"tests/*" = ["D101", "D102", "S106", "TC003", "TC002", "N802", "PT027"]  # undocumented public class/method, hardcoded password, type checking blocks uninitialized vars, lowercase names, unittest style
-"main.py" = ["ERA001", "S106", "T201"]
+"tests/*" = [
+    "D101",  # undocumented public class/method
+    "D102",  # undocumented public method
+    "S106",  # hardcoded password
+    "TC003",  # type checking blocks
+    "PT027",  # unittest style
+    "D100",  # module docstring
+    "PLR2004",  # constant comparisons
+]
+"test.py" = [  # this file only for testing so...
+    "ERA001",  # commented out code
+    "S106",  # hardcoded password
+    "T201",  # print statements
+    "D100",  # public module docstring
+    "F401",  # unused variables
+]
 "kover/network/compressors.py" = ["PLR6301"]  # Could be staticmethod no self
-"kover/typings.py" = ["D102"]
+"kover/typings.py" = ["D102"]  # public method docstring
 
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = ["typing", "typing_extensions"]
@@ -120,10 +126,13 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "flake8 >= 7.3.0",
+    "matplotlib>=3.10.5",
+    "motor>=3.7.1",
     "pymongo >= 4.14.0",
     "pyright >= 1.1.403",
     "ruff >= 0.12.3",
     "setuptools >= 80.9.0",
+    "tornado>=6.5.2",
 ]
 
 [tool.hatch.build]

@@ -1,3 +1,5 @@
+"""Metadata definitions for Kover documents and fields."""
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
@@ -53,6 +55,9 @@ class SchemaMetadata(GroupedMetadata):
 
         Serializing to a dictionary with camelCase keys,
         omitting fields with None values.
+
+        Returns:
+            A dictionary representation of the SchemaMetadata instance.
         """
         serialized = asdict(self)
         for k in list(serialized.keys()):

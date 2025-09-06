@@ -1,3 +1,5 @@
+"""The kover's grids implementation."""
+
 from __future__ import annotations
 
 import datetime
@@ -5,7 +7,7 @@ from hashlib import sha1
 from io import BytesIO
 import math
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, BinaryIO, Final
 
 from typing_extensions import Self
 
@@ -64,10 +66,10 @@ class GridFS:
     ) -> tuple[BytesIO, str | None]:
         name = None
 
-        if hasattr(data, "read"):  # io-like obj
-            if data.tell() != 0 and data.seekable():  # type: ignore
-                data.seek(0)  # type: ignore
-            data = data.read()  # type: ignore
+        if isinstance(data, BinaryIO):  # io-like obj
+            if data.tell() != 0 and data.seekable():
+                data.seek(0)
+            data = data.read()
 
         if isinstance(data, str):
             binary = BytesIO(data.encode(encoding=encoding))
@@ -80,7 +82,7 @@ class GridFS:
             binary = BytesIO(data)
 
         else:
-            cls = getattr(data, "__class__", None)  # type: ignore
+            cls = getattr(data, "__class__", None)
             raise IncorrectGridFSData(f"Incorrect data passed: {cls}, {data}")
 
         binary.seek(0)
@@ -102,7 +104,7 @@ class GridFS:
             for x in range(0, len(chunks), max_amount)
         ]
         for chunk_group in splitted:
-            await self._chunks.insert(chunk_group)
+            await self._chunks.insert_many(chunk_group)
 
     async def put(
         self,
@@ -130,9 +132,6 @@ class GridFS:
 
         Returns:
             The ObjectId of the stored file.
-
-        Raises:
-            IncorrectGridFSData : If the provided data type is not supported.
         """
         chunk_size = chunk_size or DEFAULT_CHUNK_SIZE
         file_id = ObjectId()
@@ -169,13 +168,14 @@ class GridFS:
         ).with_id(file_id)
 
         file.metadata.update(metadata or {})
-        return await self._files.insert(
+        await self._files.insert_one(
             file.to_dict(exclude_id=False),
         )
+        return file_id
 
     async def get_by_file_id(
         self,
-        file_id: ObjectId,
+        file_id: ObjectId | None,
         *,
         check_sha1: bool = True,
     ) -> tuple[File, BytesIO]:
@@ -191,8 +191,6 @@ class GridFS:
 
         Raises:
             GridFSFileNotFound : If no file with the given ID is found.
-            AssertionError : If check_sha1 is True and
-                the SHA1 hash does not match.
         """
         file = await self._files.find_one({"_id": file_id}, cls=File)
         if file is not None:
@@ -230,7 +228,7 @@ class GridFS:
         """
         file = await self._files.find_one({"filename": filename}, cls=File)
         if file is not None:
-            document_id: ObjectId = file.get_id()  # type: ignore
+            document_id = file.get_id()
             return await self.get_by_file_id(document_id)
         raise GridFSFileNotFound("No file with that filename found")
 

@@ -1,3 +1,6 @@
+"""Exceptions for GridFS operations."""
+
+
 class GridFSFileNotFound(Exception):
     """Exception raised when a GridFS file is not found."""
 

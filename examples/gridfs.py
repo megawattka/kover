@@ -29,10 +29,10 @@ async def main() -> None:
     log.info(file, binary.read())
 
     files = await fs.list()
-    log.info(f"total files: {len(files)}")
+    log.info("total files: %d", len(files))
 
     deleted = await fs.delete(file_id)
-    log.info(f"is file deleted? {deleted}")
+    log.info("is file deleted? %d", deleted)
 
 
 if __name__ == "__main__":

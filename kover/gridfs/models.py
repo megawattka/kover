@@ -1,3 +1,5 @@
+"""Models for GridFS files and chunks."""
+
 from __future__ import annotations
 
 import datetime  # noqa: TC003

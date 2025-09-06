@@ -1,10 +1,12 @@
+"""The authentication module for MongoDB connections."""
+
 from __future__ import annotations
 
 from base64 import b64decode, b64encode
 import hashlib
 from hmac import HMAC, compare_digest
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from urllib.parse import unquote_plus
 
 from pydantic import BaseModel, Field
@@ -17,6 +19,8 @@ if TYPE_CHECKING:
 
     from ..client import MongoTransport
     from ..typings import xJsonT
+
+ITERATIONS: Final[int] = 4096
 
 
 class AuthCredentials(BaseModel):
@@ -106,7 +110,11 @@ class Auth:
 
     @staticmethod
     def xor(fir: bytes, sec: bytes) -> bytes:
-        """XOR two byte strings together."""
+        """XOR two byte strings together.
+
+        Returns:
+            A bytes object containing the result of the XOR operation.
+        """
         return b"".join(
             [bytes([x ^ y]) for x, y in zip(fir, sec, strict=True)],
         )
@@ -174,18 +182,18 @@ class Auth:
             The server signature after successful authentication.
 
         Raises:
-            AssertionError : If the server returns an invalid
-                iteration count or nonce,
-                or if the server signature does not match.
+            ValueError : If an unknown authentication mechanism is provided.
         """
         if mechanism == "SCRAM-SHA-1":
             digest = "sha1"
             digestmod = hashlib.sha1
             data = credentials.md5_hash()
-        else:
+        elif mechanism == "SCRAM-SHA-256":
             digest = "sha256"
             digestmod = hashlib.sha256
             data = credentials.password.encode()
+        else:
+            raise ValueError("Unknown authentication mechanism.")
 
         nonce, server_first, first_bare, cid = await self._sasl_start(
             mechanism,
@@ -193,8 +201,8 @@ class Auth:
         )
         parsed = self._parse_scram_response(server_first)
         iterations = int(parsed["i"])
-        assert iterations > 4096, "Server returned an invalid iteration count."
-        assert parsed["r"].startswith(nonce), "Server gave an invalid nonce."
+        assert iterations > ITERATIONS, "Server sent an wrong iteration count."
+        assert parsed["r"].startswith(nonce), "Server sent an invalid nonce."
 
         salted_pass = hashlib.pbkdf2_hmac(
             digest,

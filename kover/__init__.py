@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-__version__ = "2.6.2"
+__version__ = "2.7.0"
 __author__ = "megawattka"
 __license__ = "MIT"
 __copyright__ = "Copyright (C) 2024-present megawattka"

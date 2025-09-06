@@ -1,3 +1,5 @@
+"""Kover Database Module."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -154,7 +156,7 @@ class Database:
 
     async def users_info(
         self,
-        query: str | xJsonT | list[xJsonT] | None = None,
+        query: str | xJsonT | list[xJsonT] | float | None = None,
         *,
         show_credentials: bool = False,
         show_custom_data: bool = False,
@@ -182,7 +184,7 @@ class Database:
             A list of User objects matching the query.
         """
         if query is None:
-            query = 1.0  # type: ignore
+            query = 1.0
         command = filter_non_null({
             "usersInfo": query,
             "showCredentials": show_credentials,
@@ -244,7 +246,7 @@ class Database:
         Returns:
             The response from the database.
         """
-        return await self.client.transport.request(
+        return await self.client.request(
             doc=doc,
             transaction=transaction,
             db_name=self.name,

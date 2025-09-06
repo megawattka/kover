@@ -1,6 +1,7 @@
+"""Kover Collection Module."""
+
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from typing_extensions import overload
@@ -13,6 +14,8 @@ from .models import Delete, Index
 from .schema import Document
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from .database import Database
     from .models import Collation, ReadConcern, Update, WriteConcern
     from .session import Transaction
@@ -73,8 +76,8 @@ class Collection:
         """
         infos = await self.database.list_collections({"name": self.name})
         if not infos:
-            db = self.database.name
-            msg = f'namespace "{self.name}" not found in database "{db}"'
+            database = self.database.name
+            msg = f'namespace "{self.name}" not found in database "{database}"'
             raise ValueError(msg)
         return infos[0]
 
@@ -108,10 +111,10 @@ class Collection:
             "validationLevel": level.value.lower(),
         })
 
-    @overload
-    async def insert(
+    # https://www.mongodb.com/docs/manual/reference/command/insert/
+    async def insert_one(
         self,
-        insertable: xJsonT | Document,
+        document: xJsonT | Document,
         /,
         *,
         ordered: bool = True,
@@ -120,12 +123,40 @@ class Collection:
         comment: str | None = None,
         transaction: Transaction | None = None,
     ) -> ObjectId:
-        ...
+        """Insert one document into the collection.
 
-    @overload
-    async def insert(
+        Parameters:
+            document : The document itself.
+            ordered : Whether the inserts should be
+                processed in order (default is True).
+            max_time_ms : The maximum time in milliseconds
+                for the operation (default is 0).
+            bypass_document_validation : Allows the write to circumvent
+                document validation (default is False).
+            comment : A comment to attach to the operation.
+            transaction : The transaction context for the operation.
+
+        Returns:
+            The boolean value that indicates document insertion.
+        """
+        insertable = maybe_to_dict(document)
+        insertable.setdefault("id", ObjectId())
+
+        command: xJsonT = filter_non_null({
+            "insert": self.name,
+            "ordered": ordered,
+            "documents": [insertable],
+            "maxTimeMS": max_time_ms,
+            "bypassDocumentValidation": bypass_document_validation,
+            "comment": comment,
+        })
+        await self.database.command(command, transaction=transaction)
+        return insertable["id"]
+
+    # https://www.mongodb.com/docs/manual/reference/command/insert/
+    async def insert_many(
         self,
-        insertable: Sequence[xJsonT | Document],
+        documents: Sequence[xJsonT | Document],
         /,
         *,
         ordered: bool = True,
@@ -134,24 +165,10 @@ class Collection:
         comment: str | None = None,
         transaction: Transaction | None = None,
     ) -> list[ObjectId]:
-        ...
-
-    # https://www.mongodb.com/docs/manual/reference/command/insert/
-    async def insert(
-        self,
-        insertable: xJsonT | Document | Sequence[xJsonT | Document],
-        /,
-        *,
-        ordered: bool = True,
-        max_time_ms: int = 0,
-        bypass_document_validation: bool = False,
-        comment: str | None = None,
-        transaction: Transaction | None = None,
-    ) -> ObjectId | list[ObjectId]:
-        """Insert one or more documents into the collection.
+        """Insert many documents at once into the collection.
 
         Parameters:
-            d : The documents to insert. Non-positional argument.
+            documents : sequence of documents.
             ordered : Whether the inserts should be
                 processedin order (default is True).
             max_time_ms : The maximum time in milliseconds
@@ -162,30 +179,22 @@ class Collection:
             transaction : The transaction context for the operation.
 
         Returns:
-            The ObjectId(s) of the inserted document(s).
+            The amount of documents that were successfully inserted.
         """
-        multi = isinstance(insertable, Sequence)
-        if not multi:
-            insertable = [insertable]
-        documents = [
-            doc.to_dict()
-            if isinstance(doc, Document) else doc
-            for doc in insertable
-        ]
-        for doc in documents:
-            doc.setdefault("_id", ObjectId())
+        insertable = [*map(maybe_to_dict, documents)]
+        for value in insertable:
+            value.setdefault("id", ObjectId())
+
         command: xJsonT = filter_non_null({
             "insert": self.name,
             "ordered": ordered,
-            "documents": documents,
+            "documents": insertable,
             "maxTimeMS": max_time_ms,
             "bypassDocumentValidation": bypass_document_validation,
             "comment": comment,
         })
         await self.database.command(command, transaction=transaction)
-
-        inserted_ids = [doc["_id"] for doc in documents]
-        return inserted_ids if multi else inserted_ids[0]
+        return [value["id"] for value in insertable]
 
     # https://www.mongodb.com/docs/manual/reference/command/update/
     async def update(

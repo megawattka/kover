@@ -1,3 +1,5 @@
+"""Operation models, required by kover."""
+
 from __future__ import annotations
 
 from typing import Literal

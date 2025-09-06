@@ -1,3 +1,5 @@
+"""Other models, that ill sort in future."""
+
 from __future__ import annotations
 
 import datetime  # noqa: TC003
@@ -37,9 +39,11 @@ class HelloResult(_ModelMixin):
         """Check if the server requires authentication."""
         return len(self.sasl_supported_mechs) > 0
 
-    def get_auth_mechanism(self) -> AuthTypesT:
+    def get_auth_mechanism(self) -> AuthTypesT | None:
         """Returns a random mechanism from result mechanisms."""
-        return secrets.choice(self.sasl_supported_mechs)
+        if self.requires_auth:
+            return secrets.choice(self.sasl_supported_mechs)
+        return None
 
 
 class BuildInfo(_ModelMixin):

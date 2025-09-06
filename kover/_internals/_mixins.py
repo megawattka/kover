@@ -28,7 +28,11 @@ class ModelMixin(BaseModel):
     )
 
     def to_dict(self) -> xJsonT:
-        """Convert the model to a dictionary with camel case keys."""
+        """Convert the model to a dictionary with camel case keys.
+
+        Returns:
+            A dictionary representation of the model with camel case keys.
+        """
         return self.model_dump(by_alias=True, exclude_none=True)
 
     def __str__(self) -> str:

@@ -1,3 +1,5 @@
+"""The SRV resolver for Kover library."""
+
 from dns.asyncresolver import Resolver
 
 
@@ -9,7 +11,11 @@ class SrvResolver:
         self._resolver = Resolver()
 
     async def get_nodes(self, fqdn: str) -> list[str]:
-        """Get available SRV nodes for given fqdn."""
+        """Get available SRV nodes for given fqdn.
+
+        Returns:
+            A list of nodes in the format "host:port".
+        """
         resolvable = self._srv + "._tcp." + fqdn
         results = await self._resolver.resolve(resolvable, rdtype="SRV")
         return [node.to_text().split()[-1][:-1] for node in results]

@@ -1,17 +1,9 @@
+"""Example of updating and deleting documents in Kover."""
+
 import asyncio
 import logging
-from typing import TYPE_CHECKING
 
-from kover import (
-    AuthCredentials,
-    Delete,
-    Document,
-    Kover,
-    Update,
-)
-
-if TYPE_CHECKING:
-    from kover.bson import ObjectId
+from kover import AuthCredentials, Delete, Document, Kover, Update
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -31,7 +23,7 @@ async def main() -> None:
 
     collection = kover.db.get_collection("test")
     user = User(name="John", age=23)
-    file_id: ObjectId = await collection.insert(user)  # or user.to_dict()
+    object_id = await collection.insert_one(user)  # or user.to_dict()
 
     # this concept requires using "$set" explicitly
     # if you dont specify it your entire doc will be
@@ -39,13 +31,13 @@ async def main() -> None:
     # advancements of this way is that you can do anything here not only "$set"
     # e.g {"$push": {"userIds": 12345}} and more
     # in conclusion: be careful with specifying "$set", dont forget it!
-    update = Update({"_id": file_id}, {"$set": {"name": "Wick"}})
+    update = Update({"name": "John", "age": 23}, {"$set": {"name": "Wick"}})
     await collection.update(update)
 
     # limit 1 corresponds to .delete_one and 0 to .delete_many
-    delete = Delete({"_id": file_id}, limit=1)
+    delete = Delete({"_id": object_id}, limit=1)
     n = await collection.delete(delete)
-    log.info(f"documents deleted: {n}")  # 1
+    log.info("documents deleted: %d", n)  # 1
 
 
 if __name__ == "__main__":

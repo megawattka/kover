@@ -1,16 +1,18 @@
+"""Helpers and serializers for MongoDB transport."""
+
 from __future__ import annotations
 
 import os
 import platform as _platform
 import struct
 import sys
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 from .. import __version__
 from ..bson import (
     DEFAULT_CODEC_OPTIONS,
-    _decode_all_selective,  # type: ignore
-    _make_c_string,  # type: ignore
+    _decode_all_selective,  # pyright: ignore[reportPrivateUsage]
+    _make_c_string,  # pyright: ignore[reportPrivateUsage]
     encode,
 )
 from ..codes import get_exception_name
@@ -21,6 +23,9 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from ..typings import COMPRESSION_T, xJsonT
+
+OP_MSG: Final[int] = 2013
+OP_COMPRESSED: Final[int] = 2012
 
 
 class WireHelper:
@@ -96,10 +101,11 @@ class WireHelper:
         if op_code == 1:  # manual/legacy-opcodes/#op_reply
             # flags, cursor, starting, docs = unpack from "<iqii"
             message = msg[20:]
-        elif op_code == 2013:  # manual/reference/mongodb-wire-protocol/#op_msg
+        elif op_code == OP_MSG:
+            # manual/reference/mongodb-wire-protocol/#op_msg
             # flags, section = unpack from "<IB"
             message = msg[5:]
-        elif op_code == 2012:
+        elif op_code == OP_COMPRESSED:
             # manual/reference/mongodb-wire-protocol/#op_compressed
             op_code, _, compressor_id = struct.unpack_from("<iiB", msg)
             ctx = get_context_by_id(compressor_id=compressor_id)
@@ -118,7 +124,11 @@ class WireHelper:
         doc: xJsonT,
         compressor: Literal["zlib", "zstd", "snappy"] | None = None,
     ) -> tuple[int, bytes]:
-        """Gets the prepaired message bytes and request_id."""
+        """Gets the prepaired message bytes and request_id.
+
+        Returns:
+            A tuple containing the request ID and the packed message bytes.
+        """
         op_msg_m = self._op_msg_impl(doc)
         if compressor is None:
             return self._pack_message(
@@ -147,7 +157,14 @@ class WireHelper:
         data: bytes,
         rid: int,
     ) -> tuple[int, int]:
-        """Verify that the request_id is correct."""
+        """Verify that the request_id is correct.
+
+        Raises:
+            AssertionError: If the request_id does not match.
+
+        Returns:
+            A tuple containing the length of the message and the op_code.
+        """
         length, _, response_to, op_code = struct.unpack("<iiii", data)
         if response_to != rid:
             exc_t = f"wrong r_id. expected ({rid}) but found ({response_to})"
@@ -159,7 +176,11 @@ class WireHelper:
         compression: COMPRESSION_T | None = None,
         application: xJsonT | None = None,
     ) -> xJsonT:
-        """Create a hello payload for the MongoDB server."""
+        """Create a hello payload for the MongoDB server.
+
+        Returns:
+            A dictionary representing the hello payload.
+        """
         uname = _platform.uname()
         impl = sys.implementation
         if compression is None:
@@ -201,7 +222,11 @@ class WireHelper:
         })
 
     def get_exception(self, reply: xJsonT) -> OperationFailure:
-        """Construct an exception based on server reply."""
+        """Construct an exception based on server reply.
+
+        Returns:
+            An instance of OperationFailure or a subclass thereof.
+        """
         write_errors = reply.get("writeErrors", [])
         if write_errors:
             reply = write_errors[0]

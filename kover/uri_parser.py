@@ -1,7 +1,9 @@
+"""Uri parser functionality for Kover."""
+
 from __future__ import annotations
 
 from collections import UserDict
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 from urllib.parse import parse_qsl, urlparse
 import warnings
 
@@ -9,7 +11,7 @@ from pydantic import Field
 
 from ._internals._mixins import ModelMixin as _ModelMixin
 from .network import AuthCredentials
-from .typings import COMPRESSION_T, xJsonT  # noqa: TC001
+from .typings import COMPRESSION_T, DEFAULT_MONGODB_PORT, xJsonT  # noqa: TC001
 
 V = TypeVar("V")
 
@@ -28,7 +30,12 @@ class CaseInsensitiveDict(UserDict[str, V]):
         return super().__getitem__(key.lower())
 
     def get(self, key: str, default: ... = None) -> V:
-        """https://python-reference.readthedocs.io/en/latest/docs/dict/get.html."""
+        """https://python-reference.readthedocs.io/en/latest/docs/dict/get.html.
+
+        Returns:
+            The value for the given key, or
+                default if the key is not found.
+        """
         return super().get(key, default=default)
 
 
@@ -51,6 +58,7 @@ def _bool_from_str(key: str, value: str) -> bool:
 class ParsedUri(_ModelMixin):
     """Represents a parsed MongoDB URI."""
 
+    scheme: Literal["mongodb", "mongodb+srv"]
     tls: bool
     hostname: str
     port: int
@@ -58,26 +66,38 @@ class ParsedUri(_ModelMixin):
     credentials: AuthCredentials | None
     compressors: COMPRESSION_T = Field(default_factory=COMPRESSION_T)
     application: xJsonT | None = None
+    max_pool_size: int = Field(alias="max_pool_size", default=100)
 
 
 def is_valid_uri(uri: str) -> bool:
-    """Check if the given URI is valid."""
+    """Check if the given URI is valid.
+
+    Returns:
+        True if the URI is valid, False otherwise.
+    """
     try:
         parts = urlparse(uri)
-        port = parts.port if parts.port is not None else 0
-    except (ValueError, TypeError):
+        parse_qsl(parts.query, strict_parsing=True)
+        port = parts.port if parts.port is not None else DEFAULT_MONGODB_PORT
+        assert port in range(1, 65536)
+    except (ValueError, TypeError, AssertionError):
         return False
     if parts.hostname is None or len(parts.hostname) == 0:
         return False
-    if parts.hostname and (port == 0):
-        return False
     if parts.scheme not in {"mongodb", "mongodb+srv"}:
         return False
-    return not (parts.scheme == "mongodb+srv" and port != 27017)
+    return not (parts.scheme == "mongodb+srv" and port != DEFAULT_MONGODB_PORT)
 
 
 def parse_uri(uri: str) -> ParsedUri:
-    """Parse given uri and return parsed args."""
+    """Parse given uri and return parsed args.
+
+    Raises:
+        ValueError: If the URI is invalid.
+
+    Returns:
+        Parsed URI object with all necessary fields.
+    """
     if not is_valid_uri(uri):
         raise ValueError(f"Invalid URI: {uri}")
 
@@ -90,7 +110,9 @@ def parse_uri(uri: str) -> ParsedUri:
 
     tls = _bool_from_str("tls", parameters.get("tls", "true"))
     app_name = parameters.get("appName")
-    port = parts.port or 27017
+    max_pool_size = int(parameters.get("maxPoolSize", 100))
+
+    port = parts.port or DEFAULT_MONGODB_PORT
     write_concern = parameters.get("w", "majority")
 
     compressors = parameters.get("compressors")
@@ -102,11 +124,13 @@ def parse_uri(uri: str) -> ParsedUri:
     assert parts.hostname is not None  # for pyright
 
     return ParsedUri(
+        scheme=parts.scheme,  # pyright: ignore[reportArgumentType]
         hostname=parts.hostname,
         port=port,
         credentials=credentials,
-        compressors=compressors,
+        compressors=compressors or [],
         tls=tls,
         write_concern=write_concern,
         application=application,
+        max_pool_size=max_pool_size,
     )

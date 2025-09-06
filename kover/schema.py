@@ -1,3 +1,5 @@
+"""Schema generation for Kover documents."""
+
 from __future__ import annotations
 
 from enum import Enum
@@ -96,7 +98,7 @@ class SchemaGenerator:
                     },
                 }
             if isinstance_ex(attr_t, Document):
-                return self.generate(attr_t, child=True)  # type: ignore
+                return self.generate(attr_t, child=True)  # pyright: ignore[reportArgumentType]
 
             # TODO @megawattka: deal with ForwardRef's
             args_ = attr_t.__class__, attr_t
@@ -111,7 +113,7 @@ class SchemaGenerator:
             (isinstance_ex, Enum),
             (is_origin_ex, Literal),
         ]:
-            condition = any(func(cls, carg) for cls in args)  # type: ignore
+            condition = any(func(cls, carg) for cls in args)  # pyright: ignore[reportArgumentType]
             if condition and len(args) != (1 + is_optional):
                 raise SchemaGenerationException(
                     f"Cannot specify other annotations with {carg}")
@@ -247,11 +249,21 @@ class Document(BaseModel):
 
     @classmethod
     def from_document(cls, payload: xJsonT) -> Self:
-        """Create a Document instance from a dictionary."""
+        """Create a Document instance from a dictionary.
+
+        Returns:
+            An instance of the Document subclass with
+                the data from the dictionary.
+        """
         return cls.model_validate(payload)
 
     def to_dict(self, *, exclude_id: bool = False) -> xJsonT:
-        """Convert the document to a dictionary."""
+        """Convert the document to a dictionary.
+
+        Returns:
+            The document represented as a dictionary.
+                If `exclude_id` is True, the `_id` field is excluded.
+        """
         dumped: xJsonT = self.model_dump(by_alias=True)
         if not exclude_id and self._id is not None:
             dumped = {"_id": self._id, **dumped}
@@ -273,18 +285,30 @@ class Document(BaseModel):
         return self.to_dict(exclude_id=True) == other.to_dict(exclude_id=True)
 
     def __hash__(self) -> int:
-        """Hash based on id if present, otherwise error."""
+        """Hash based on id if present, otherwise error.
+
+        Returns:
+            Hash of the document based on its _id.
+        """
         if self._id is not None:
             return hash(self._id)
         raise NotImplementedError("Hash requires _id set.")
 
     def with_id(self, _id: ObjectId) -> Self:
-        """Set the document's ObjectId."""
+        """Set the document's ObjectId.
+
+        Returns:
+            The document instance with the specified _id.
+        """
         self._id = _id
         return self
 
     def get_id(self) -> ObjectId | None:
-        """Get the document's ObjectId."""
+        """Get the document's ObjectId.
+
+        Returns:
+            The document's _id if set, otherwise None.
+        """
         return self._id
 
     def __str__(self) -> str:
@@ -309,6 +333,9 @@ def model_configure(config: ConfigDict) -> Callable[[type[T]], Callable[P, T]]:
 
     Changed(test=<MyEnum.FIRST: '1'>)
     ```
+
+    Returns:
+        The decorator that applies the given config to the class.
     """
     def outer(cls: type[T]) -> Callable[P, T]:
         cls.model_config.update(config)

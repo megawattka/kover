@@ -52,11 +52,11 @@ def _serialize_literal(
     *,
     is_optional: bool = False,
 ) -> xJsonT:
-    args = [
+    args: list[Any] = [
         x.value if issubclass(x.__class__, Enum)
         else x for x in attr_t.__args__
     ]
-    dtypes = chain([_lookup_type(type(val)) for val in args])  # type: ignore
+    dtypes = chain([_lookup_type(type(val)) for val in args])  # pyright: ignore[reportUnknownArgumentType]
     return {
         "enum": args + ([None] if is_optional else []),
         "bsonType": sorted(set(dtypes)),
@@ -93,7 +93,7 @@ def _serialize_enum(
     is_optional: bool = False,
 ) -> xJsonT:
     values = [z.value for z in attr_t]
-    dtypes = chain([_lookup_type(type(val)) for val in values])  # type: ignore
+    dtypes = chain([_lookup_type(type(val)) for val in values])  # pyright: ignore[reportUnknownArgumentType]
     return {
         "enum": values + ([None] if is_optional else []),
         "bsonType": sorted(set(dtypes)) + (
@@ -130,14 +130,14 @@ def value_to_json_schema(
         dict: _serialize_dict,
     }
     if origin in origin_map:
-        func = origin_map[origin]  # type: ignore
+        func = origin_map[origin]
 
-    elif isinstance(attr_t, type) and issubclass(attr_t, Enum):  # type: ignore
+    elif isinstance(attr_t, type) and issubclass(attr_t, Enum):  # pyright: ignore[reportUnnecessaryIsInstance]
         func = _serialize_enum
 
     elif attr_t in _TYPE_MAP:
         func = _serialize_simple_type
     if func is not None:
-        return func(attr_t, is_optional=is_optional)  # type: ignore
+        return func(attr_t, is_optional=is_optional)  # pyright: ignore[reportArgumentType]
 
     return None  # ruff requires this to be explicit

@@ -1,3 +1,5 @@
+"""Enums, that are required for kover library."""
+
 from enum import Enum
 
 

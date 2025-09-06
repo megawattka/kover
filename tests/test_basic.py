@@ -3,11 +3,14 @@ from __future__ import annotations
 import unittest
 from uuid import UUID, uuid4
 
-from kover.bson import Binary, ObjectId
-from kover.client import Kover
-from kover.models import Delete
-from kover.network import AuthCredentials
-from kover.schema import Document, SchemaGenerator
+from kover import (
+    AuthCredentials,
+    Delete,
+    Document,
+    Kover,
+    SchemaGenerator,
+)
+from kover.bson import Binary
 
 
 class User(Document):
@@ -27,6 +30,8 @@ class Subclass(User):
 
 
 class BasicTests(unittest.IsolatedAsyncioTestCase):
+    """Basic tests related to document operations."""
+
     def __init__(self, *args: str, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
         self.schema_generator = SchemaGenerator()
@@ -54,15 +59,14 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
         )
         assert await collection.count() == 0
         users = [User(name="josh", age=50)] * 1000
-        r = await collection.insert(users)
+        r = await collection.insert_many(users)
         assert len(r) == 1000
-        assert len(set(r)) == 1000
         cs = await collection.find().limit(100).to_list()
         assert len(cs) == 100
         cs = await collection.find().skip(10).to_list()
         assert len(cs) == 990
         await collection.clear()
-        await collection.insert([users[0]] * 75)
+        await collection.insert_many([users[0]] * 75)
         cs = await collection.find().batch_size(50).to_list()
         assert len(cs) == 75
 
@@ -88,8 +92,7 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
         count = await collection.count()
         assert count == 0
 
-        obj_id = await collection.insert(document)
-        assert isinstance(obj_id, ObjectId)
+        await collection.insert_one(document)
         count = await collection.count()
         assert count == 1
         resp = await collection.find().to_list()

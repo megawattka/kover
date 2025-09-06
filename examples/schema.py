@@ -55,7 +55,11 @@ class User(Document):  # noqa: D101
 
 
 async def main() -> None:
-    """Entrypoint."""
+    """Entrypoint.
+
+    Raises:
+        SystemExit: because of invalid user creation.
+    """
     credentials = AuthCredentials.from_environ()
     kover = await Kover.make_client(credentials=credentials)
 
@@ -72,8 +76,8 @@ async def main() -> None:
         friend=Friend(name="dima", age=18),
     )
     # function accepts either valid_user or valid_user.to_dict()
-    object_id = await collection.insert(valid_user)
-    log.info(f"{object_id}, added!")
+    object_id = await collection.insert_one(valid_user)
+    log.info("%s, added!", object_id)
 
     try:
         invalid_user = User(
@@ -88,11 +92,11 @@ async def main() -> None:
     # somehow if you try to insert invalid_user.to_dict()
     # kover.exceptions.ErrDocumentValidationFailure: Rick's age is less than 18
     try:
-        await collection.insert(invalid_user)
+        await collection.insert_one(invalid_user)
     except OperationFailure as e:
         msg: str = e.message["errmsg"]
-        log.info(f"got Error: {msg}")
-        assert e.code == 121  # ErrDocumentValidationFailure  # noqa: E501, PT017
+        log.info("got Error: %s", msg)
+        assert e.code == 121  # ErrDocumentValidationFailure  # noqa: E501, PLR2004, PT017
 
 
 if __name__ == "__main__":

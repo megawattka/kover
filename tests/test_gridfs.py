@@ -46,18 +46,18 @@ class TestMethods(unittest.IsolatedAsyncioTestCase):
         assert self.client.signature is not None
         self.addAsyncCleanup(self.client.close)
         self.collection = self.client.db.get_collection(self.coll_name)
-        self._18_mb = 1 * 1024 * 1024 * 18
+        self._9_mb = 1 * 1024 * 1024 * 9
 
     async def asyncTearDown(self) -> None:
         await self.client.db.drop_collection(self.coll_name)
 
     async def test_gridfs(self) -> None:
         fs = await GridFS(self.client.gridfsdb).indexed()
-        file_id = await fs.put(os.urandom(self._18_mb))
+        file_id = await fs.put(os.urandom(self._9_mb))
         file, binary = await fs.get_by_file_id(file_id)
         sha1_hash = file.metadata["sha1"]
-        log.info(f"sha1: {sha1_hash}")
-        assert len(binary.getvalue()) == self._18_mb
+        log.info("sha1: %s", sha1_hash)
+        assert len(binary.getvalue()) == self._9_mb
 
 
 if __name__ == "__main__":

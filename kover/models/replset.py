@@ -1,3 +1,5 @@
+"""Models for MongoDB replica set configurations."""
+
 from __future__ import annotations
 
 from pydantic import Field
@@ -50,7 +52,11 @@ class ReplicaSetConfig(_ModelMixin):
 
     @classmethod
     def default(cls) -> ReplicaSetConfig:
-        """Create a default replica set configuration."""
+        """Create a default replica set configuration.
+
+        Returns:
+            The instance of default ReplicaSetConfig.
+        """
         return cls(
             rs_name="rs0",
             version=1,

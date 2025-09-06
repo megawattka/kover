@@ -1,72 +1,89 @@
+"""Kover Client Module."""
+
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import TYPE_CHECKING, Literal
 
 from typing_extensions import Self
 
 from .database import Database
-from .helpers import classrepr, filter_non_null, maybe_to_dict
+from .helpers import (
+    classrepr,
+    filter_non_null,
+    maybe_to_dict,
+)
 from .models import BuildInfo, WriteConcern
 from .network import MongoTransport, SrvResolver
 from .session import Session
+from .typings import DEFAULT_MONGODB_PORT
 from .uri_parser import parse_uri
 
 if TYPE_CHECKING:
-    import asyncio
-
     from .models import ReplicaSetConfig
     from .network import AuthCredentials
-    from .typings import COMPRESSION_T, xJsonT
+    from .transaction import Transaction
+    from .typings import COMPRESSION_T, DocumentT, xJsonT
 
 
-@classrepr("signature", "transport", "is_primary")
-class Kover:
-    """Kover client for interacting with a MongoDB server.
+def create_connection_pool(
+    host: str,
+    port: int,
+    size: int,
+    *,
+    tls: bool,
+    loop: asyncio.AbstractEventLoop | None = None,
+) -> asyncio.Queue[MongoTransport]:
+    """Gives us a filled connection pool.
 
-    Attributes:
-        transport : The underlying transport to the MongoDB server.
-        signature : The authentication signature, if authenticated.
-        default_database : The name of the default database.
-        is_primary : The flag that tells us whether that
-            this is primary or secondary instance
+    Returns:
+        Pool, filled with non connected connections.
     """
+    pool: asyncio.Queue[MongoTransport] = asyncio.Queue()
+    for _ in range(size):
+        pool.put_nowait(MongoTransport(host, port, loop=loop, tls=tls))
+    return pool
+
+
+@classrepr("_write_concern", "_compression", "_application")
+class Kover:
+    """Kover client for interacting with a MongoDB server."""
 
     def __init__(
         self,
-        transport: MongoTransport,
-        signature: bytes | None,
         *,
-        is_primary: bool = False,
         w: str | int = "majority",
+        pool: asyncio.Queue[MongoTransport],
+        credentials: AuthCredentials | None = None,
+        compression: COMPRESSION_T | None = None,
+        application: xJsonT | None = None,
     ) -> None:
-        self.transport = transport
-        self.signature = signature
-        self._is_primary = is_primary
         self._write_concern = WriteConcern(w=w)
+        self._pool = pool
+        self._credentials = credentials
+        self._compression = compression
+        self._application = application
 
     async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *exc: object) -> bool:
-        if self.signature is not None:
-            await self.logout()
         await self.close()
         return True
 
-    @property
-    def is_primary(self) -> bool:
-        """Whether this instance is a primary or not."""
-        return self._is_primary
-
     async def close(self) -> None:
-        """Close the underlying transport connection.
+        """Close the underlying transport connections.
 
         This method closes the transport writer
         and waits until the connection is fully closed.
         """
-        self.transport.writer.close()
-        await self.transport.writer.wait_closed()
+        if self._pool.empty():
+            return
+
+        while not self._pool.empty():
+            conn = await self._pool.get()
+            await conn.close()
 
     def get_database(self, name: str) -> Database:
         """Get a Database instance for the specified database name.
@@ -90,7 +107,11 @@ class Kover:
         j: bool | None = None,
         wtimeout: int = 0,
     ) -> Self:
-        """This sets a WriteConcern for all requests."""
+        """This sets a WriteConcern for all requests.
+
+        Returns:
+            The Kover client instance with the updated write concern.
+        """
         self._write_concern = WriteConcern(w=w, j=j, wtimeout=wtimeout)
         return self
 
@@ -100,49 +121,54 @@ class Kover:
         uri: str,
         loop: asyncio.AbstractEventLoop | None = None,
     ) -> Kover:
-        """Create an instance of Kover client by passing a uri."""
+        """Create an instance of Kover client by passing a uri.
+
+        Parameters:
+            uri : The uri itself.
+            loop : Optional asyncio loop
+
+        Returns:
+            An instance of newly created Kover client.
+        """
         parsed = parse_uri(uri)
 
-        resolver = SrvResolver()
-        nodes = await resolver.get_nodes(parsed.hostname)
-        assert nodes, "Node resolution failed."
+        if parsed.scheme == "mongodb+srv":
+            resolver = SrvResolver()
+            nodes = await resolver.get_nodes(parsed.hostname)
+            assert nodes, "Node resolution failed."
+        else:
+            nodes = [parsed.hostname]
 
-        transport = await MongoTransport.make(
-            nodes[0], port=parsed.port, tls=parsed.tls, loop=loop)
+        transport = MongoTransport(
+            nodes[0], parsed.port, loop=loop, tls=parsed.tls)
 
+        await transport.connect()
         hello = await transport.hello(
             parsed.compressors, parsed.credentials, parsed.application)
+        await transport.close()
 
         if not hello.is_primary:
             assert hello.primary_node, "Primary node resolution failed."
 
             host, _ = hello.primary_node.split(":")
-            return await cls.make_client(
-                host=host,
-                port=parsed.port,
-                credentials=parsed.credentials,
-                loop=loop,
-                compression=parsed.compressors,
-                tls=parsed.tls,
-                application=parsed.application,
-                write_concern=parsed.write_concern,
-            )
+            nodes = [host]
 
-        mechanism = hello.get_auth_mechanism()
-        signature = await transport.authorize(mechanism, parsed.credentials)
+        args = (nodes[0], parsed.port, parsed.max_pool_size)
+        pool = create_connection_pool(*args, tls=parsed.tls, loop=loop)
 
         return cls(
-            transport=transport,
-            signature=signature,
-            is_primary=hello.is_primary,
             w=parsed.write_concern,
+            pool=pool,
+            credentials=parsed.credentials,
+            compression=parsed.compressors,
+            application=parsed.application,
         )
 
     @classmethod
     async def make_client(
         cls,
         host: str = "127.0.0.1",
-        port: int = 27017,
+        port: int = DEFAULT_MONGODB_PORT,
         *,
         credentials: AuthCredentials | None = None,
         loop: asyncio.AbstractEventLoop | None = None,
@@ -150,6 +176,7 @@ class Kover:
         tls: bool = False,
         application: xJsonT | None = None,
         write_concern: str | int = "majority",
+        max_pool_size: int = 100,
     ) -> Kover:
         """Create and return a new Kover client instance.
 
@@ -169,23 +196,48 @@ class Kover:
         Returns:
             An instance of the Kover client.
         """
-        transport = await MongoTransport.make(
-            host=host, port=port, loop=loop, tls=tls)
+        pool = create_connection_pool(
+            host, port, max_pool_size, tls=tls, loop=loop)
 
-        hello = await transport.hello(
+        return cls(
+            w=write_concern,
+            pool=pool,
             credentials=credentials,
             compression=compression,
             application=application,
         )
-        mechanism = hello.get_auth_mechanism()
-        signature = await transport.authorize(mechanism, credentials)
 
-        return cls(
-            transport,
-            signature,
-            is_primary=hello.is_primary,
-            w=write_concern,
-        )
+    async def request(
+        self,
+        doc: DocumentT,
+        *,
+        db_name: str = "admin",
+        transaction: Transaction | None = None,
+        wait_response: bool = True,
+    ) -> xJsonT:
+        """Send a request to MongoDB Server.
+
+        Returns:
+            Document, containing response from the server.
+        """
+        conn = await self._pool.get()
+        if not conn.is_connected:
+            await conn.connect()
+            hello = await conn.hello(
+                self._compression, self._credentials, self._application)
+
+            if hello.requires_auth:
+                mechanism = hello.get_auth_mechanism()
+                await conn.authorize(mechanism, credentials=self._credentials)
+        try:
+            return await conn.request(
+                doc,
+                db_name=db_name,
+                transaction=transaction,
+                wait_response=wait_response,
+            )
+        finally:
+            await self._pool.put(conn)
 
     async def refresh_sessions(self, sessions: list[Session]) -> None:
         """Refresh the provided list of sessions.
@@ -194,7 +246,7 @@ class Kover:
             sessions : A list of Session objects to be refreshed.
         """
         documents: list[xJsonT] = [x.document for x in sessions]
-        await self.transport.request({"refreshSessions": documents})
+        await self.request({"refreshSessions": documents})
 
     async def end_sessions(self, sessions: list[Session]) -> None:
         """End the provided list of sessions.
@@ -203,7 +255,7 @@ class Kover:
             sessions : A list of Session objects to be ended.
         """
         documents: list[xJsonT] = [x.document for x in sessions]
-        await self.transport.request({"endSessions": documents})
+        await self.request({"endSessions": documents})
 
     async def start_session(self) -> Session:
         """Start a new session.
@@ -211,8 +263,8 @@ class Kover:
         Returns:
             An instance of the Session class representing the started session.
         """
-        req = await self.transport.request({"startSession": 1.0})
-        return Session(document=req["id"], transport=self.transport)
+        req = await self.request({"startSession": 1.0})
+        return Session(document=req["id"], client=self)
 
     async def build_info(self) -> BuildInfo:
         """Retrieve build information from the MongoDB server.
@@ -220,7 +272,7 @@ class Kover:
         Returns:
             An instance of BuildInfo containing server build details.
         """
-        request = await self.transport.request({"buildInfo": 1.0})
+        request = await self.request({"buildInfo": 1.0})
         return BuildInfo.model_validate(request)
 
     async def logout(self) -> None:
@@ -229,7 +281,7 @@ class Kover:
         This method sends a logout request to the server
         to terminate the current authenticated session.
         """
-        await self.transport.request({"logout": 1.0})
+        await self.request({"logout": 1.0})
 
     async def list_database_names(self) -> list[str]:
         """Retrieve the names of all databases on the MongoDB server.
@@ -241,7 +293,7 @@ class Kover:
             "listDatabases": 1.0,
             "nameOnly": True  # noqa: COM812
         }
-        request = await self.transport.request(command)
+        request = await self.request(command)
         return [x["name"] for x in request["databases"]]
 
     async def drop_database(self, name: str) -> None:
@@ -250,7 +302,7 @@ class Kover:
         Parameters:
             name : The name of the database to drop.
         """
-        await self.transport.request({"dropDatabase": 1.0}, db_name=name)
+        await self.request({"dropDatabase": 1.0}, db_name=name)
 
     # https://www.mongodb.com/docs/manual/reference/command/replSetInitiate/
     async def replica_set_initiate(
@@ -264,7 +316,7 @@ class Kover:
                 default configuration is used.
         """
         document = maybe_to_dict(config) or {}
-        await self.transport.request({"replSetInitiate": document})
+        await self.request({"replSetInitiate": document})
 
     # https://www.mongodb.com/docs/manual/reference/command/replSetReconfig/
     async def replica_set_reconfig(
@@ -284,7 +336,7 @@ class Kover:
             "force": force,
             "maxTimeMS": max_time_ms,
         })
-        await self.transport.request(document)
+        await self.request(document)
 
     # https://www.mongodb.com/docs/manual/reference/command/replSetGetStatus/
     async def get_replica_set_status(self) -> xJsonT:
@@ -293,7 +345,7 @@ class Kover:
         Returns:
             A JSON document containing the replica set status information.
         """
-        return await self.transport.request({"replSetGetStatus": 1.0})
+        return await self.request({"replSetGetStatus": 1.0})
 
     # https://www.mongodb.com/docs/manual/reference/command/shutdown/
     async def shutdown(
@@ -316,7 +368,7 @@ class Kover:
             "timeoutSecs": timeout,
             "comment": comment,
         })
-        await self.transport.request(command, wait_response=False)
+        await self.request(command, wait_response=False)
 
     # https://www.mongodb.com/docs/manual/reference/command/getCmdLineOpts/
     async def get_commandline(self) -> list[str]:
@@ -325,7 +377,7 @@ class Kover:
         Returns:
             A list of command line arguments.
         """
-        r = await self.transport.request({"getCmdLineOpts": 1.0})
+        r = await self.request({"getCmdLineOpts": 1.0})
         return r["argv"]
 
     # https://www.mongodb.com/docs/manual/reference/command/getLog/#getlog
@@ -342,7 +394,7 @@ class Kover:
         Returns:
             A list of log entries as JSON objects.
         """
-        r = await self.transport.request({"getLog": parameter})
+        r = await self.request({"getLog": parameter})
         return [
             json.loads(info) for info in r["log"]
         ]
@@ -371,7 +423,7 @@ class Kover:
             "dropTarget": drop_target,
             "comment": comment,
         })
-        await self.transport.request(command)
+        await self.request(command)
 
     # https://www.mongodb.com/docs/manual/reference/command/setUserWriteBlockMode/
     async def set_user_write_block_mode(self, *, param: bool) -> None:
@@ -381,7 +433,7 @@ class Kover:
             param : Blocks writes on a cluster when set to true.
                 To enable writes on a cluster, set global: false.
         """
-        await self.transport.request({
+        await self.request({
             "setUserWriteBlockMode": 1.0,
             "global": param,
         })
@@ -409,7 +461,7 @@ class Kover:
             "lock": lock,
             "comment": comment,
         })
-        await self.transport.request(command)
+        await self.request(command)
 
     # https://www.mongodb.com/docs/manual/reference/command/fsyncUnlock/
     async def fsync_unlock(self, comment: str | None = None) -> None:
@@ -422,4 +474,4 @@ class Kover:
             "fsyncUnlock": 1.0,
             "comment": comment,
         })
-        await self.transport.request(command)
+        await self.request(command)

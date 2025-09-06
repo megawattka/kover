@@ -1,6 +1,15 @@
+"""Kover Typings Module."""
+
 from pathlib import Path
-from types import UnionType  # type: ignore  # noqa: F401
-from typing import Any, BinaryIO, Literal, Protocol, TextIO, runtime_checkable
+from typing import (
+    Any,
+    BinaryIO,
+    Final,
+    Literal,
+    Protocol,
+    TextIO,
+    runtime_checkable,
+)
 
 from .bson import SON
 
@@ -28,3 +37,6 @@ class CompressionContext(Protocol):
 
     def decompress(self, payload: bytes) -> bytes:
         ...
+
+
+DEFAULT_MONGODB_PORT: Final[int] = 27017

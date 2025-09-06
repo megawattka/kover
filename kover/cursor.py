@@ -1,3 +1,5 @@
+"""Kover Cursor Module."""
+
 from __future__ import annotations
 
 from collections import deque
@@ -165,7 +167,7 @@ class Cursor(Generic[T]):
         if self._cls is not None:
             documents = [
                 self._cls.from_document(doc) for doc in documents
-            ]  # type: ignore
+            ]  # pyright: ignore[reportAssignmentType]
         return cast("list[T]", documents)
 
     def __aiter__(self) -> Self:

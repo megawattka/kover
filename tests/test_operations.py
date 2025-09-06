@@ -4,10 +4,7 @@ import os
 import unittest
 from uuid import UUID, uuid4
 
-from kover.bson import ObjectId
-from kover.client import Kover
-from kover.network import AuthCredentials
-from kover.schema import Document
+from kover import AuthCredentials, Document, Kover
 
 
 class Sample(Document):
@@ -44,12 +41,11 @@ class TestMethods(unittest.IsolatedAsyncioTestCase):
 
     async def test_insert(self) -> None:
         doc = Sample.random()
-        obj_id = await self.collection.insert(doc)
-        assert isinstance(obj_id, ObjectId)
+        await self.collection.insert_one(doc)
 
         samples = [Sample.random() for _ in range(100)]
-        ids = await self.collection.insert(samples)
-        assert len(ids) == 100
+        r = await self.collection.insert_many(samples)
+        assert len(r) == 100
 
         count = await self.collection.count()
         assert count == 101, count

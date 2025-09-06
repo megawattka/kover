@@ -3,9 +3,8 @@ from typing import Literal
 import unittest
 from uuid import UUID
 
+from kover import Document, SchemaGenerationException, SchemaGenerator
 from kover.bson import Binary, Int64, ObjectId  # noqa: TC001
-from kover.exceptions import SchemaGenerationException
-from kover.schema import Document, SchemaGenerator
 
 
 class Sub(Document):
@@ -67,7 +66,7 @@ class SchemaTests(unittest.IsolatedAsyncioTestCase):
         super().__init__(*args, **kwargs)
         self.generator = SchemaGenerator()
 
-    async def test_A(self) -> None:
+    async def test_a(self) -> None:
         schema = self.generator.generate(A)["$jsonSchema"]
         properties = schema["properties"]
         assert len(schema["required"]) == 4  # _id included
@@ -87,7 +86,7 @@ class SchemaTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(SchemaGenerationException):
                 self.generator.generate(cls)
 
-    async def test_C(self) -> None:
+    async def test_c(self) -> None:
         schema = self.generator.generate(C)["$jsonSchema"]
         rq = schema["required"]
         ps = schema["properties"]
@@ -110,7 +109,7 @@ class SchemaTests(unittest.IsolatedAsyncioTestCase):
         for x in ["a", "e"]:
             assert len(ps[x]["required"]) == 3
 
-    async def test_D(self) -> None:
+    async def test_d(self) -> None:
         schema = self.generator.generate(D)["$jsonSchema"]
         assert len(schema["required"]) == 5
         ps = schema["properties"]

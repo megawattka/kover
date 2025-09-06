@@ -1,3 +1,5 @@
+"""Example of using transactions with Kover."""
+
 import asyncio
 import logging
 from typing import TYPE_CHECKING
@@ -23,13 +25,13 @@ async def main() -> None:
     collection = await kover.db.test.create_if_not_exists()
 
     async with session.start_transaction() as transaction:
-        await collection.insert(doc, transaction=transaction)
+        await collection.insert_one(doc, transaction=transaction)
         # it should error with duplicate key now
-        await collection.insert(doc, transaction=transaction)
+        await collection.insert_one(doc, transaction=transaction)
 
     exc = transaction.exception  # if exist
-    log.info(f"{exc}, {type(exc)}")
-    log.info(f"trx state: {transaction.state}")
+    log.info("%s, %s", exc, type(exc))
+    log.info("trx state: %s", transaction.state)
 
     found = await collection.find().to_list()
     log.info(found)  # no documents found due to transaction abort

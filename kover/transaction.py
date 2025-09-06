@@ -1,3 +1,5 @@
+"""Transaction implementation for Kover."""
+
 from __future__ import annotations
 
 import time
@@ -11,7 +13,7 @@ from .enums import TxnState
 if TYPE_CHECKING:
     from types import TracebackType
 
-    from .network import MongoTransport
+    from .client import Kover
     from .typings import xJsonT
 
 
@@ -19,7 +21,7 @@ class Transaction:
     """Represents a MongoDB transaction.
 
     Attributes:
-        transport : The transport used to communicate with MongoDB.
+        client : The client used to communicate with MongoDB.
         session_document : The transaction's session document.
         id : The transaction identifier.
         state : The current state of the transaction.
@@ -29,10 +31,10 @@ class Transaction:
 
     def __init__(
         self,
-        transport: MongoTransport,
+        client: Kover,
         session_document: xJsonT,
     ) -> None:
-        self.transport = transport
+        self.client = client
         self.session_document: xJsonT = session_document
         self.id: Int64 = Int64(-1)
         self.state: TxnState = TxnState.NONE
@@ -74,7 +76,7 @@ class Transaction:
             "txnNumber": self.id,
             "autocommit": False,
         }
-        await self.transport.request(command)
+        await self.client.request(command)
 
     async def abort(self) -> None:
         """Abort the transaction."""
@@ -86,7 +88,7 @@ class Transaction:
             "txnNumber": self.id,
             "autocommit": False,
         }
-        await self.transport.request(command)
+        await self.client.request(command)
 
     async def __aenter__(self) -> Self:
         if not self.is_active:

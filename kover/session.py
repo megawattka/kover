@@ -1,3 +1,5 @@
+"""Session Module for Kover."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -6,7 +8,7 @@ from .helpers import classrepr
 from .transaction import Transaction
 
 if TYPE_CHECKING:
-    from .client import MongoTransport
+    from .client import Kover
     from .typings import xJsonT
 
 
@@ -19,13 +21,17 @@ class Session:
         transport : The transport used to communicate with MongoDB.
     """
 
-    def __init__(self, document: xJsonT, transport: MongoTransport) -> None:
+    def __init__(self, document: xJsonT, client: Kover) -> None:
         self.document: xJsonT = document
-        self.transport = transport
+        self.client = client
 
     def start_transaction(self) -> Transaction:
-        """Start a new transaction for this session."""
+        """Start a new transaction for this session.
+
+        Returns:
+            A new transaction object associated with this session
+        """
         return Transaction(
-            transport=self.transport,
+            client=self.client,
             session_document=self.document,
         )

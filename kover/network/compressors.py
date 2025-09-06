@@ -1,3 +1,5 @@
+"""Compression algorithms for network layer."""
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -58,7 +60,15 @@ class _SnappyContext(BaseModel):
 
 @lru_cache
 def get_context_by_id(compressor_id: int) -> CompressionContext:
-    """Get the compression context by the compressor id."""
+    """Get the compression context by the compressor id.
+
+    Raises:
+        ModuleNotFoundError: If the requested compression module
+            is not available.
+
+    Returns:
+        An instance of the requested compression context.
+    """
     compressors = {
         1: (_SnappyContext, _HAVE_SNAPPY, "Snappy"),
         2: (_ZlibContext, True, ""),
