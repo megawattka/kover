@@ -54,7 +54,7 @@ indent-style = "space"
 docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint]
-exclude = ["kover/bson"]
+exclude = ["kover/bson", "benchmarks"]
 ignore = [
     "INP001",  # __init__.py in public namespaces
     "TD003",  # issue links for todos
@@ -150,5 +150,5 @@ exclude = [
 ]
 
 [tool.pyright]
-exclude = ["kover/bson"]
+exclude = ["kover/bson", "benchmarks"]
 typeCheckingMode = "strict"
