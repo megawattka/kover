@@ -70,7 +70,7 @@ class Delete(_ModelMixin):
         """
         return filter_non_null({
             "filter": self.q,
-            "multi": False if self.limit == 1 else True,
+            "multi": self.limit != 1,
             "hint": self.hint,
             "collation": self.collation,
         })
