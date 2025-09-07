@@ -202,9 +202,9 @@ class SchemaGenerator:
 
     @staticmethod
     def _generate_metadata(metadata: list[Any]) -> xJsonT:
-        for _meta in metadata:
-            if isinstance(_meta, SchemaMetadata):
-                return _meta.serialize()
+        for meta in metadata:
+            if isinstance(meta, SchemaMetadata):
+                return meta.serialize()
         return {}
 
 

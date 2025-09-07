@@ -76,7 +76,7 @@ class MongoTransport:
                 if not self._writer.is_closing():
                     self._writer.close()
 
-    async def send(self, msg: bytes) -> None:
+    async def _send(self, msg: bytes) -> None:
         """Send a message to the MongoDB server.
 
         Raises:
@@ -87,7 +87,7 @@ class MongoTransport:
         self._writer.write(msg)
         await self._writer.drain()
 
-    async def recv(self, size: int) -> bytes:
+    async def _recv(self, size: int) -> bytes:
         """Receive a message from the MongoDB server.
 
         Returns:
@@ -119,11 +119,11 @@ class MongoTransport:
             transaction.apply_to(doc)
         rid, msg = self._helper.get_message(doc, compressor=self._compressor)
 
-        await self.send(msg)
+        await self._send(msg)
         if wait_response:
-            header = await self.recv(16)
+            header = await self._recv(16)
             length, op_code = self._helper.verify_rid(header, rid)
-            data = await self.recv(length - 16)  # exclude header
+            data = await self._recv(length - 16)  # exclude header
             reply = self._helper.get_reply(data, op_code)
         else:  # cases like kover.shutdown()
             return {}

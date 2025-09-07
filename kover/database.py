@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from .typings import xJsonT
 
 
-@classrepr("name")
+@classrepr("name", "client")
 class Database:
     """Represents a database instance, providing methods to manage database.
 

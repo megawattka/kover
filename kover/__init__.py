@@ -20,11 +20,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-__version__ = "2.7.0"
+__version__ = "2.7.2"
 __author__ = "megawattka"
 __license__ = "MIT"
 __copyright__ = "Copyright (C) 2024-present megawattka"
 
+from .bulk_write_builder import BulkWriteBuilder
 from .client import Kover
 from .collection import Collection
 from .cursor import Cursor
@@ -65,6 +66,7 @@ from .typings import xJsonT
 __all__ = (
     "AuthCredentials",
     "BuildInfo",
+    "BulkWriteBuilder",
     "Collation",
     "CollationStrength",
     "Collection",

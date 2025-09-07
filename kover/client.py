@@ -239,6 +239,18 @@ class Kover:
         finally:
             await self._pool.put(conn)
 
+    async def bulk_write(
+        self,
+        document: xJsonT,
+        transaction: Transaction | None = None,
+    ) -> xJsonT:
+        """Execute a bulkWrite operation and return info about it.
+
+        Returns:
+            Document, containing info about this operation.
+        """
+        return await self.request(document, transaction=transaction)
+
     async def refresh_sessions(self, sessions: list[Session]) -> None:
         """Refresh the provided list of sessions.
 

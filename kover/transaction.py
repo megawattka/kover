@@ -9,6 +9,7 @@ from typing_extensions import Self
 
 from .bson import Int64
 from .enums import TxnState
+from .helpers import classrepr
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
     from .typings import xJsonT
 
 
+@classrepr("_id", "state", "session_document")
 class Transaction:
     """Represents a MongoDB transaction.
 
@@ -36,7 +38,7 @@ class Transaction:
     ) -> None:
         self.client = client
         self.session_document: xJsonT = session_document
-        self.id: Int64 = Int64(-1)
+        self._id: Int64 = Int64(-1)
         self.state: TxnState = TxnState.NONE
         self.action_count: int = 0
         self.exception: BaseException | None = None
