@@ -1,81 +1,206 @@
 # kover
+![Build Status](https://img.shields.io/github/actions/workflow/status/megawattka/kover/actions.yml) ![License](https://img.shields.io/github/license/megawattka/kover) ![Python - Req](https://img.shields.io/badge/python-3.10+-blue) ![Pypi Status](https://img.shields.io/pypi/status/kover) ![Last Commit](https://img.shields.io/github/last-commit/megawattka/kover) ![MongoDB](https://img.shields.io/badge/MongoDB-6.0+-green)
 
-![Build Status](https://img.shields.io/github/actions/workflow/status/megawattka/kover/actions.yml)
-![License](https://img.shields.io/github/license/megawattka/kover)
-![Python - Req](https://img.shields.io/badge/python-3.10+-blue)
-![Pypi Status](https://img.shields.io/pypi/status/kover)
-![Last Commit](https://img.shields.io/github/last-commit/megawattka/kover)
-![MongoDB](https://img.shields.io/badge/MongoDB-6.0+-green)
+Kover is a model-oriented, strictly-typed, and asynchronous Object-Document Mapper (ODM) for MongoDB. It was built from the ground up using `asyncio` to provide a clean and high-performance alternative to traditional database drivers that rely on thread pools.
 
-**Kover** is a model-orientied strictly typed mongodb object-document mapper (ODM) supporting local and remote servers.<br>
-This library was inspired by <a href=https://github.com/sakal/aiomongo>this project</a> i like it very much. Though its 9 years old.
-Kover is linted by Ruff and supports pyright strict type checking mode.
+This library is inspired by `aiomongo` but is modernized for recent versions of Python and MongoDB, with a strong emphasis on type safety and developer experience. Kover is linted with Ruff and supports `pyright`'s strict type-checking mode.
 
-```py
+## Features
+
+*   **Fully Asynchronous:** Uses `asyncio` for non-blocking database operations, avoiding the use of thread pool executors.
+*   **Pydantic Integration:** Define your document schemas using Pydantic-style models for automatic validation and serialization.
+*   **Strictly Typed:** Designed for modern Python, with full type hinting support for better static analysis and code completion.
+*   **Modern MongoDB Support:** Built for MongoDB 6.0+ and omits deprecated features for a cleaner API.
+*   **Comprehensive API:** Supports nearly all of PyMongo's features, including CRUD operations, bulk writes, transactions, and GridFS.
+*   **Authentication:** Supports all standard MongoDB authentication mechanisms.
+
+**Note:** The `kover.bson` package is adapted from the `pymongo` source code.
+
+## Dependencies
+- `Python 3.10+`
+- `MongoDB 6.0+`
+- `pydantic>=2.10.6`
+- `dnspython>=2.7.0`
+
+## Installation
+
+```bash
+pip install kover
+```
+Optional dependencies for compression can be installed with:
+```bash
+pip install kover[snappy,zstd]
+```
+
+## Quick Start
+
+Connect to MongoDB, create a client, and perform a simple query.
+
+```python
 import asyncio
+import logging
 
-from kover import AuthCredentials, Kover
+from kover import Kover
 
+log = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 async def main():
-    # or AuthCredentials.from_environ()
-    # (requires MONGO_USER and MONGO_PASSWORD environment variables)
-    # (remove if no auth present)
-    credentials = AuthCredentials(username="<username>", password="<password>")
-    client = await Kover.make_client(credentials=credentials)
-    # OR
-    client = await Kover.from_uri("mongodb://user:pass@host:port?tls=false")
+    # Connect using a connection string
+    client = await Kover.from_uri("mongodb://user:pass@host:port/?tls=false")
+    
+    # Or, create a client programmatically
+    # from kover import AuthCredentials
+    # credentials = AuthCredentials(username="<user>", password="<pass>")
+    # client = await Kover.make_client(credentials=credentials)
 
-    found = await client.db.test.find().limit(10).to_list()
-    print(found)
+    db = client.testdb
+    collection = db.test_collection
+
+    # Insert a document
+    await collection.insert_one({"message": "Hello, Kover!"})
+
+    # Find documents
+    found = await collection.find().to_list()
+    log.info(found)
+
+    await client.close()
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-The main reason why i created this project is that Motor - official async wrapper for mongodb, uses ThreadPool executor and it's just a wrapper around pymongo. In general thats slower than clear asyncio and looks more dirty.
-- 02.12.24 UPDATE: pymongo added async support but its kinda messed up. pymongo's code looks complicated, dirty and unclean.
+## Examples
 
-# Dependencies
-- All platforms.
-- python 3.10+
-- MongoDB 6.0+ (not sure about older versions)
-- pydantic 2.10.6 or later
-- dnspython 2.7.0 or later
+### Defining Schemas with Pydantic
 
-# Features
-Almost all features from pymongo. All auth types are supported. Integration with Pydantic supported.
-this lib was built for new mongod versions. All features that were marked as DEPRECATED in docs
-were NOT added. See docs for references. The kover.bson package was entirely copied from pymongo source code. I do not own these files.
+Kover leverages Pydantic for defining document structures. This provides data validation, serialization, and a clear, explicit schema.
 
-### Cursors
-if you just need list:
-
-```py
-items = await db.test.find().limit(1000).batch_size(50).to_list()
-```
-
-### or
-```py
-async with db.test.find().limit(1000).batch_size(50) as cursor:
-    async for item in cursor:
-        print(item)
-```
-### if collection has specific schema:
-```py
+```python
+from uuid import UUID
 from kover import Document
 
 class User(Document):
+    """A user document schema."""
+
     uuid: UUID
     name: str
     age: int
-
-
-async with db.test.find(cls=User).limit(1000) as cursor:
-    async for item in cursor:
-        print(item) # its now User
-
 ```
-# See more examples in ./examples folder.
 
-# If you found a bug, open an issue please, or even better create a pull request, thx ❤️
+You can even generate and enforce a JSON schema on the collection in MongoDB.
+
+```python
+from kover import SchemaGenerator
+
+# Generate a schema from the User model
+generator = SchemaGenerator()
+schema = generator.generate(User)
+
+# Apply the schema to the collection
+collection = await client.db.users.create_if_not_exists()
+await collection.set_validator(schema)
+```
+
+### Inserting Documents
+
+You can insert Pydantic model instances directly into a collection.
+
+```python
+from uuid import uuid4
+
+user = User(name="Jane Doe", age=30, uuid=uuid4())
+result = await client.db.users.insert_one(user)
+log.info("Inserted user with ID: %s", result)
+```
+
+### Querying Documents
+
+Kover's cursor provides a powerful and flexible way to retrieve data.
+
+**Iterating over a Cursor:**
+```python
+# The cursor asynchronously yields `User` objects
+async with client.db.users.find(cls=User).limit(100) as cursor:
+    async for user in cursor:
+        log.info("User: %s, Age: %d", user.name, user.age)
+```
+
+**Fetching all results into a list:**
+```python
+users_list = await client.db.users.find(cls=User).to_list()
+```
+
+### Updating and Deleting
+
+Use `Update` and `Delete` models to construct operations. This approach makes it clear which documents are being targeted and what modifications are being made.
+
+```python
+from kover import Update, Delete
+
+# Update a user's age
+update = Update({"name": "Jane Doe"}, {"$set": {"age": 31}})
+await client.db.users.update(update)
+
+# Delete a user
+delete = Delete({"name": "Jane Doe"}, limit=1)
+n_deleted = await client.db.users.delete(delete)
+log.info("Documents deleted: %d", n_deleted)
+```
+
+### Bulk Writes
+
+Perform multiple operations in a single request for efficiency.
+
+```python
+from kover import BulkWriteBuilder, Update, Delete
+
+builder = BulkWriteBuilder()
+builder.add_insert([{"product": "A"}], ns="testdb.inventory")
+builder.add_update(
+    Update({"product": "A"}, {"$set": {"quantity": 10}}),
+    ns="testdb.inventory",
+)
+builder.add_delete(Delete({"product": "A"}, limit=1), ns="testdb.inventory")
+
+await client.bulk_write(builder.build())
+```
+
+### Transactions
+
+Kover supports ACID transactions for operations that require atomicity.
+
+```python
+session = await client.start_session()
+collection = client.db.test
+
+async with session.start_transaction() as transaction:
+    await collection.insert_one({"step": 1}, transaction=transaction)
+    await collection.insert_one({"step": 2}, transaction=transaction)
+    # The transaction will be automatically committed on successful exit.
+    # If an exception occurs, it will be aborted.
+```
+
+### GridFS for Large Files
+
+Store and retrieve large files (e.g., images, videos) seamlessly with GridFS.
+
+```python
+from kover.gridfs import GridFS
+
+# Get a GridFS instance for a database
+fs = await GridFS(client.get_database("files")).indexed()
+
+# Put a file into GridFS
+file_id = await fs.put(b"Hello, large world!", filename="greeting.txt")
+
+# Retrieve the file
+file_info, file_bytes_io = await fs.get_by_file_id(file_id)
+
+log.info(file_info)
+log.info(file_bytes_io.read())
+```
+
+## Found a Bug?
+
+If you find a bug, please [open an issue](https://github.com/megawattka/kover/issues). Better yet, create a pull request with a fix. Contributions are welcome! ❤️

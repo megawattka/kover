@@ -26,6 +26,7 @@ def _get_module(name: Literal["zstd", "snappy"]) -> ModuleType:
     return importlib.import_module(name)
 
 
+# TODO @megawattka: configurable level?
 class _ZlibContext(BaseModel):
     """Zlib compression context."""
 
