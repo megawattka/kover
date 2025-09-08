@@ -1,5 +1,10 @@
 # kover
-![Build Status](https://img.shields.io/github/actions/workflow/status/megawattka/kover/actions.yml) ![License](https://img.shields.io/github/license/megawattka/kover) ![Python - Req](https://img.shields.io/badge/python-3.10+-blue) ![Pypi Status](https://img.shields.io/pypi/status/kover) ![Last Commit](https://img.shields.io/github/last-commit/megawattka/kover) ![MongoDB](https://img.shields.io/badge/MongoDB-6.0+-green)
+![Build Status](https://img.shields.io/github/actions/workflow/status/megawattka/kover/actions.yml)
+![License](https://img.shields.io/github/license/megawattka/kover)
+![Python - Req](https://img.shields.io/badge/python-3.10+-blue)
+![Pypi Status](https://img.shields.io/pypi/status/kover)
+![Last Commit](https://img.shields.io/github/last-commit/megawattka/kover)
+![MongoDB](https://img.shields.io/badge/MongoDB-6.0+-green)
 
 Kover is a model-oriented, strictly-typed, and asynchronous Object-Document Mapper (ODM) for MongoDB. It was built from the ground up using `asyncio` to provide a clean and high-performance alternative to traditional database drivers that rely on thread pools.
 
@@ -18,7 +23,6 @@ This library is inspired by `aiomongo` but is modernized for recent versions of 
 
 ## Dependencies
 - `Python 3.10+`
-- `MongoDB 6.0+`
 - `pydantic>=2.10.6`
 - `dnspython>=2.7.0`
 
