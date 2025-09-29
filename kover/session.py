@@ -18,7 +18,7 @@ class Session:
 
     Attributes:
         document : The session document associated with the session.
-        transport : The transport used to communicate with MongoDB.
+        client : The client used to communicate with MongoDB.
     """
 
     def __init__(self, document: xJsonT, client: Kover) -> None:

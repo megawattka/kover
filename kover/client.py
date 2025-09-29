@@ -14,8 +14,9 @@ from .helpers import (
     filter_non_null,
     maybe_to_dict,
 )
-from .models import BuildInfo, WriteConcern
+from .models import BuildInfo, ReadConcern, WriteConcern
 from .network import MongoTransport, SrvResolver
+from .schema import SchemaGenerator
 from .session import Session
 from .typings import DEFAULT_MONGODB_PORT
 from .uri_parser import parse_uri
@@ -23,11 +24,12 @@ from .uri_parser import parse_uri
 if TYPE_CHECKING:
     from .models import ReplicaSetConfig
     from .network import AuthCredentials
+    from .schema import Document
     from .transaction import Transaction
     from .typings import COMPRESSION_T, DocumentT, xJsonT
 
 
-def create_connection_pool(
+def _create_connection_pool(
     host: str,
     port: int,
     size: int,
@@ -64,6 +66,7 @@ class Kover:
         self._credentials = credentials
         self._compression = compression
         self._application = application
+        self._schema_generator = SchemaGenerator()
 
     async def __aenter__(self) -> Self:
         return self
@@ -115,6 +118,17 @@ class Kover:
         self._write_concern = WriteConcern(w=w, j=j, wtimeout=wtimeout)
         return self
 
+    def generate_schema(self, cls: type[Document]) -> xJsonT:
+        """Generate a JSON schema for the provided Document class.
+
+        Parameters:
+            cls : The Document class for which to generate the schema.
+
+        Returns:
+            A JSON schema as a dictionary.
+        """
+        return self._schema_generator.generate(cls)
+
     @classmethod
     async def from_uri(
         cls,
@@ -154,7 +168,7 @@ class Kover:
             nodes = [host]
 
         args = (nodes[0], parsed.port, parsed.max_pool_size)
-        pool = create_connection_pool(*args, tls=parsed.tls, loop=loop)
+        pool = _create_connection_pool(*args, tls=parsed.tls, loop=loop)
 
         return cls(
             w=parsed.write_concern,
@@ -196,7 +210,7 @@ class Kover:
         Returns:
             An instance of the Kover client.
         """
-        pool = create_connection_pool(
+        pool = _create_connection_pool(
             host, port, max_pool_size, tls=tls, loop=loop)
 
         return cls(
@@ -315,6 +329,25 @@ class Kover:
             name : The name of the database to drop.
         """
         await self.request({"dropDatabase": 1.0}, db_name=name)
+
+    # https://www.mongodb.com/docs/manual/reference/command/dropConnections
+    async def drop_connections(
+        self,
+        hosts: list[str],
+        comment: str | None = None,
+    ) -> None:
+        """Drop connections to the specified hosts.
+
+        Parameters:
+            hosts : A list of hostnames whose connections should be dropped.
+            comment : Optional comment for the operation.
+        """
+        document: xJsonT = filter_non_null({
+            "dropConnections": 1.0,
+            "hostAndPort": hosts,
+            "comment": comment,
+        })
+        await self.request(document)
 
     # https://www.mongodb.com/docs/manual/reference/command/replSetInitiate/
     async def replica_set_initiate(
@@ -487,3 +520,54 @@ class Kover:
             "comment": comment,
         })
         await self.request(command)
+
+    # https://www.mongodb.com/docs/manual/reference/command/getDefaultRWConcern
+    async def get_default_rw_concern(
+        self,
+        *,
+        in_memory: bool = False,
+        comment: str | None = None,
+    ) -> tuple[ReadConcern, WriteConcern]:
+        """Get the default read and write concern settings for the database.
+
+        Parameters:
+            in_memory : If True, returns a WriteConcern instance without
+                querying the server, by default False.
+            comment : Optional comment for the operation.
+
+        Returns:
+            An instance of WriteConcern representing the default settings.
+        """
+        command = filter_non_null({
+            "getDefaultRWConcern": 1.0,
+            "inMemory": in_memory,
+            "comment": comment,
+        })
+        resp = await self.request(command)
+        read_concern = ReadConcern(level=resp["defaultReadConcern"]["level"])
+        write_concern = WriteConcern(w=resp["defaultWriteConcern"]["w"])
+
+        return read_concern, write_concern
+
+    # https://www.mongodb.com/docs/manual/reference/command/getParameter
+    async def get_parameter(self, name: str) -> object:
+        """Get the value of a specific server parameter.
+
+        Parameters:
+            name : The name of the server parameter to retrieve.
+
+        Returns:
+            A Parameter itself.
+        """
+        resp = await self.request({"getParameter": 1.0, name: 1.0})
+        return resp[name]
+
+    # https://www.mongodb.com/docs/manual/reference/command/setParameter
+    async def set_parameter(self, name: str, value: object) -> None:
+        """Set the server parameter at runtime.
+
+        Parameters:
+            name : The name of the server parameter to set.
+            value : The value of that parameter.
+        """
+        await self.request({"setParameter": 1.0, name: value})

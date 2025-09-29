@@ -1,6 +1,6 @@
 [project]
 name = "kover"
-version = "2.7.2"
+version = "2.7.3"
 description = "Fully async mongodb driver for mongod and replica sets."
 readme = "README.md"
 authors = [{ name = "megawattka", email = "gunter56741@gmail.com" }]
@@ -21,9 +21,6 @@ classifiers = [
 keywords = [
     "kover",
     "mongodb",
-    "mongo kover",
-    "Mongo Kover",
-    "Kover API mongo",
     "mongod driver",
     "async driver",
     "mongo async",

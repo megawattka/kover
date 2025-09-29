@@ -24,7 +24,7 @@ class BulkWriteBuilder:
         let: xJsonT | None = None,
         errors_only: bool = False,
         cursor_batch_size: int | None = None,
-        write_concern: str = "majority",
+        write_concern: str | int = "majority",
     ) -> None:
         self.ordered = ordered
         self.bypass_document_validation = bypass_document_validation
@@ -66,29 +66,27 @@ class BulkWriteBuilder:
 
     def add_update(
         self,
-        *updates: Update,
+        update: Update,
         ns: str,
     ) -> None:
         """Adds an Update operations into the builder."""
         idx = self._get_ns_idx(ns)
-        for update in updates:
-            self._operations.append({
-                "update": idx,
-                **update.as_bulk_write_op(),
-            })
+        self._operations.append({
+            "update": idx,
+            **update.as_bulk_write_op(),
+        })
 
     def add_delete(
         self,
-        *deletes: Delete,
+        delete: Delete,
         ns: str,
     ) -> None:
         """Adds an Delete operations into the builder."""
         idx = self._get_ns_idx(ns)
-        for delete in deletes:
-            self._operations.append({
-                "delete": idx,
-                **delete.as_bulk_write_op(),
-            })
+        self._operations.append({
+            "delete": idx,
+            **delete.as_bulk_write_op(),
+        })
 
     def build(self) -> xJsonT:
         """Build the command.

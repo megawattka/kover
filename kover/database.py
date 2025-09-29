@@ -5,13 +5,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .collection import Collection
-from .helpers import classrepr, filter_non_null
+from .helpers import classrepr, filter_non_null, maybe_to_dict
 from .models import User
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from .client import Kover
+    from .models import WriteConcern
     from .session import Transaction
     from .typings import xJsonT
 
@@ -213,6 +214,28 @@ class Database:
             "comment": comment,
         })
         await self.command(command)
+
+    async def drop_all_users_from_database(
+        self,
+        write_concern: WriteConcern | None = None,
+        comment: str | None = None,
+    ) -> int:
+        """Drops all users from the database.
+
+        Parameters:
+            write_concern : Optional write concern for the operation.
+            comment : Optional comment for the operation.
+
+        Returns:
+            The number of users dropped.
+        """
+        command = filter_non_null({
+            "dropAllUsersFromDatabase": 1.0,
+            "writeConcern": maybe_to_dict(write_concern),
+            "comment": comment,
+        })
+        resp = await self.command(command)
+        return resp["n"]
 
     async def grant_roles_to_user(
         self,

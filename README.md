@@ -98,8 +98,7 @@ You can even generate and enforce a JSON schema on the collection in MongoDB.
 from kover import SchemaGenerator
 
 # Generate a schema from the User model
-generator = SchemaGenerator()
-schema = generator.generate(User)
+schema = client.generate_schema(User)
 
 # Apply the schema to the collection
 collection = await client.db.users.create_if_not_exists()

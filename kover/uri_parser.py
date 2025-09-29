@@ -103,10 +103,7 @@ def parse_uri(uri: str) -> ParsedUri:
 
     parts = urlparse(uri)
     parameters: CaseInsensitiveDict[Any] = CaseInsensitiveDict()
-
-    parsed = parse_qsl(parts.query)
-    for k, v in parsed:
-        parameters[k] = v
+    parameters.update(parse_qsl(parts.query))
 
     tls = _bool_from_str("tls", parameters.get("tls", "true"))
     app_name = parameters.get("appName")
