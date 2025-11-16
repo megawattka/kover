@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from bson import ObjectId
 from typing_extensions import overload
 
-from .bson import ObjectId
 from .cursor import Cursor
 from .enums import IndexDirection, IndexType, ValidationLevel
 from .helpers import classrepr, filter_non_null, maybe_to_dict

@@ -1,3 +1,4 @@
+# basic stuff
 uv.lock
 __pycache__
 .vscode
@@ -10,3 +11,10 @@ dist
 .ruff_cache
 .python-version
 .token
+Cargo.lock
+target
+
+# rust extensions. 
+Cargo.toml
+rust
+hatch_build.py

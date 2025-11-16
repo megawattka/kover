@@ -1,3 +1,5 @@
+"""Mixin classes used in this library."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -10,6 +12,8 @@ if TYPE_CHECKING:
 
 
 class EmptyReprMixin:
+    """Mixin that makes any class have empty str and repr."""
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
 

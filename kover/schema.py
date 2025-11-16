@@ -15,6 +15,7 @@ from typing import (
 )
 from uuid import UUID
 
+from bson import Binary, ObjectId  # noqa: TC002
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -24,10 +25,9 @@ from pydantic import (
 from pydantic.alias_generators import to_camel
 from typing_extensions import Self
 
-from ._internals import value_to_json_schema
-from .bson import Binary, ObjectId  # noqa: TC001
 from .exceptions import SchemaGenerationException
 from .helpers import classrepr, is_origin_ex, isinstance_ex
+from .internals import value_to_json_schema
 from .metadata import ExcludeIfNone, SchemaMetadata
 
 if TYPE_CHECKING:

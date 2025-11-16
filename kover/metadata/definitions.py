@@ -9,7 +9,7 @@ from annotated_types import GroupedMetadata
 from pydantic import Field
 from pydantic.alias_generators import to_camel
 
-from .._internals import EmptyReprMixin as _ReprMixin
+from ..internals import EmptyReprMixin as _ReprMixin
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

@@ -6,22 +6,22 @@ import datetime  # noqa: TC003
 import secrets
 from typing import Literal
 
+from bson import Binary  # noqa: TC002
 from pydantic import Field, model_validator
 from pydantic.functional_validators import (
     ModelWrapValidatorHandler,  # noqa: TC002
 )
 from typing_extensions import Self
 
-from .._internals._mixins import ModelMixin as _ModelMixin
-from ..bson import Binary  # noqa: TC001
 from ..enums import CollationStrength, IndexDirection, IndexType  # noqa: TC001
+from ..internals.mixins import ModelMixin as _ModelMixin
 from ..typings import COMPRESSION_T, AuthTypesT, xJsonT
 
 
 class HelloResult(_ModelMixin):
     """Represents the result of a hello command."""
 
-    me: str
+    me: str | None = Field(default=None)
     local_time: datetime.datetime
     connection_id: int
     read_only: bool
@@ -30,9 +30,9 @@ class HelloResult(_ModelMixin):
     compression: COMPRESSION_T = Field(default_factory=COMPRESSION_T)
     is_primary: bool = Field(alias="isWritablePrimary")
     primary_node: str | None = Field(default=None, alias="primary")
-    hosts: list[str] | None = None
-    set_name: str | None = None
-    set_version: int | None = None
+    hosts: list[str] | None = Field(default=None)
+    set_name: str | None = Field(default=None)
+    set_version: int | None = Field(default=None)
 
     @property
     def requires_auth(self) -> bool:

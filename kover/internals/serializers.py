@@ -1,6 +1,8 @@
+"""Core schema serializers used in kover.schema."""
+
 from __future__ import annotations
 
-import datetime
+from datetime import datetime
 from enum import Enum
 from typing import (
     TYPE_CHECKING,
@@ -11,9 +13,9 @@ from typing import (
 from typing import is_typeddict as t_is_typeddict
 from uuid import UUID
 
+from bson import Binary, Int64, ObjectId, Timestamp
 from typing_extensions import is_typeddict as te_is_typeddict
 
-from ..bson import Binary, Int64, ObjectId, Timestamp
 from ..exceptions import SchemaGenerationException, UnsupportedAnnotation
 from ..helpers import chain
 
@@ -31,7 +33,7 @@ _TYPE_MAP: dict[type, list[str]] = {
     type(None): ["null"],
     ObjectId: ["objectId"],
     bool: ["bool"],
-    datetime.datetime: ["date"],
+    datetime: ["date"],
     Binary: ["binData"],
     UUID: ["binData"],
     Timestamp: ["timestamp"],
@@ -120,6 +122,11 @@ def value_to_json_schema(
     *,
     is_optional: bool = False,
 ) -> xJsonT | None:
+    """Convert type hint into kover schema value.
+
+    Returns:
+        Serialized data as dict or None
+    """
     origin = get_origin(attr_t)
     if origin is None and _is_typeddict_ex(attr_t):
         origin = dict
@@ -137,7 +144,8 @@ def value_to_json_schema(
 
     elif attr_t in _TYPE_MAP:
         func = _serialize_simple_type
+
     if func is not None:
         return func(attr_t, is_optional=is_optional)  # pyright: ignore[reportArgumentType]
 
-    return None  # ruff requires this to be explicit
+    return None

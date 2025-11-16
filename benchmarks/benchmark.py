@@ -1,4 +1,8 @@
-import asyncio  # noqa: D100
+"""The main benchmark file."""
+
+from __future__ import annotations
+
+import asyncio
 import json
 import logging
 import os
@@ -6,6 +10,7 @@ from pathlib import Path
 import sys
 import time
 from typing import TYPE_CHECKING, Final
+from uuid import uuid4
 
 from motor.motor_tornado import MotorClient
 from pymongo import AsyncMongoClient
@@ -18,18 +23,20 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
-asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+if os.name == "nt":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 CONCURRENCIES: Final[list[int]] = [1, 2, 4, 8, 16, 32, 64, 96, 128, 160, 192, 256, 384, 512]  # noqa: E501
 RESULTS_DIR = Path(__file__).parent / "results"
 RESULTS_DIR.mkdir(exist_ok=True)
 
 
-def _random_document() -> "xJsonT":
+def _random_document() -> xJsonT:
     return {
         "name": os.urandom(8).hex(),
         "age": int.from_bytes(os.urandom(2), "little"),
-        "uuid": str(os.urandom(16).hex()),
+        "uuid": str(uuid4()),
     }
 
 
@@ -72,7 +79,7 @@ async def benchmark_kover() -> None:
 
 
 async def benchmark_pymongo() -> None:
-    """Entrypoint."""
+    """Entrypoint for pymongo benchmark."""
     client: AsyncMongoClient[xJsonT] = AsyncMongoClient("mongodb://main_m1:incunaby!@127.0.0.1:27017?tls=false")
 
     database = client.get_database("benchmarks")

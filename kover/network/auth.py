@@ -9,9 +9,9 @@ import os
 from typing import TYPE_CHECKING, Final
 from urllib.parse import unquote_plus
 
+from bson import Binary
 from pydantic import BaseModel, Field
 
-from ..bson import Binary
 from ..exceptions import CredentialsException
 
 if TYPE_CHECKING:

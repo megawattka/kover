@@ -5,9 +5,9 @@ from __future__ import annotations
 import datetime  # noqa: TC003
 from typing import Annotated
 
+from bson import Binary, ObjectId  # noqa: TC002
 from pydantic import Field
 
-from ..bson import Binary, ObjectId  # noqa: TC001
 from ..metadata import SchemaMetadata
 from ..schema import Document
 

@@ -9,10 +9,10 @@ import math
 from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, Final
 
+from bson import Binary, ObjectId
 from typing_extensions import Self
 
 from .. import Delete, Index
-from ..bson import Binary, ObjectId
 from ..enums import IndexDirection
 from .exceptions import GridFSFileNotFound, IncorrectGridFSData
 from .models import Chunk, File

@@ -19,8 +19,6 @@ This library is inspired by `aiomongo` but is modernized for recent versions of 
 *   **Comprehensive API:** Supports nearly all of PyMongo's features, including CRUD operations, bulk writes, transactions, and GridFS.
 *   **Authentication:** Supports all standard MongoDB authentication mechanisms.
 
-**Note:** The `kover.bson` package is adapted from the `pymongo` source code.
-
 ## Dependencies
 - `Python 3.10+`
 - `pydantic>=2.10.6`
@@ -48,6 +46,7 @@ from kover import Kover
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
 
 async def main():
     # Connect using a connection string
@@ -83,6 +82,7 @@ Kover leverages Pydantic for defining document structures. This provides data va
 ```python
 from uuid import UUID
 from kover import Document
+
 
 class User(Document):
     """A user document schema."""
@@ -141,6 +141,7 @@ Use `Update` and `Delete` models to construct operations. This approach makes it
 ```python
 from kover import Update, Delete
 
+
 # Update a user's age
 update = Update({"name": "Jane Doe"}, {"$set": {"age": 31}})
 await client.db.users.update(update)
@@ -157,6 +158,7 @@ Perform multiple operations in a single request for efficiency.
 
 ```python
 from kover import BulkWriteBuilder, Update, Delete
+
 
 builder = BulkWriteBuilder()
 builder.add_insert([{"product": "A"}], ns="testdb.inventory")

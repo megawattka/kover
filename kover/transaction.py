@@ -5,9 +5,9 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
+from bson import Int64
 from typing_extensions import Self
 
-from .bson import Int64
 from .enums import TxnState
 from .helpers import classrepr
 

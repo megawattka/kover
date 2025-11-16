@@ -1,6 +1,10 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "kover"
-version = "2.7.3"
+version = "2.7.5"
 description = "Fully async mongodb driver for mongod and replica sets."
 readme = "README.md"
 authors = [{ name = "megawattka", email = "gunter56741@gmail.com" }]
@@ -27,9 +31,9 @@ keywords = [
     "kover mongodb",
 ]
 dependencies = [
-    "dnspython >= 2.7.0",
-    "pydantic >= 2.10.6",
-    "typing-extensions >= 4.12.2",
+    "pydantic>=2.10.6",
+    "pymongo>=4.15.3",
+    "typing-extensions>=4.12.2",
 ]
 
 [project.urls]
@@ -51,7 +55,7 @@ indent-style = "space"
 docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint]
-exclude = ["kover/bson", "benchmarks"]
+exclude = ["benchmarks"]
 ignore = [
     "INP001",  # __init__.py in public namespaces
     "TD003",  # issue links for todos
@@ -116,36 +120,39 @@ convention = "google"
 [tool.uv]
 link-mode="copy"
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [dependency-groups]
 dev = [
     "flake8 >= 7.3.0",
-    "matplotlib>=3.10.5",
+    "hatchling>=1.27.0",
     "motor>=3.7.1",
-    "pymongo >= 4.14.0",
     "pyright >= 1.1.403",
     "ruff >= 0.12.3",
-    "setuptools >= 80.9.0",
     "tornado>=6.5.2",
 ]
 
 [tool.hatch.build]
 include = [
-    "/README.md",
-    "/requirements.txt",
-    "/CODE_OF_CONDUCT.md",
-    "/kover"
+    "README.md",
+    "requirements.txt",
+    "CODE_OF_CONDUCT.md",
+    "kover",
+    "Cargo.toml",
+    # "rust/*.rs"
 ]
 exclude = [
-    "/benchmarks",
-    "/examples",
-    "/tests",
-    "/setup.py"
+    "benchmarks",
+    "examples",
+    "tests",
 ]
 
 [tool.pyright]
-exclude = ["kover/bson", "benchmarks"]
+exclude = ["benchmarks"]
 typeCheckingMode = "strict"
+
+# [tool.maturin]
+# python-source = "."
+# module-name = "kover.rlib"
+# bindings = "pyo3"
+
+# [tool.hatch.build.targets.wheel.hooks.custom]
+

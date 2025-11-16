@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from bson import ObjectId  # noqa: TC002
 from pydantic import Field
 
-from .._internals._mixins import ModelMixin as _ModelMixin
-from ..bson import ObjectId  # noqa: TC001
+from ..internals.mixins import ModelMixin as _ModelMixin
 from ..typings import xJsonT  # noqa: TC001
 
 

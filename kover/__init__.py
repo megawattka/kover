@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-__version__ = "2.7.3"
+__version__ = "2.7.5"
 __author__ = "megawattka"
 __license__ = "MIT"
 __copyright__ = "Copyright (C) 2024-present megawattka"
@@ -57,7 +57,7 @@ from .models import (
     User,
     WriteConcern,
 )
-from .network import AuthCredentials, MongoTransport, SrvResolver
+from .network import AuthCredentials, MongoTransport
 from .schema import Document, SchemaGenerator
 from .session import Session
 from .transaction import Transaction
@@ -90,7 +90,6 @@ __all__ = (
     "SchemaGenerationException",
     "SchemaGenerator",
     "Session",
-    "SrvResolver",
     "Transaction",
     "Update",
     "User",

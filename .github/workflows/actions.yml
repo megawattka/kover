@@ -30,4 +30,4 @@ jobs:
       - name: Lint with ruff
         run: |
           python3 -m pip install ruff
-          python3 -m ruff check ./ --exclude kover/bson
+          python3 -m ruff check ./

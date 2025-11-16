@@ -8,13 +8,13 @@ import struct
 import sys
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from .. import __version__
-from ..bson import (
+from bson import (
     DEFAULT_CODEC_OPTIONS,
-    _decode_all_selective,  # pyright: ignore[reportPrivateUsage]
-    _make_c_string,  # pyright: ignore[reportPrivateUsage]
+    decode,  # type: ignore[reportUnknownVariableType]
     encode,
 )
+
+from .. import __version__
 from ..codes import get_exception_name
 from ..exceptions import OperationFailure
 from . import get_context_by_id
@@ -63,7 +63,7 @@ class WireHelper:
         )
         return b"".join([
             struct.pack("<i", 0),  # flags
-            _make_c_string(f"{collection}.$cmd"),
+            f"{collection}.$cmd".encode() + b"\x00",
             struct.pack("<i", 0),  # to_skip
             struct.pack("<i", -1),  # to_return (all)
             encoded,  # doc itself
@@ -113,11 +113,8 @@ class WireHelper:
             return self.get_reply(message, op_code=op_code)
         else:
             raise AssertionError(f"Unsupported op_code from server: {op_code}")
-        return _decode_all_selective(
-            message,
-            codec_options=DEFAULT_CODEC_OPTIONS,
-            fields=None,
-        )[0]
+
+        return decode(message, codec_options=DEFAULT_CODEC_OPTIONS)
 
     def get_message(
         self,

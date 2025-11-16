@@ -15,7 +15,7 @@ from .helpers import (
     maybe_to_dict,
 )
 from .models import BuildInfo, ReadConcern, WriteConcern
-from .network import MongoTransport, SrvResolver
+from .network import MongoTransport
 from .schema import SchemaGenerator
 from .session import Session
 from .typings import DEFAULT_MONGODB_PORT
@@ -146,36 +146,33 @@ class Kover:
         """
         parsed = parse_uri(uri)
 
-        if parsed.scheme == "mongodb+srv":
-            resolver = SrvResolver()
-            nodes = await resolver.get_nodes(parsed.hostname)
-            assert nodes, "Node resolution failed."
-        else:
-            nodes = [parsed.hostname]
+        fhost, fport = parsed.node_list[0]
+        tls = parsed.options.get("tls", False)
+        compressors = parsed.options.get("compressors")
+        application = {"name": parsed.options.get("appName")}
+        w = parsed.options.get("w", "majority")
 
-        transport = MongoTransport(
-            nodes[0], parsed.port, loop=loop, tls=parsed.tls)
-
+        transport = MongoTransport(fhost, fport, loop=loop, tls=tls)
         await transport.connect()
+
         hello = await transport.hello(
-            parsed.compressors, parsed.credentials, parsed.application)
+            compressors, parsed.credentials, application)
         await transport.close()
 
         if not hello.is_primary:
             assert hello.primary_node, "Primary node resolution failed."
 
-            host, _ = hello.primary_node.split(":")
-            nodes = [host]
+            fhost, fport = hello.primary_node.split(":")
 
-        args = (nodes[0], parsed.port, parsed.max_pool_size)
-        pool = _create_connection_pool(*args, tls=parsed.tls, loop=loop)
+        args = (fhost, int(fport), parsed.options.get("maxPoolSize", 100) - 4)
+        pool = _create_connection_pool(*args, tls=tls, loop=loop)
 
         return cls(
-            w=parsed.write_concern,
+            w=w,
             pool=pool,
             credentials=parsed.credentials,
-            compression=parsed.compressors,
-            application=parsed.application,
+            compression=compressors,
+            application=application,
         )
 
     @classmethod

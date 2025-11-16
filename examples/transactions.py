@@ -4,8 +4,9 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+from bson import ObjectId
+
 from kover import AuthCredentials, Kover
-from kover.bson import ObjectId
 
 if TYPE_CHECKING:
     from kover import xJsonT

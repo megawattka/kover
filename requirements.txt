@@ -1,3 +1,4 @@
-pydantic >= 2.10.6 
-typing-extensions >= 4.12.2
-dnspython >= 2.7.0
+pydantic>=2.10.6 
+typing-extensions>=4.12.2
+dnspython>=2.7.0
+multidict>=6.7.0

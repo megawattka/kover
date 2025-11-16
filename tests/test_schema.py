@@ -3,8 +3,9 @@ from typing import Literal
 import unittest
 from uuid import UUID
 
+from bson import Binary, Int64, ObjectId  # noqa: TC002
+
 from kover import Document, SchemaGenerationException, SchemaGenerator
-from kover.bson import Binary, Int64, ObjectId  # noqa: TC001
 
 
 class Sub(Document):

@@ -1,7 +1,7 @@
 # powershell run_tests.sh
 
 echo "running ruff tests..."
-ruff check --exclude ./kover/bson
+ruff check
 
 echo "running unittests..."
 python -m unittest discover ./tests --quiet

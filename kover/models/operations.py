@@ -3,11 +3,22 @@
 from __future__ import annotations
 
 from pydantic import BaseModel
+from typing_extensions import NotRequired, TypedDict, Unpack
 
-from .._internals._mixins import ModelMixin as _ModelMixin
 from ..helpers import filter_non_null
+from ..internals.mixins import ModelMixin as _ModelMixin
 from ..typings import xJsonT  # noqa: TC001
 from .other import Collation  # noqa: TC001
+
+
+class _UpdateKwargs(TypedDict):
+    """Kwargs used in Update model."""
+
+    upsert: NotRequired[bool]
+    multi: NotRequired[bool]
+    collation: NotRequired[Collation | None]
+    array_filters: NotRequired[xJsonT | None]
+    hint: NotRequired[str | None]
 
 
 # https://www.mongodb.com/docs/manual/reference/command/update/#syntax
@@ -20,7 +31,7 @@ class Update(_ModelMixin):
         u: xJsonT,
         c: xJsonT | None = None,
         /,
-        **kwargs: object,
+        **kwargs: Unpack[_UpdateKwargs],
     ) -> None:
         BaseModel.__init__(self, q=q, u=u, c=c, **kwargs)
 
@@ -50,11 +61,19 @@ class Update(_ModelMixin):
         })
 
 
+class _DeleteKwargs(TypedDict):
+    """Kwargs used in Delete model."""
+
+    limit: int
+    collation: NotRequired[Collation | None]
+    hint: NotRequired[xJsonT | str | None]
+
+
 # https://www.mongodb.com/docs/manual/reference/command/delete/#syntax
 class Delete(_ModelMixin):
     """Represents a MongoDB delete document."""
 
-    def __init__(self, q: xJsonT, /, **kwargs: object) -> None:
+    def __init__(self, q: xJsonT, /, **kwargs: Unpack[_DeleteKwargs]) -> None:
         BaseModel.__init__(self, q=q, **kwargs)
 
     q: xJsonT  # query

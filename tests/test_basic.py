@@ -3,6 +3,8 @@ from __future__ import annotations
 import unittest
 from uuid import UUID, uuid4
 
+from bson import Binary
+
 from kover import (
     AuthCredentials,
     Delete,
@@ -10,7 +12,6 @@ from kover import (
     Kover,
     SchemaGenerator,
 )
-from kover.bson import Binary
 
 
 class User(Document):

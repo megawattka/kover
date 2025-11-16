@@ -10,9 +10,9 @@ from typing import (
     cast,
 )
 
+from bson import Int64
 from typing_extensions import Self
 
-from .bson import Int64
 from .helpers import filter_non_null
 
 if TYPE_CHECKING:
@@ -190,6 +190,7 @@ class Cursor(Generic[T]):
             if int(self._id) == 0 or self._second_iteration:
                 await self.close()
                 raise StopAsyncIteration
+
             self._second_iteration = True
             command: xJsonT = {
                 "getMore": Int64(self._id),
@@ -202,8 +203,10 @@ class Cursor(Generic[T]):
             docs = request["cursor"]["nextBatch"]
             self._retrieved += len(docs)
             self._docs.extend(self._map_docs(docs))
+
         if self._docs:
             return self._docs.popleft()
+
         raise StopAsyncIteration
 
     async def close(self) -> None:

@@ -99,6 +99,7 @@ class MongoTransport:
         # ... 13.05.2024 # https://stackoverflow.com/a/29068174
         if not self._connected:
             raise ConnectionError("Not connected to the MongoDB server.")
+
         return await self._reader.readexactly(size)
 
     async def request(
