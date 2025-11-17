@@ -149,10 +149,10 @@ exclude = [
 exclude = ["benchmarks"]
 typeCheckingMode = "strict"
 
-# [tool.maturin]
-# python-source = "."
-# module-name = "kover.rlib"
-# bindings = "pyo3"
+[tool.maturin]
+python-source = "."
+module-name = "kover.rlib"
+bindings = "pyo3"
 
 # [tool.hatch.build.targets.wheel.hooks.custom]
 

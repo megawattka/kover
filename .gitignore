@@ -15,6 +15,4 @@ Cargo.lock
 target
 
 # rust extensions. 
-Cargo.toml
-rust
 hatch_build.py
