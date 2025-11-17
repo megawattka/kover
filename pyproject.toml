@@ -136,7 +136,7 @@ include = [
     "requirements.txt",
     "CODE_OF_CONDUCT.md",
     "kover",
-    "Cargo.toml",
+    # "Cargo.toml",
     # "rust/*.rs"
 ]
 exclude = [
@@ -146,12 +146,12 @@ exclude = [
 ]
 
 [tool.pyright]
-exclude = ["benchmarks", "hatch_build.py"]
+exclude = ["benchmarks"]
 typeCheckingMode = "strict"
 
-[tool.maturin]
-python-source = "."
-module-name = "kover.rlib"
-bindings = "pyo3"
+# [tool.maturin]
+# python-source = "."
+# module-name = "kover.rlib"
+# bindings = "pyo3"
 
-[tool.hatch.build.targets.wheel.hooks.custom]
+# [tool.hatch.build.targets.wheel.hooks.custom]

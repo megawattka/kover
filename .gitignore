@@ -12,4 +12,6 @@ dist
 .python-version
 .token
 Cargo.lock
+Cargo.toml
 target
+hatch_build.py

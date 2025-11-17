@@ -164,7 +164,7 @@ class Kover:
 
             fhost, fport = hello.primary_node.split(":")
 
-        args = (fhost, int(fport), parsed.options.get("maxPoolSize", 100) - 4)
+        args = (fhost, int(fport), parsed.options.get("maxPoolSize", 100))
         pool = _create_connection_pool(*args, tls=tls, loop=loop)
 
         return cls(

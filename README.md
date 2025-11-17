@@ -22,16 +22,16 @@ This library is inspired by `aiomongo` but is modernized for recent versions of 
 ## Dependencies
 - `Python 3.10+`
 - `pydantic>=2.10.6`
-- `dnspython>=2.7.0`
+- `pymongo>=4.15.3 (for bson and uri_parser)`
 
 ## Installation
 
 ```bash
-pip install kover
+uv add kover
 ```
 Optional dependencies for compression can be installed with:
 ```bash
-pip install kover[snappy,zstd]
+uv add kover[snappy, zstd]
 ```
 
 ## Quick Start
