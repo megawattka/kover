@@ -13,6 +13,3 @@ dist
 .token
 Cargo.lock
 target
-
-# rust extensions. 
-hatch_build.py
