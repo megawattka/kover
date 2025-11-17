@@ -155,4 +155,7 @@ module-name = "kover.rlib"
 bindings = "pyo3"
 
 [tool.hatch.build.targets.wheel.hooks.custom]
-
+[tool.hatch.build.targets.wheel]
+dependencies = [
+    "hatchling>=1.24"
+]
