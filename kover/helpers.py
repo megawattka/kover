@@ -92,6 +92,7 @@ def classrepr(*attributes: str) -> Callable[[type[T]], type[T]]:
 
         def _cls_name(obj: T) -> str:
             return obj.__class__.__name__
+
         cls.__repr__ = lambda self: f"{_cls_name(self)}({_gen_parts(self)})"
         cls.__str__ = cls.__repr__
         return cls

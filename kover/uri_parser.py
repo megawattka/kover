@@ -26,6 +26,7 @@ class ParsedUri(_ModelMixin):
         """Return credentials based on username and password."""
         if self.username is None or self.password is None:
             return None
+
         return AuthCredentials(
             username=self.username,
             password=self.password,
