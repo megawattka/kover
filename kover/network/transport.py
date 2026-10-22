@@ -15,7 +15,7 @@ from .wirehelper import WireHelper
 
 if TYPE_CHECKING:
     from ..session import Transaction
-    from ..typings import COMPRESSION_T, DocumentT, xJsonT
+    from ..typings import COMPRESSION_T, DocumentT, JsonT
     from .auth import AuthCredentials
 
 
@@ -60,7 +60,7 @@ class MongoTransport:
 
     @property
     def is_connected(self) -> bool:
-        """Return True if we are conected False otherwise."""
+        """True if we are conected False otherwise."""
         return self._connected
 
     def set_compressor(
@@ -109,7 +109,7 @@ class MongoTransport:
         db_name: str = "admin",
         transaction: Transaction | None = None,
         wait_response: bool = True,
-    ) -> xJsonT:
+    ) -> JsonT:
         """Send a request to the MongoDB server.
 
         Returns:
@@ -118,9 +118,10 @@ class MongoTransport:
         doc = {**doc, "$db": db_name}  # order important
         if transaction is not None and transaction.is_active:
             transaction.apply_to(doc)
-        rid, msg = self._helper.get_message(doc, compressor=self._compressor)
 
+        rid, msg = self._helper.get_message(doc, compressor=self._compressor)
         await self._send(msg)
+
         if wait_response:
             header = await self._recv(16)
             length, op_code = self._helper.verify_rid(header, rid)
@@ -129,8 +130,8 @@ class MongoTransport:
         else:  # cases like kover.shutdown()
             return {}
 
-        if reply.get("ok") != 1.0 or reply.get("writeErrors") is not None:
-            exc_value = self._helper.get_exception(reply=reply)
+        if reply.get("ok") != 1 or reply.get("writeErrors") is not None:
+            exc_value = await self._helper.get_exception(reply=reply)
             if transaction is not None:
                 transaction.end(TxnState.ABORTED, exc_value=exc_value)
             raise exc_value
@@ -144,7 +145,7 @@ class MongoTransport:
         self,
         compression: COMPRESSION_T | None = None,
         credentials: AuthCredentials | None = None,
-        application: xJsonT | None = None,
+        application: JsonT | None = None,
     ) -> HelloResult:
         """Send a hello request to the MongoDB server and return the result.
 
@@ -184,5 +185,7 @@ class MongoTransport:
         """Close the connection to the MongoDB server."""
         if not self._connected:
             return
+
+        self._connected = False
         self._writer.close()
         await self._writer.wait_closed()

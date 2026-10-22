@@ -17,8 +17,8 @@ from ..exceptions import CredentialsException
 if TYPE_CHECKING:
     from urllib.parse import ParseResult
 
-    from ..client import MongoTransport
-    from ..typings import xJsonT
+    from ..network.transport import MongoTransport
+    from ..typings import JsonT
 
 ITERATIONS: Final[int] = 4096
 
@@ -42,7 +42,7 @@ class AuthCredentials(BaseModel):
         hashed = hashlib.md5(f"{self.username}:mongo:{self.password}".encode())
         return hashed.hexdigest().encode("u8")
 
-    def apply_to(self, document: xJsonT) -> None:
+    def apply_to(self, document: JsonT) -> None:
         """Internal use only. Applies auth credentials to hello payload."""
         formatted = f"{self.auth_database}.{self.username}"
         document["saslSupportedMechs"] = formatted
@@ -133,7 +133,7 @@ class Auth:
         user = self._clear_username(credentials.username.encode("u8"))
         nonce = b64encode(os.urandom(32))
         first_bare = b"n=" + user + b",r=" + nonce
-        command: xJsonT = {
+        command: JsonT = {
             "saslStart": 1.0,
             "mechanism": mechanism,
             "payload": Binary(b"n,," + first_bare),
@@ -153,8 +153,8 @@ class Auth:
         client_final: bytes,
         cid: int,
         credentials: AuthCredentials,
-    ) -> xJsonT:
-        cmd: xJsonT = {
+    ) -> JsonT:
+        cmd: JsonT = {
             "saslContinue": 1.0,
             "conversationId": cid,
             "payload": Binary(client_final),

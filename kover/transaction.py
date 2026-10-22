@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import time
-from typing import TYPE_CHECKING
-
-from bson import Int64
-from typing_extensions import Self
+from typing import TYPE_CHECKING, Self
 
 from .enums import TxnState
 from .helpers import classrepr
@@ -14,11 +10,13 @@ from .helpers import classrepr
 if TYPE_CHECKING:
     from types import TracebackType
 
+    from bson import Int64
+
     from .client import Kover
-    from .typings import xJsonT
+    from .typings import JsonT
 
 
-@classrepr("_id", "state", "session_document")
+@classrepr("tx_id", "state", "session_document")
 class Transaction:
     """Represents a MongoDB transaction.
 
@@ -34,11 +32,12 @@ class Transaction:
     def __init__(
         self,
         client: Kover,
-        session_document: xJsonT,
+        session_document: JsonT,
+        transaction_number: Int64,
     ) -> None:
         self.client = client
-        self.session_document: xJsonT = session_document
-        self._id: Int64 = Int64(-1)
+        self.session_document: JsonT = session_document
+        self.tx_id: Int64 = transaction_number
         self.state: TxnState = TxnState.NONE
         self.action_count: int = 0
         self.exception: BaseException | None = None
@@ -51,12 +50,11 @@ class Transaction:
     @property
     def is_ended(self) -> bool:
         """Check if the transaction has ended."""
-        return self.state in {TxnState.COMMITED, TxnState.ABORTED}
+        return self.state in {TxnState.COMMITTED, TxnState.ABORTED}
 
     def start(self) -> None:
         """Start the transaction."""
         self.state = TxnState.STARTED
-        self.id = Int64(int(time.time()))
 
     def end(
         self,
@@ -72,30 +70,33 @@ class Transaction:
         """Commit the transaction."""
         if not self.is_active:
             return
-        command: xJsonT = {
+
+        await self.client.request({
             "commitTransaction": 1.0,
             "lsid": self.session_document,
-            "txnNumber": self.id,
+            "txnNumber": self.tx_id,
             "autocommit": False,
-        }
-        await self.client.request(command)
+        })
+        self.end(TxnState.COMMITTED)
 
     async def abort(self) -> None:
         """Abort the transaction."""
         if not self.is_active:
             return
-        command: xJsonT = {
+
+        await self.client.request({
             "abortTransaction": 1.0,
             "lsid": self.session_document,
-            "txnNumber": self.id,
+            "txnNumber": self.tx_id,
             "autocommit": False,
-        }
-        await self.client.request(command)
+        })
+        self.end(TxnState.ABORTED)
 
     async def __aenter__(self) -> Self:
         if not self.is_active:
             if self.is_ended:
                 raise ValueError("Cannot use transaction context twice")
+
             self.start()
             return self
         raise ValueError("Transaction already used")
@@ -106,23 +107,23 @@ class Transaction:
         exc_value: BaseException | None,
         exc_traceback: TracebackType | None,
     ) -> bool:
-        state = [TxnState.ABORTED, TxnState.COMMITED][exc_type is None]
+        state = [TxnState.ABORTED, TxnState.COMMITTED][exc_type is None]
         if self.action_count != 0:
             state_func = {
                 TxnState.ABORTED: self.abort,
-                TxnState.COMMITED: self.commit,
+                TxnState.COMMITTED: self.commit,
             }[state]
             await state_func()
         self.end(state=state, exc_value=exc_value)
-        return True
+        return False
 
-    def apply_to(self, document: xJsonT) -> None:
+    def apply_to(self, document: JsonT) -> None:
         """Apply transaction information to a MongoDB document."""
         if self.action_count == 0:
             document["startTransaction"] = True
 
         document.update({
-            "txnNumber": self.id,
+            "txnNumber": self.tx_id,
             "autocommit": False,
             "lsid": self.session_document,
         })

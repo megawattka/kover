@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 from hashlib import sha1
 from io import BytesIO
 import math
 from pathlib import Path
-from typing import TYPE_CHECKING, BinaryIO, Final
+from typing import TYPE_CHECKING, BinaryIO, Final, Self
 
 from bson import Binary, ObjectId
-from typing_extensions import Self
 
 from .. import Delete, Index
 from ..enums import IndexDirection
@@ -19,30 +18,20 @@ from .models import Chunk, File
 
 if TYPE_CHECKING:
     from ..database import Database
-    from ..typings import GridFSPayloadT, xJsonT
+    from ..typings import GridFSPayloadT, JsonT
 
 # pre-created index models
-FS_IDX: Final[Index] = Index(name="_fs_idx", key={
+FS_IDX: Final[Index] = Index("_fs_idx", {
     "filename": IndexDirection.ASCENDING,
     "uploadDate": IndexDirection.ASCENDING,
 })
-CHUNKS_IDX: Final[Index] = Index(name="_chunks_idx", key={
+CHUNKS_IDX: Final[Index] = Index("_chunks_idx", {
     "files_id": IndexDirection.ASCENDING,
     "n": IndexDirection.ASCENDING,
 }, unique=True)
 
 DEFAULT_CHUNK_SIZE: Final[int] = 255 * 1024  # from pymongo
 SIZE_LIMIT: Final[int] = 1 * 1024 * 1024 * 16  # 16MB
-
-# Old docs for put method:
-# also auto adds sha1 hash if add_sha1 param is True
-# >>> database = kover.get_database("files")
-# >>> fs = await GridFS(database).indexed()
-# >>> file_id = await fs.put("<AnyIO or bytes or str or path..>")
-# >>> file, binary = await fs.get_by_file_id(file_id)
-# >>> print(file, binary.read())
-# >>> files = await fs.list_files()
-# >>> print(files)
 
 
 class GridFS:
@@ -94,11 +83,10 @@ class GridFS:
         chunk_size: int,
     ) -> None:
         total_chunks = len(chunks)
-        max_amount = math.ceil(
-            total_chunks / (
-                total_chunks * chunk_size / SIZE_LIMIT
-            ),
-        ) - 1
+        if total_chunks == 0:
+            return
+
+        max_amount = max(1, math.ceil(SIZE_LIMIT / chunk_size) - 1)
         splitted = [
             chunks[x:x + max_amount]
             for x in range(0, len(chunks), max_amount)
@@ -114,7 +102,7 @@ class GridFS:
         encoding: str = "utf-8",
         chunk_size: int | None = None,
         add_sha1: bool = True,
-        metadata: xJsonT | None = None,
+        metadata: JsonT | None = None,
     ) -> ObjectId:
         """Store a file in GridFS, splitting it into chunks.
 
@@ -132,8 +120,16 @@ class GridFS:
 
         Returns:
             The ObjectId of the stored file.
+
+        Raises:
+            ValueError: if ``chunk_size`` is not positive or exceeds the
+                maximum BSON document size.
         """
-        chunk_size = chunk_size or DEFAULT_CHUNK_SIZE
+        chunk_size = DEFAULT_CHUNK_SIZE if chunk_size is None else chunk_size
+        if isinstance(chunk_size, bool) or not 0 < chunk_size < SIZE_LIMIT:
+            raise ValueError(
+                f"chunk_size must be > 0 and < {SIZE_LIMIT}",
+            )
         file_id = ObjectId()
 
         binary, name = self._get_binary_io(data, encoding=encoding)
@@ -155,7 +151,7 @@ class GridFS:
             chunks,
             chunk_size=chunk_size,
         )
-        upload_date = datetime.datetime.now(tz=datetime.timezone.utc)
+        upload_date = dt.datetime.now(tz=dt.UTC)
 
         file = File(
             chunk_size=chunk_size,
@@ -165,7 +161,7 @@ class GridFS:
             metadata={
                 "sha1": sha1(binary.getvalue()).hexdigest(),
             } if add_sha1 else {},
-        ).with_id(file_id)
+        ).set_id(file_id)
 
         file.metadata.update(metadata or {})
         await self._files.insert_one(
@@ -197,7 +193,7 @@ class GridFS:
             chunks = await self._chunks.aggregate([
                 {"$match": {"files_id": file_id}},
                 {"$sort": {"n": 1}},
-            ])
+            ]).to_list()
             binary = BytesIO()
             for chunk in chunks:
                 binary.write(chunk["data"])
@@ -264,7 +260,8 @@ class GridFS:
         Returns:
             List of "File" objects, stored in GridFS.
         """
-        return await self._files.find(cls=File).to_list()
+        cursor = self._files.find(cls=File)
+        return await cursor.to_list()
 
     async def exists(
         self,

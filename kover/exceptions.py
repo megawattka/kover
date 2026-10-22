@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .typings import xJsonT
+    from .typings import JsonT
 
 
 class OperationFailure(Exception):
     """General operation failure."""
 
-    def __init__(self, code: int, message: xJsonT) -> None:
+    def __init__(self, code: int, message: JsonT) -> None:
         self.code = code
         self.message = message
         self.err_info = None

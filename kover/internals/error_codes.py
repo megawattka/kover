@@ -1,5 +1,10 @@
-"""This file contains complete version of MongoDB error codes."""
+"""MongoDB error codes and cached exception types."""
 
+from asyncio import Lock
+
+from ..exceptions import OperationFailure
+
+# https://www.mongodb.com/docs/manual/reference/error-codes/
 _codes_to_exc_name: dict[str, str] = {
     "0": "OK",
     "1": "InternalError",
@@ -528,7 +533,21 @@ _codes_to_exc_name: dict[str, str] = {
     "10171600": "ReadThroughCacheTimeMonotonicityViolation",
 }
 
+_exception_types: dict[str, type[OperationFailure]] = {}
+_exception_types_lock = Lock()
 
-def get_exception_name(code: int) -> str | None:
-    """Returns exception name based on its code."""
-    return _codes_to_exc_name.get(str(code))
+
+async def get_exception_type(code: str) -> type[OperationFailure]:
+    """Return the cached operation-failure subclass for an error name."""
+    async with _exception_types_lock:
+        name = _codes_to_exc_name.get(str(code))
+        if name is None:
+            return OperationFailure
+
+        exception_type = _exception_types.get(name)
+        if exception_type is None:
+            exception_type = type(name, (OperationFailure,), {
+                "__module__": "kover.exceptions",
+            })
+            _exception_types[name] = exception_type
+        return exception_type

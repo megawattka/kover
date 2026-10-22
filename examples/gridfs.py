@@ -26,7 +26,7 @@ async def main() -> None:
     file_id = await fs.put(b"Hello World!")
 
     file, binary = await fs.get_by_file_id(file_id)
-    log.info(file, binary.read())
+    log.info("%s %s", file, binary.read())
 
     files = await fs.list()
     log.info("total files: %d", len(files))

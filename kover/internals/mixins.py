@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
 if TYPE_CHECKING:
-    from ..typings import xJsonT
+    from ..typings import JsonT
 
 
 class EmptyReprMixin:
@@ -31,7 +31,7 @@ class ModelMixin(BaseModel):
         use_enum_values=True,
     )
 
-    def to_dict(self) -> xJsonT:
+    def to_dict(self) -> JsonT:
         """Convert the model to a dictionary with camel case keys.
 
         Returns:

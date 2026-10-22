@@ -22,7 +22,7 @@ from ..helpers import chain
 if TYPE_CHECKING:
     from types import UnionType
 
-    from ..typings import xJsonT
+    from ..typings import JsonT
 
 _TYPE_MAP: dict[type, list[str]] = {
     str: ["string"],
@@ -53,7 +53,7 @@ def _serialize_literal(
     /,
     *,
     is_optional: bool = False,
-) -> xJsonT:
+) -> JsonT:
     args: list[Any] = [
         x.value if issubclass(x.__class__, Enum)
         else x for x in attr_t.__args__
@@ -79,7 +79,7 @@ def _serialize_dict(
     /,
     *,
     is_optional: bool = False,
-) -> xJsonT:
+) -> JsonT:
     if not _is_typeddict_ex(attr_t):
         return {
             "bsonType": ["object"] + (["null"] if is_optional else []),
@@ -93,7 +93,7 @@ def _serialize_enum(
     /,
     *,
     is_optional: bool = False,
-) -> xJsonT:
+) -> JsonT:
     values = [z.value for z in attr_t]
     dtypes = chain([_lookup_type(type(val)) for val in values])  # pyright: ignore[reportUnknownArgumentType]
     return {
@@ -109,7 +109,7 @@ def _serialize_simple_type(
     /,
     *,
     is_optional: bool = False,
-) -> xJsonT:
+) -> JsonT:
     dtype = _lookup_type(attr_t) + (["null"] if is_optional else [])
     return {
         "bsonType": sorted(set(dtype)),
@@ -121,7 +121,7 @@ def value_to_json_schema(
     /,
     *,
     is_optional: bool = False,
-) -> xJsonT | None:
+) -> JsonT | None:
     """Convert type hint into kover schema value.
 
     Returns:

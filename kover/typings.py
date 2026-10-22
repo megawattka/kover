@@ -13,8 +13,8 @@ from typing import (
 
 from bson import SON
 
-xJsonT = dict[str, Any]  # noqa: N816
-DocumentT = xJsonT | SON[str, Any]
+JsonT = dict[str, Any]
+DocumentT = JsonT | SON[str, Any]
 
 COMPRESSION_T = list[Literal["zlib", "zstd", "snappy"]]
 GridFSPayloadT = bytes | str | BinaryIO | TextIO | Path
@@ -25,7 +25,7 @@ AuthTypesT = Literal["SCRAM-SHA-1", "SCRAM-SHA-256"]
 class HasToDict(Protocol):
     """Protocol for objects that can be converted to a dictionary."""
 
-    def to_dict(self) -> xJsonT:
+    def to_dict(self) -> JsonT:
         ...
 
 

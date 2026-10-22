@@ -40,4 +40,4 @@ class TxnState(Enum):
     NONE = "NONE"
     STARTED = "STARTED"
     ABORTED = "ABORTED"
-    COMMITED = "COMMITED"
+    COMMITTED = "COMMITTED"

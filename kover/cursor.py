@@ -1,234 +1,346 @@
-"""Kover Cursor Module."""
+"""Asynchronous MongoDB cursor."""
 
 from __future__ import annotations
 
+from asyncio import CancelledError
 from collections import deque
-from typing import (
-    TYPE_CHECKING,
-    Generic,
-    TypeVar,
-    cast,
-)
+from typing import TYPE_CHECKING, NoReturn, Self, TypeVar, cast
 
 from bson import Int64
-from typing_extensions import Self
 
-from .helpers import filter_non_null
+from kover.exceptions import OperationFailure
+
+from .helpers import maybe_to_dict
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from .collection import Collection
     from .models import Collation
-    from .schema import Document
     from .session import Transaction
-    from .typings import xJsonT
+    from .typings import JsonT
+
 
 T = TypeVar("T")
 
 
-class Cursor(Generic[T]):
-    """Asynchronous MongoDB-like cursor for iterating over query results."""
+class Cursor[T]:
+    """Lazy asynchronous cursor.
+
+    Concurrent reads and closing during a read are not supported.
+    """
 
     def __init__(
         self,
-        filter_: xJsonT,
+        query: JsonT,
         collection: Collection,
-        cls: type[Document] | None = None,
+        decoder: Callable[[JsonT], T],
         transaction: Transaction | None = None,
     ) -> None:
-        self._id: Int64 | None = None
+        self._decoder = decoder
+        self._query = query.copy()
         self._collection = collection
-        self._limit = 0
-        self._filter = filter_
-        self._projection: xJsonT | None = None
-        self._sort: xJsonT | None = None
-        self._skip: int = 0
-        self._limit: int = 0
-        self._hint: str | xJsonT | None = None
-        self._batch_size: int = 101
-        self._comment: str | None = None
-        self._retrieved: int = 0
-        self._killed: bool = False
-        self._second_iteration: bool = False
-        self._docs: deque[T] = deque()
-        self._cls = cls
         self._transaction = transaction
-        self._collation: Collation | None = None
+
+        self._id: Int64 | None = None
+        self._server_collection = collection.name
+        self._docs: deque[T] = deque()
+
+        self._started = False
+        self._closed = False
+        self._reading = False
+        self._first: T | None = None
+        self._first_cached = False
+
+        self._options: JsonT = {}
+        self._command_response: JsonT | None = None
+        self._get_more_batch_size = 101
 
     async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, *args: object) -> None:
-        await self.close()
-
-    def sort(self, mapping: xJsonT) -> Self:
-        """Set the sort order for the query results.
-
-        Parameters:
-            mapping : A mapping specifying the sort order for the query.
-
-        Returns:
-            The cursor instance with the sort order applied.
-        """
-        self._sort = mapping
-        return self
-
-    def skip(self, value: int) -> Self:
-        """Set the skip amount for the query results.
-
-        Parameters:
-            value : Amount to skip.
-
-        Returns:
-            The cursor instance with the sort order applied.
-        """
-        self._skip = value
-        return self
-
-    def limit(self, value: int) -> Self:
-        """Set the limit for the query.
-
-        Parameters:
-            value : Maximum amount of docs to return.
-
-        Returns:
-            The cursor instance with the sort order applied.
-        """
-        self._limit = value
-        return self
-
-    def batch_size(self, value: int) -> Self:
-        """Set the batch size for the query results.
-
-        Parameters:
-            value : Maximum amount of docs to return from first batch.
-
-        Returns:
-            The cursor instance with the projection applied.
-        """
-        self._batch_size = value
-        return self
-
-    def projection(self, mapping: xJsonT) -> Self:
-        """Set the projection for the query results.
-
-        Parameters:
-            mapping : A mapping specifying the fields
-                to include or exclude in the query results.
-
-        Returns:
-            The cursor instance with the projection applied.
-        """
-        self._projection = mapping
-        return self
-
-    def comment(self, comment: str) -> Self:
-        """Set the comment for operation.
-
-        Parameters:
-            comment : A comment that will be shown in logs.
-
-        Returns:
-            The cursor instance with the projection applied.
-        """
-        self._comment = comment
-        return self
-
-    def hint(self, hint: str | xJsonT) -> Self:
-        """Set the hint for the query.
-
-        Parameters:
-            hint : Index hint to optimize query performance.
-
-        Returns:
-            The cursor instance with the hint applied.
-        """
-        self._hint = hint
-        return self
-
-    def _get_query(self) -> xJsonT:
-        collation = self._collation.to_dict() if self._collation else None
-        return filter_non_null({
-            "find": self._collection.name,
-            "filter": self._filter,
-            "skip": self._skip,
-            "limit": self._limit,
-            "projection": self._projection,
-            "sort": self._sort,
-            "batchSize": self._batch_size,
-            "comment": self._comment,
-            "collation": collation,
-            "hint": self._hint,
-        })
-
-    def _map_docs(
+    async def __aexit__(
         self,
-        documents: list[xJsonT],
-    ) -> list[T]:
-        if self._cls is not None:
-            documents = [
-                self._cls.from_document(doc) for doc in documents
-            ]  # pyright: ignore[reportAssignmentType]
-        return cast("list[T]", documents)
+        exc_type: object,
+        exc_value: BaseException | None,
+        traceback: object,
+    ) -> None:
+        if exc_value is None:
+            await self.close()
+        else:
+            await self._close_after_error(exc_value)
 
     def __aiter__(self) -> Self:
         return self
 
-    async def __anext__(self) -> T:
-        if self._docs:
-            return self._docs.popleft()
-        if self._id is None:
-            query = self._get_query()
-            request = await self._collection.database.command(
-                query,
-                transaction=self._transaction,
+    def _ensure_at_start(self) -> None:
+        if self._started or self._closed:
+            raise RuntimeError("Cursor is already started or closed")
+
+    def _ensure_single_thread(self) -> None:
+        if self._reading:
+            raise RuntimeError("Concurrent use of cursor is not supported")
+
+    def _set_option(self, name: str, value: object) -> Self:
+        self._ensure_at_start()
+
+        self._options[name] = value
+        return self
+
+    def sort(self, mapping: JsonT) -> Self:  # ruff: ignore[undocumented-public-method]
+        return self._set_option("sort", mapping.copy())
+
+    def skip(self, value: int) -> Self:  # ruff: ignore[undocumented-public-method]
+        return self._set_option("skip", value)
+
+    def limit(self, value: int) -> Self:  # ruff: ignore[undocumented-public-method]
+        return self._set_option("limit", value)
+
+    def batch_size(self, value: int) -> Self:  # ruff: ignore[undocumented-public-method]
+        return self._set_option("batchSize", value)
+
+    def projection(self, mapping: JsonT) -> Self:  # ruff: ignore[undocumented-public-method]
+        return self._set_option("projection", mapping.copy())
+
+    def comment(self, comment: str) -> Self:  # ruff: ignore[undocumented-public-method]
+        return self._set_option("comment", comment)
+
+    def hint(self, hint: str | JsonT) -> Self:  # ruff: ignore[undocumented-public-method]
+        value = hint.copy() if isinstance(hint, dict) else hint
+        return self._set_option("hint", value)
+
+    def collation(self, collation: Collation) -> Self:  # ruff: ignore[undocumented-public-method]
+        return self._set_option(
+            "collation",
+            maybe_to_dict(collation),
+        )
+
+    def _get_query(self) -> JsonT:
+        query = self._query.copy()
+        options = self._options.copy()
+
+        if "find" in query:
+            query.update(options)
+            query.setdefault("batchSize", 101)
+
+            limit = query.get("limit", 0)
+            if limit < 0:
+                query["limit"] = abs(limit)
+                query["singleBatch"] = True
+
+            self._get_more_batch_size = query["batchSize"]
+            return query
+
+        uses_cursor_options = (
+            "cursor" in query
+            or any(
+                name in query
+                for name in ("aggregate", "listIndexes", "listCollections")
             )
-            docs = request["cursor"]["firstBatch"]
-            self._retrieved += len(docs)
-            self._id = request["cursor"]["id"]
-            self._docs.extend(self._map_docs(docs))
+        )
+
+        if uses_cursor_options:
+            cursor_options = query.get("cursor", {}).copy()
+
+            if "batchSize" in options:
+                cursor_options["batchSize"] = options.pop("batchSize")
+
+            cursor_options.setdefault("batchSize", 101)
+            query["cursor"] = cursor_options
+            self._get_more_batch_size = cursor_options["batchSize"]
+
+        elif "batchSize" in options:
+            raise ValueError(
+                "Cannot determine batchSize placement for this command; "
+                "specify its initial batch options directly in the query",
+            )
+
+        query.update(options)
+        return query
+
+    def _map_docs(self, documents: list[JsonT]) -> list[T]:
+        return [self._decoder(document) for document in documents]
+
+    def _accept_batch(
+        self,
+        response: JsonT,
+        batch_key: str,
+    ) -> None:
+        cursor = response["cursor"]
+
+        # Save the ID before mapping: mapping may fail, and cleanup
+        # still needs to know which server cursor to kill.
+        self._id = Int64(cursor["id"])
+
+        namespace = cursor.get("ns")
+        if namespace:
+            _, separator, collection = namespace.partition(".")
+            if not separator or not collection:
+                raise ValueError(f"Invalid cursor namespace: {namespace!r}")
+            self._server_collection = collection
+
+        self._docs.extend(self._map_docs(cursor[batch_key]))
+
+    async def _start(self) -> None:
+        self._started = True
+
+        response = await self._collection.database.command(
+            self._get_query(),
+            transaction=self._transaction,
+        )
+
+        if "cursor" in response:
+            self._accept_batch(response, "firstBatch")
         else:
-            if int(self._id) == 0 or self._second_iteration:
-                await self.close()
-                raise StopAsyncIteration
+            # Preserve support for commands such as aggregate explain.
+            self._command_response = response
+            self._docs.append(cast("T", response))
+            self._closed = True
 
-            self._second_iteration = True
-            command: xJsonT = {
-                "getMore": Int64(self._id),
-                "collection": self._collection.name,
-            }
-            request = await self._collection.database.command(
-                command,
-                transaction=self._transaction,
-            )
-            docs = request["cursor"]["nextBatch"]
-            self._retrieved += len(docs)
-            self._docs.extend(self._map_docs(docs))
+    async def _get_more(self) -> None:
+        if self._id is None or self._id == 0:
+            raise RuntimeError("Cursor has no active server ID")
 
-        if self._docs:
-            return self._docs.popleft()
+        command: JsonT = {
+            "getMore": self._id,
+            "collection": self._server_collection,
+        }
 
+        # batchSize=0 is useful for the initial request, but should
+        # not be forwarded as a zero-sized getMore request.
+        if self._get_more_batch_size > 0:
+            command["batchSize"] = self._get_more_batch_size
+
+        response = await self._collection.database.command(
+            command,
+            transaction=self._transaction,
+        )
+        self._accept_batch(response, "nextBatch")
+
+    def _stop_iteration(self) -> NoReturn:
+        self._closed = True
         raise StopAsyncIteration
 
-    async def close(self) -> None:
-        """Close the cursor and release any associated resources.
+    async def __anext__(self) -> T:
+        self._ensure_single_thread()
 
-        This method kills the cursor on the server if it is still active and
-        clears any remaining documents in the local buffer.
-        """
-        if not self._killed:
-            self._killed = True
-            if self._id is not None and int(self._id) > 0 and self._limit != 0:
-                command: xJsonT = {
-                    "killCursors": self._collection.name,
-                    "cursors": [self._id],
-                }
-                await self._collection.database.command(command)
-            self._docs.clear()
+        self._reading = True
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
+            while True:
+                # A final batch may contain documents even when id == 0.
+                if self._docs:
+                    return self._docs.popleft()
 
-    async def to_list(self) -> list[T]:
-        """Return all documents from the cursor as a list.
+                if self._closed:
+                    self._stop_iteration()
+
+                if not self._started:
+                    await self._start()
+
+                elif self._id is None or self._id == 0:
+                    self._closed = True
+                    self._stop_iteration()
+                else:
+                    await self._get_more()
+
+        except StopAsyncIteration:
+            raise
+
+        except (Exception, CancelledError) as error:
+            await self._close_after_error(error)
+            raise
+
+        finally:
+            self._reading = False
+
+    async def command_result(self) -> JsonT:
+        """Execute a command and return its non-cursor response.
 
         Returns:
-            A list containing all documents retrieved by the cursor.
+            The command response document.
+
+        Raises:
+            RuntimeError: If the cursor has already started or closed, or if
+                the command returns a cursor instead of a direct response.
+            CancelledError: If the command is cancelled.
         """
-        return [doc async for doc in self]
+        self._ensure_single_thread()
+
+        if self._command_response is not None:
+            return self._command_response
+
+        self._ensure_at_start()
+
+        self._reading = True
+        try:
+            await self._start()
+
+            if self._command_response is None:
+                raise RuntimeError("Command returned a cursor;")  # ruff: ignore[raise-within-try]
+
+            self._docs.clear()
+            return self._command_response  # ruff: ignore[try-consider-else]
+
+        except (Exception, CancelledError) as e:
+            await self._close_after_error(e)
+            raise
+
+        finally:
+            self._reading = False
+
+    async def _close(self) -> None:
+        cursor_id = self._id
+
+        # Close locally before awaiting network I/O.
+        self._closed = True
+        self._id = None
+        self._docs.clear()
+
+        if cursor_id is None or cursor_id == 0:
+            return
+
+        await self._collection.database.command({
+            "killCursors": self._server_collection,
+            "cursors": [cursor_id],
+        }, transaction=self._transaction)
+
+    async def _close_after_error(
+        self,
+        error: BaseException,
+    ) -> None:
+        try:
+            await self._close()
+        except (OperationFailure, Exception, CancelledError) as e:  # ruff: ignore[blind-except]
+            error.add_note(f"Cursor cleanup also failed: {e!r}")
+
+    async def close(self) -> None:
+        """Close locally and attempt to kill the server cursor."""
+        self._ensure_single_thread()
+
+        await self._close()
+
+    async def to_list(self) -> list[T]:
+        """Retrieve all remaining documents from the cursor.
+
+        Returns:
+            A list containing all remaining documents.
+        """
+        return [document async for document in self]
+
+    async def first(self) -> T:
+        """Return the first document from the cursor's remaining results.
+
+        Like ``to_list``, this method consumes results from the current cursor
+        position. Repeated calls return the same value.
+
+        Returns:
+            The first document in the cursor's remaining results.
+        """
+        self._ensure_single_thread()
+        if self._first_cached:
+            return cast("T", self._first)
+
+        document = await anext(self)
+        self._first = document
+        self._first_cached = True
+        return document

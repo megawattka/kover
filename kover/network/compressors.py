@@ -63,12 +63,12 @@ class _SnappyContext(BaseModel):
 def get_context_by_id(compressor_id: int) -> CompressionContext:
     """Get the compression context by the compressor id.
 
+    Returns:
+        An instance of the requested compression context.
+
     Raises:
         ModuleNotFoundError: If the requested compression module
             is not available.
-
-    Returns:
-        An instance of the requested compression context.
     """
     compressors = {
         1: (_SnappyContext, _HAVE_SNAPPY, "Snappy"),

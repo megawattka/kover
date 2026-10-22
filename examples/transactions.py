@@ -9,7 +9,7 @@ from bson import ObjectId
 from kover import AuthCredentials, Kover
 
 if TYPE_CHECKING:
-    from kover import xJsonT
+    from kover import JsonT
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -22,7 +22,7 @@ async def main() -> None:
     session = await kover.start_session()
 
     # specify _id directly
-    doc: xJsonT = {"_id": ObjectId(), "name": "John", "age": 30}
+    doc: JsonT = {"_id": ObjectId(), "name": "John", "age": 30}
     collection = await kover.db.test.create_if_not_exists()
 
     async with session.start_transaction() as transaction:

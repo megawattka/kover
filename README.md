@@ -20,7 +20,7 @@ This library is inspired by `aiomongo` but is modernized for recent versions of 
 *   **Authentication:** Supports all standard MongoDB authentication mechanisms.
 
 ## Dependencies
-- `Python 3.10+`
+- `Python 3.12+`
 - `pydantic>=2.10.6`
 - `pymongo>=4.15.3 (for bson and uri_parser)`
 

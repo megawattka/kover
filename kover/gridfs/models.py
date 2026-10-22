@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import datetime  # noqa: TC003
+import datetime as dt  # ruff: ignore[typing-only-standard-library-import]
 from typing import Annotated
 
-from bson import Binary, ObjectId  # noqa: TC002
+from bson import Binary, ObjectId  # ruff: ignore[typing-only-third-party-import]
 from pydantic import Field
 
 from ..metadata import SchemaMetadata
@@ -38,7 +38,7 @@ class File(Document):
     """
 
     length: int
-    upload_date: datetime.datetime = Field(alias="upload_date")
+    upload_date: dt.datetime = Field(alias="upload_date")
     filename: str | None = None
     metadata: dict[str, object] = Field(default_factory=dict)
     chunk_size: Annotated[int, SchemaMetadata(minimum=0)] = Field(

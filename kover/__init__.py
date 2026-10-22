@@ -58,10 +58,11 @@ from .models import (
     WriteConcern,
 )
 from .network import AuthCredentials, MongoTransport
+from .network.pool import ConnectionPool
 from .schema import Document, SchemaGenerator
 from .session import Session
 from .transaction import Transaction
-from .typings import xJsonT
+from .typings import JsonT
 
 __all__ = (
     "AuthCredentials",
@@ -70,6 +71,7 @@ __all__ = (
     "Collation",
     "CollationStrength",
     "Collection",
+    "ConnectionPool",
     "CorruptedDocument",
     "CredentialsException",
     "Cursor",
@@ -80,6 +82,7 @@ __all__ = (
     "Index",
     "IndexDirection",
     "IndexType",
+    "JsonT",
     "Kover",
     "MongoTransport",
     "OperationFailure",
@@ -98,5 +101,4 @@ __all__ = (
     "chain",
     "filter_non_null",
     "maybe_to_dict",
-    "xJsonT",
 )

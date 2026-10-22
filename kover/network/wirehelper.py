@@ -15,14 +15,14 @@ from bson import (
 )
 
 from .. import __version__
-from ..codes import get_exception_name
 from ..exceptions import OperationFailure
+from ..internals.error_codes import get_exception_type
 from . import get_context_by_id
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from ..typings import COMPRESSION_T, xJsonT
+    from ..typings import COMPRESSION_T, JsonT
 
 OP_MSG: Final[int] = 2013
 OP_COMPRESSED: Final[int] = 2012
@@ -52,7 +52,7 @@ class WireHelper:
 
     @staticmethod
     def _query_impl(
-        doc: xJsonT,
+        doc: JsonT,
         collection: str = "admin",
     ) -> bytes:
         # https://www.mongodb.com/docs/manual/legacy-opcodes/#op_query
@@ -97,7 +97,7 @@ class WireHelper:
         self,
         msg: bytes,
         op_code: int,
-    ) -> xJsonT:
+    ) -> JsonT:
         if op_code == 1:  # manual/legacy-opcodes/#op_reply
             # flags, cursor, starting, docs = unpack from "<iqii"
             message = msg[20:]
@@ -118,7 +118,7 @@ class WireHelper:
 
     def get_message(
         self,
-        doc: xJsonT,
+        doc: JsonT,
         compressor: Literal["zlib", "zstd", "snappy"] | None = None,
     ) -> tuple[int, bytes]:
         """Gets the prepaired message bytes and request_id.
@@ -171,8 +171,8 @@ class WireHelper:
     @staticmethod
     def get_hello_payload(
         compression: COMPRESSION_T | None = None,
-        application: xJsonT | None = None,
-    ) -> xJsonT:
+        application: JsonT | None = None,
+    ) -> JsonT:
         """Create a hello payload for the MongoDB server.
 
         Returns:
@@ -182,8 +182,9 @@ class WireHelper:
         impl = sys.implementation
         if compression is None:
             compression = []
+
         platform = impl.name + " " + ".".join(map(str, impl.version))
-        payload: xJsonT = {
+        payload: JsonT = {
             "hello": 1.0,
             "client": {
                 "driver": {
@@ -205,20 +206,10 @@ class WireHelper:
         return payload
 
     @staticmethod
-    def _has_error_label(label: str, reply: xJsonT) -> bool:
+    def _has_error_label(label: str, reply: JsonT) -> bool:
         return label in reply.get("errorLabels", [])
 
-    @staticmethod
-    def _construct_exception(
-        name: str,
-        info: xJsonT | None = None,
-    ) -> type[OperationFailure]:
-        return type(name, (OperationFailure,), {
-            "err_info": info,
-            "__module__": "kover.exceptions",
-        })
-
-    def get_exception(self, reply: xJsonT) -> OperationFailure:
+    async def get_exception(self, reply: JsonT) -> OperationFailure:
         """Construct an exception based on server reply.
 
         Returns:
@@ -230,16 +221,13 @@ class WireHelper:
 
         if "code" in reply:
             code: int = reply["code"]
-            exc_name = get_exception_name(code=code)
-            if exc_name is not None:
-                exception = self._construct_exception(
-                    exc_name,
-                    info=reply.get("errInfo"),
-                )
-                return exception(code, reply["errmsg"])
+            exception = await get_exception_type(code=str(code))
+            error = exception(code, reply["errmsg"])
+            error.err_info = reply.get("errInfo")
+            return error
 
         if self._has_error_label("TransientTransactionError", reply):
-            exception = self._construct_exception(reply["codeName"])
+            exception = await get_exception_type(reply["codeName"])
             return exception(reply["code"], reply["errmsg"])
 
         return OperationFailure(-1, reply)

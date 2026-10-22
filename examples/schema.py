@@ -24,13 +24,13 @@ log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-class UserType(Enum):  # noqa: D101
+class UserType(Enum):  # ruff: ignore[undocumented-public-class]
     ADMIN = "ADMIN"
     USER = "USER"
     CREATOR = "CREATOR"
 
 
-class Friend(Document):  # noqa: D101
+class Friend(Document):  # ruff: ignore[undocumented-public-class]
     name: str
     age: Annotated[int, SchemaMetadata(minimum=18)]  # minimum age is 18.
 
@@ -39,7 +39,7 @@ class Friend(Document):  # noqa: D101
 # so user_type will be "userType" in db
 # if you still need to snake cased field_name
 # use explicit alias="<snake_cased_name>"
-class User(Document):  # noqa: D101
+class User(Document):  # ruff: ignore[undocumented-public-class]
     name: Annotated[str, SchemaMetadata(description="must be a string")]
     age: Annotated[
         int,
@@ -96,7 +96,7 @@ async def main() -> None:
     except OperationFailure as e:
         msg: str = e.message["errmsg"]
         log.info("got Error: %s", msg)
-        assert e.code == 121  # ErrDocumentValidationFailure  # noqa: E501, PLR2004, PT017
+        assert e.code == 121  # ErrDocumentValidationFailure  # ruff: ignore[magic-value-comparison, pytest-assert-in-except]
 
 
 if __name__ == "__main__":

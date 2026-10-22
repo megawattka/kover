@@ -9,13 +9,14 @@ from typing import (
     Any,
     Literal,
     ParamSpec,
+    Self,
     TypeVar,
     Union,
     get_origin,
 )
 from uuid import UUID
 
-from bson import Binary, ObjectId  # noqa: TC002
+from bson import Binary, ObjectId  # ruff: ignore[typing-only-third-party-import]
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -23,7 +24,6 @@ from pydantic import (
     model_serializer,
 )
 from pydantic.alias_generators import to_camel
-from typing_extensions import Self
 
 from .exceptions import SchemaGenerationException
 from .helpers import classrepr, is_origin_ex, isinstance_ex
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
     from pydantic import SerializationInfo
 
-    from .typings import xJsonT
+    from .typings import JsonT
 
 P = ParamSpec("P")
 
@@ -78,7 +78,7 @@ class SchemaGenerator:
         *,
         attr_name: str,
         is_optional: bool = False,
-    ) -> xJsonT:
+    ) -> JsonT:
         if attr_t is None:
             return {"bsonType": ["null"]}
         origin = get_origin(attr_t)
@@ -131,8 +131,8 @@ class SchemaGenerator:
         return self._merge_payloads(payloads)
 
     @staticmethod
-    def _merge_payloads(payloads: list[xJsonT], /) -> xJsonT:
-        data: xJsonT = {"bsonType": []}
+    def _merge_payloads(payloads: list[JsonT], /) -> JsonT:
+        data: JsonT = {"bsonType": []}
 
         for payload in payloads:
             data["bsonType"].extend(payload.pop("bsonType"))
@@ -150,7 +150,7 @@ class SchemaGenerator:
         /,
         *,
         child: bool = False,
-    ) -> xJsonT:
+    ) -> JsonT:
         """Generate a JSON schema for the given Document subclass.
 
         Parameters:
@@ -169,7 +169,7 @@ class SchemaGenerator:
         if "_id" in required:
             required.remove("_id")
 
-        payload: xJsonT = {
+        payload: JsonT = {
             "bsonType": ["object"],
             "required": required,  # make all fields required
             "properties": {},
@@ -187,7 +187,7 @@ class SchemaGenerator:
             })
         return payload
 
-    def _maybe_add_object_id_signature(self, payload: xJsonT, /) -> xJsonT:
+    def _maybe_add_object_id_signature(self, payload: JsonT, /) -> JsonT:
         if self.additional_properties:
             return payload
 
@@ -201,7 +201,7 @@ class SchemaGenerator:
         return payload
 
     @staticmethod
-    def _generate_metadata(metadata: list[Any]) -> xJsonT:
+    def _generate_metadata(metadata: list[Any]) -> JsonT:
         for meta in metadata:
             if isinstance(meta, SchemaMetadata):
                 return meta.serialize()
@@ -232,7 +232,7 @@ class Document(BaseModel):
     ) -> dict[str, Any]:
         wrapped = wrap(self)
         for k, v in self.__pydantic_fields__.items():
-            if v.metadata and any(isinstance(x, ExcludeIfNone) for x in v.metadata):  # noqa: E501
+            if v.metadata and any(isinstance(x, ExcludeIfNone) for x in v.metadata):  # ruff: ignore[line-too-long]
                 key = (v.alias or k) if info.by_alias else k
                 if getattr(self, k) is None:
                     wrapped.pop(key, None)
@@ -248,7 +248,7 @@ class Document(BaseModel):
         return wrapped
 
     @classmethod
-    def from_document(cls, payload: xJsonT) -> Self:
+    def from_document(cls, payload: JsonT) -> Self:
         """Create a Document instance from a dictionary.
 
         Returns:
@@ -257,14 +257,14 @@ class Document(BaseModel):
         """
         return cls.model_validate(payload)
 
-    def to_dict(self, *, exclude_id: bool = False) -> xJsonT:
+    def to_dict(self, *, exclude_id: bool = False) -> JsonT:
         """Convert the document to a dictionary.
 
         Returns:
             The document represented as a dictionary.
                 If `exclude_id` is True, the `_id` field is excluded.
         """
-        dumped: xJsonT = self.model_dump(by_alias=True)
+        dumped: JsonT = self.model_dump(by_alias=True)
         if not exclude_id and self._id is not None:
             dumped = {"_id": self._id, **dumped}
         return dumped
@@ -277,7 +277,7 @@ class Document(BaseModel):
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Document):
-            raise NotImplementedError
+            return False
 
         if self._id is not None and other._id is not None:
             return self._id == other._id
@@ -294,7 +294,7 @@ class Document(BaseModel):
             return hash(self._id)
         raise NotImplementedError("Hash requires _id set.")
 
-    def with_id(self, _id: ObjectId) -> Self:
+    def set_id(self, _id: ObjectId) -> Self:
         """Set the document's ObjectId.
 
         Returns:

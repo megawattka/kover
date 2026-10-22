@@ -3,9 +3,10 @@ from typing import Literal
 import unittest
 from uuid import UUID
 
-from bson import Binary, Int64, ObjectId  # noqa: TC002
+from bson import Binary, Int64, ObjectId  # ruff: ignore[typing-only-third-party-import]
 
-from kover import Document, SchemaGenerationException, SchemaGenerator
+from kover.exceptions import SchemaGenerationException
+from kover.schema import Document, SchemaGenerator
 
 
 class Sub(Document):
@@ -48,7 +49,7 @@ class C(Document):
     c: TEnum | None
     d: TEnum
     e: Sub
-    f: Literal[b"a", "3"] | None
+    f: Literal[b"a", None, "3"] | None  # noqa: PYI061
 
 
 class D(Document):
@@ -62,15 +63,14 @@ class D1(Document):
     c: list[list[list[list[list[str]]]]]
 
 
-class SchemaTests(unittest.IsolatedAsyncioTestCase):
-    def __init__(self, *args: str, **kwargs: object) -> None:
-        super().__init__(*args, **kwargs)
+class SchemaTests(unittest.TestCase):
+    def setUp(self) -> None:
         self.generator = SchemaGenerator()
 
-    async def test_a(self) -> None:
+    def test_primitive_types(self):
         schema = self.generator.generate(A)["$jsonSchema"]
         properties = schema["properties"]
-        assert len(schema["required"]) == 4  # _id included
+        self.assertEqual(len(schema["required"]), 4)  # _id included
 
         for name, val in [
             ("a", ["int", "long"]),
@@ -78,22 +78,23 @@ class SchemaTests(unittest.IsolatedAsyncioTestCase):
             ("c", ["string"]),
             ("_id", ["objectId"]),
         ]:
-            assert properties[name]["bsonType"] == val
-        assert not schema["additionalProperties"]
+            self.assertEqual(properties[name]["bsonType"], val)
+        self.assertFalse(schema["additionalProperties"])
 
-    async def test_invalid_mixed(self) -> None:
+    def test_invalid_mixed(self):
         classes: list[type[Document]] = [B1, B2, B3, B4]
         for cls in classes:
-            with self.assertRaises(SchemaGenerationException):
+            with self.subTest(model=cls.__name__), self.assertRaises(
+                SchemaGenerationException,
+            ):
                 self.generator.generate(cls)
 
-    async def test_c(self) -> None:
+    def test_nullable_nested_enum_and_literal(self):
         schema = self.generator.generate(C)["$jsonSchema"]
         rq = schema["required"]
         ps = schema["properties"]
-        assert len(rq) == 7
-        assert "".join(rq) == "abcdef_id"
-        assert len(ps.keys()) == 7
+        self.assertEqual(rq, ["a", "b", "c", "d", "e", "f", "_id"])
+        self.assertEqual(len(ps), 7)
         for name, val in [
             ("a", ["null", "object"]),
             ("b", ["int", "double", "long", "null", "string"]),
@@ -103,30 +104,31 @@ class SchemaTests(unittest.IsolatedAsyncioTestCase):
             ("f", ["null", "binData", "string"]),
             ("_id", ["objectId"]),
         ]:
-            assert sorted(ps[name]["bsonType"]) == sorted(val)
-        assert ps["d"]["enum"] == ["A", "B", "C"]
-        assert all(x in {None, "3", b"a"} for x in ps["f"]["enum"])
-        assert len(ps["f"]["enum"]) == 3
+            self.assertCountEqual(ps[name]["bsonType"], val)
+        self.assertEqual(ps["d"]["enum"], ["A", "B", "C"])
+        self.assertCountEqual(ps["f"]["enum"], [None, "3", b"a"])
         for x in ["a", "e"]:
-            assert len(ps[x]["required"]) == 3
+            self.assertEqual(len(ps[x]["required"]), 3)
 
-    async def test_d(self) -> None:
+    def test_arrays_and_bson_types(self):
         schema = self.generator.generate(D)["$jsonSchema"]
-        assert len(schema["required"]) == 5
+        self.assertEqual(len(schema["required"]), 5)
         ps = schema["properties"]
-        for name1, val1 in [
+        for name, val in [
             ("a", ["array"]),
             ("b", ["long", "array", "int"]),
             ("c", ["long", "array", "int"]),
             ("d", ["long", "binData", "objectId"]),
             ("_id", ["objectId"]),
         ]:
-            assert sorted(ps[name1]["bsonType"]) == sorted(val1)
-            for name2, val2 in [("b", ["string"]), ("c", ["object"])]:
-                assert ps[name2]["items"]["bsonType"] == val2
+            self.assertCountEqual(ps[name]["bsonType"], val)
+        for name, val in [("b", ["string"]), ("c", ["object"])]:
+            self.assertEqual(ps[name]["items"]["bsonType"], val)
         schema = self.generator.generate(D1)["$jsonSchema"]
         items = schema["properties"]["c"]["items"]["items"]
-        assert items["items"]["items"]["items"]["bsonType"][0] == "string"
+        self.assertEqual(
+            items["items"]["items"]["items"]["bsonType"], ["string"],
+        )
 
 
 if __name__ == "__main__":

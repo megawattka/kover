@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from pydantic import Field
-from pymongo.uri_parser import parse_uri as _parse_uri
+from pymongo.asynchronous.uri_parser import parse_uri as _parse_uri
 
 from .internals.mixins import ModelMixin as _ModelMixin
 from .network import AuthCredentials
-from .typings import xJsonT  # noqa: TC001
+from .typings import JsonT  # ruff: ignore[typing-only-first-party-import]
 
 
 class ParsedUri(_ModelMixin):
@@ -18,12 +18,12 @@ class ParsedUri(_ModelMixin):
     password: str | None
     database: str | None
     collection: str | None
-    options: xJsonT
+    options: JsonT
     fqdn: str | None
 
     @property
     def credentials(self) -> AuthCredentials | None:
-        """Return credentials based on username and password."""
+        """Use credentials based on username and password."""
         if self.username is None or self.password is None:
             return None
 
@@ -33,11 +33,11 @@ class ParsedUri(_ModelMixin):
         )
 
 
-def parse_uri(uri: str) -> ParsedUri:
+async def parse_uri(uri: str) -> ParsedUri:
     """Pymongo parse uri wrapper.
 
     Returns:
         ParsedUri object
     """
-    parsed = _parse_uri(uri=uri)
+    parsed = await _parse_uri(uri=uri)
     return ParsedUri.model_validate(parsed)

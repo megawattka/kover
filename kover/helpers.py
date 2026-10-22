@@ -5,7 +5,6 @@ from __future__ import annotations
 import itertools
 from typing import (
     TYPE_CHECKING,
-    TypeVar,
     get_origin,
     overload,
 )
@@ -13,12 +12,22 @@ from typing import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    from .typings import HasToDict, xJsonT
-
-T = TypeVar("T")
+    from .typings import HasToDict, JsonT
 
 
-def chain(iterable: Iterable[Iterable[T]]) -> list[T]:
+def raw_decoder(payload: JsonT) -> JsonT:
+    """Return the payload unchanged.
+
+    Args:
+        payload: JSON-compatible payload to decode.
+
+    Returns:
+        The original payload without any modifications.
+    """
+    return payload
+
+
+def chain[T](iterable: Iterable[Iterable[T]]) -> list[T]:
     """Flatten an iterable of iterables into a single list.
 
     Returns:
@@ -27,7 +36,7 @@ def chain(iterable: Iterable[Iterable[T]]) -> list[T]:
     return [*itertools.chain.from_iterable(iterable)]
 
 
-def filter_non_null(doc: xJsonT) -> xJsonT:
+def filter_non_null(doc: JsonT) -> JsonT:
     """Filter out None values from a dictionary.
 
     Returns:
@@ -56,7 +65,7 @@ def is_origin_ex(attr_t: object, argument: object) -> bool:
 
 
 @overload
-def maybe_to_dict(obj: HasToDict | xJsonT) -> xJsonT:
+def maybe_to_dict(obj: HasToDict | JsonT) -> JsonT:
     ...
 
 
@@ -65,7 +74,7 @@ def maybe_to_dict(obj: None) -> None:
     ...
 
 
-def maybe_to_dict(obj: HasToDict | xJsonT | None) -> xJsonT | None:
+def maybe_to_dict(obj: HasToDict | JsonT | None) -> JsonT | None:
     """Convert an object to a dictionary.
 
     Converts the object using its `to_dict` method if it has one,
@@ -79,7 +88,7 @@ def maybe_to_dict(obj: HasToDict | xJsonT | None) -> xJsonT | None:
     return obj.to_dict()
 
 
-def classrepr(*attributes: str) -> Callable[[type[T]], type[T]]:
+def classrepr[T](*attributes: str) -> Callable[[type[T]], type[T]]:
     """Add a repr to class by decorator.
 
     Returns:

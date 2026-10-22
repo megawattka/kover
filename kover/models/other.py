@@ -2,27 +2,25 @@
 
 from __future__ import annotations
 
-import datetime  # noqa: TC003
-import secrets
-from typing import Literal
+import datetime as dt  # ruff: ignore[typing-only-standard-library-import]
+from typing import Literal, NotRequired, Self, TypedDict, Unpack
 
-from bson import Binary  # noqa: TC002
-from pydantic import Field, model_validator
+from bson import Binary  # ruff: ignore[typing-only-third-party-import]
+from pydantic import BaseModel, Field, model_validator
 from pydantic.functional_validators import (
-    ModelWrapValidatorHandler,  # noqa: TC002
+    ModelWrapValidatorHandler,  # ruff: ignore[typing-only-third-party-import]
 )
-from typing_extensions import Self
 
-from ..enums import CollationStrength, IndexDirection, IndexType  # noqa: TC001
+from ..enums import CollationStrength, IndexDirection, IndexType  # ruff: ignore[typing-only-first-party-import]
 from ..internals.mixins import ModelMixin as _ModelMixin
-from ..typings import COMPRESSION_T, AuthTypesT, xJsonT
+from ..typings import COMPRESSION_T, AuthTypesT, JsonT
 
 
 class HelloResult(_ModelMixin):
     """Represents the result of a hello command."""
 
     me: str | None = Field(default=None)
-    local_time: datetime.datetime
+    local_time: dt.datetime
     connection_id: int
     read_only: bool
     sasl_supported_mechs: list[AuthTypesT] = Field(
@@ -40,9 +38,13 @@ class HelloResult(_ModelMixin):
         return len(self.sasl_supported_mechs) > 0
 
     def get_auth_mechanism(self) -> AuthTypesT | None:
-        """Returns a random mechanism from result mechanisms."""
+        """Returns a auth mechanism from result mechanisms."""
         if self.requires_auth:
-            return secrets.choice(self.sasl_supported_mechs)
+            if "SCRAM-SHA-256" in self.sasl_supported_mechs:
+                return "SCRAM-SHA-256"
+
+            if "SCRAM-SHA-1":
+                return "SCRAM-SHA-1"
         return None
 
 
@@ -63,7 +65,7 @@ class BuildInfo(_ModelMixin):
     @classmethod
     def _validate_openssl(
         cls,
-        data: xJsonT,
+        data: JsonT,
         wrap: ModelWrapValidatorHandler[Self],
     ) -> Self:
         data["openssl"] = data["openssl"]["running"]
@@ -79,24 +81,36 @@ class User(_ModelMixin):
     mechanisms: list[
         Literal["SCRAM-SHA-1", "SCRAM-SHA-256"]
     ] = Field(repr=False)
-    credentials: xJsonT = Field(repr=False, default_factory=xJsonT)
-    roles: list[xJsonT]
-    authentication_restrictions: list[xJsonT] = Field(
-        repr=False, default_factory=list[xJsonT],
+    credentials: JsonT = Field(repr=False, default_factory=JsonT)
+    roles: list[JsonT]
+    authentication_restrictions: list[JsonT] = Field(
+        repr=False, default_factory=list[JsonT],
     )
-    inherited_privileges: list[xJsonT] = Field(
-        repr=False, default_factory=list[xJsonT],
+    inherited_privileges: list[JsonT] = Field(
+        repr=False, default_factory=list[JsonT],
     )
-    custom_data: xJsonT = Field(
-        repr=False, default_factory=xJsonT,
+    custom_data: JsonT = Field(
+        repr=False, default_factory=JsonT,
     )
+
+
+class _IndexKwargs(TypedDict):
+    unique: NotRequired[bool]
+    hidden: NotRequired[bool]
 
 
 # https://www.mongodb.com/docs/manual/reference/command/createIndexes/#example
 class Index(_ModelMixin):
     """Represents a MongoDB index document."""
 
-    name: str  # any index name e.g my_index
+    def __init__(
+        self, name: str,
+        key: dict[str, IndexType | IndexDirection],
+        **kwargs: Unpack[_IndexKwargs],
+    ) -> None:
+        BaseModel.__init__(self, name=name, key=key, **kwargs)
+
+    name: str
     key: dict[str, IndexType | IndexDirection]
     unique: bool = Field(default=False)
     hidden: bool = Field(default=False)
@@ -124,6 +138,14 @@ class WriteConcern(_ModelMixin):
     w: str | int = "majority"
     j: bool | None = None
     wtimeout: int = 0
+
+    def to_dict(self) -> JsonT:
+        """Return the write concern document."""
+        return {
+            "w": self.w,
+            **({"j": self.j} if self.j is not None else {}),
+            **({"wtimeout": self.wtimeout} if self.wtimeout else {}),
+        }
 
 
 # https://www.mongodb.com/docs/manual/reference/read-concern/

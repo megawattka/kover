@@ -2,91 +2,77 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Self
 
-from typing_extensions import Self
+from kover.cursor import Cursor
 
 from .database import Database
 from .helpers import (
     classrepr,
     filter_non_null,
     maybe_to_dict,
+    raw_decoder,
 )
 from .models import BuildInfo, ReadConcern, WriteConcern
-from .network import MongoTransport
-from .schema import SchemaGenerator
+from .network import ConnectionPool
 from .session import Session
 from .typings import DEFAULT_MONGODB_PORT
 from .uri_parser import parse_uri
 
 if TYPE_CHECKING:
+    import asyncio
+
     from .models import ReplicaSetConfig
     from .network import AuthCredentials
-    from .schema import Document
     from .transaction import Transaction
-    from .typings import COMPRESSION_T, DocumentT, xJsonT
+    from .typings import COMPRESSION_T, DocumentT, JsonT
 
 
-def _create_connection_pool(
-    host: str,
-    port: int,
-    size: int,
-    *,
-    tls: bool,
-    loop: asyncio.AbstractEventLoop | None = None,
-) -> asyncio.Queue[MongoTransport]:
-    """Gives us a filled connection pool.
+_WRITE_CONCERN_COMMANDS = frozenset({
+    "bulkWrite",
+    "collMod",
+    "create",
+    "createIndexes",
+    "delete",
+    "drop",
+    "dropAllUsersFromDatabase",
+    "dropDatabase",
+    "dropIndexes",
+    "dropUser",
+    "findAndModify",
+    "insert",
+    "renameCollection",
+    "update",
+})
 
-    Returns:
-        Pool, filled with non connected connections.
-    """
-    pool: asyncio.Queue[MongoTransport] = asyncio.Queue()
-    for _ in range(size):
-        pool.put_nowait(MongoTransport(host, port, loop=loop, tls=tls))
-    return pool
 
-
-@classrepr("_write_concern", "_compression", "_application")
+@classrepr("_write_concern", "_pool")
 class Kover:
     """Kover client for interacting with a MongoDB server."""
 
     def __init__(
         self,
         *,
-        w: str | int = "majority",
-        pool: asyncio.Queue[MongoTransport],
-        credentials: AuthCredentials | None = None,
-        compression: COMPRESSION_T | None = None,
-        application: xJsonT | None = None,
+        write_concern: WriteConcern | None = None,
+        pool: ConnectionPool,
     ) -> None:
-        self._write_concern = WriteConcern(w=w)
+        if write_concern is None:
+            self._write_concern = WriteConcern()
+        else:
+            self._write_concern = write_concern
         self._pool = pool
-        self._credentials = credentials
-        self._compression = compression
-        self._application = application
-        self._schema_generator = SchemaGenerator()
 
     async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, *exc: object) -> bool:
         await self.close()
-        return True
+        return False
 
     async def close(self) -> None:
-        """Close the underlying transport connections.
-
-        This method closes the transport writer
-        and waits until the connection is fully closed.
-        """
-        if self._pool.empty():
-            return
-
-        while not self._pool.empty():
-            conn = await self._pool.get()
-            await conn.close()
+        """Release the resources owned by the client."""
+        await self._pool.close()
 
     def get_database(self, name: str) -> Database:
         """Get a Database instance for the specified database name.
@@ -115,19 +101,12 @@ class Kover:
         Returns:
             The Kover client instance with the updated write concern.
         """
-        self._write_concern = WriteConcern(w=w, j=j, wtimeout=wtimeout)
+        self._write_concern = WriteConcern(
+            w=w,
+            j=j,
+            wtimeout=wtimeout,
+        )
         return self
-
-    def generate_schema(self, cls: type[Document]) -> xJsonT:
-        """Generate a JSON schema for the provided Document class.
-
-        Parameters:
-            cls : The Document class for which to generate the schema.
-
-        Returns:
-            A JSON schema as a dictionary.
-        """
-        return self._schema_generator.generate(cls)
 
     @classmethod
     async def from_uri(
@@ -144,36 +123,14 @@ class Kover:
         Returns:
             An instance of newly created Kover client.
         """
-        parsed = parse_uri(uri)
-
-        fhost, fport = parsed.node_list[0]
-        tls = parsed.options.get("tls", False)
-        compressors = parsed.options.get("compressors")
-        application = {"name": parsed.options.get("appName")}
-        w = parsed.options.get("w", "majority")
-
-        transport = MongoTransport(fhost, fport, loop=loop, tls=tls)
-        await transport.connect()
-
-        hello = await transport.hello(
-            compressors, parsed.credentials, application)
-        await transport.close()
-
-        if not hello.is_primary:
-            assert hello.primary_node, "Primary node resolution failed."
-
-            fhost, fport = hello.primary_node.split(":")
-
-        args = (fhost, int(fport), parsed.options.get("maxPoolSize", 100))
-        pool = _create_connection_pool(*args, tls=tls, loop=loop)
-
-        return cls(
-            w=w,
-            pool=pool,
-            credentials=parsed.credentials,
-            compression=compressors,
-            application=application,
+        parsed = await parse_uri(uri)
+        pool = await ConnectionPool.from_parsed_uri(parsed, loop=loop)
+        write_concern = WriteConcern(
+            w=parsed.options.get("w", "majority"),
+            j=parsed.options.get("journal"),
+            wtimeout=parsed.options.get("wTimeoutMS", 0),
         )
+        return cls(write_concern=write_concern, pool=pool)
 
     @classmethod
     async def make_client(
@@ -185,8 +142,8 @@ class Kover:
         loop: asyncio.AbstractEventLoop | None = None,
         compression: COMPRESSION_T | None = None,
         tls: bool = False,
-        application: xJsonT | None = None,
-        write_concern: str | int = "majority",
+        application: JsonT | None = None,
+        w: str | int = "majority",
         max_pool_size: int = 100,
     ) -> Kover:
         """Create and return a new Kover client instance.
@@ -197,26 +154,27 @@ class Kover:
             credentials : Authentication credentials, if required.
             loop : The event loop to use for asynchronous operations.
             compression : List of compression options.
-            default_database : the name of a database that will be returned
-                by Kover.get_default_database().
             tls : the boolean value that indicated whether to use tls or no.
             application : document that will be included in hello payload
                 under the "application" field.
-            write_concern : the value of default write concern used.
+            w : the value of default write concern used.
+            max_pool_size : The maximum number of pooled connections.
 
         Returns:
             An instance of the Kover client.
         """
-        pool = _create_connection_pool(
-            host, port, max_pool_size, tls=tls, loop=loop)
-
-        return cls(
-            w=write_concern,
-            pool=pool,
+        pool = ConnectionPool(
+            host,
+            port,
             credentials=credentials,
+            loop=loop,
             compression=compression,
+            tls=tls,
             application=application,
+            max_pool_size=max_pool_size,
         )
+        write_concern = WriteConcern(w=w)
+        return cls(write_concern=write_concern, pool=pool)
 
     async def request(
         self,
@@ -225,50 +183,62 @@ class Kover:
         db_name: str = "admin",
         transaction: Transaction | None = None,
         wait_response: bool = True,
-    ) -> xJsonT:
+        write_concern: WriteConcern | None = None,
+    ) -> JsonT:
         """Send a request to MongoDB Server.
 
         Returns:
             Document, containing response from the server.
         """
-        conn = await self._pool.get()
-        if not conn.is_connected:
-            await conn.connect()
-            hello = await conn.hello(
-                self._compression, self._credentials, self._application)
+        wc_allowed = next(iter(doc.keys()), None) in _WRITE_CONCERN_COMMANDS
+        in_transaction = transaction is not None and transaction.is_active
 
-            if hello.requires_auth:
-                mechanism = hello.get_auth_mechanism()
-                await conn.authorize(mechanism, credentials=self._credentials)
-        try:
-            return await conn.request(
-                doc,
-                db_name=db_name,
-                transaction=transaction,
-                wait_response=wait_response,
-            )
-        finally:
-            await self._pool.put(conn)
+        if write_concern is None:
+            write_concern = self._write_concern
 
-    async def bulk_write(
+        if not in_transaction and wc_allowed and "writeConcern" not in doc:
+            doc["writeConcern"] = maybe_to_dict(write_concern)
+
+        return await self._pool.request(
+            doc,
+            db_name=db_name,
+            transaction=transaction,
+            wait_response=wait_response,
+        )
+
+    def bulk_write(
         self,
-        document: xJsonT,
+        document: JsonT,
         transaction: Transaction | None = None,
-    ) -> xJsonT:
+    ) -> Cursor[JsonT]:
         """Execute a bulkWrite operation and return info about it.
 
         Returns:
             Document, containing info about this operation.
         """
-        return await self.request(document, transaction=transaction)
+        database = self.get_database("admin")
+        collection = database.get_collection("$cmd.bulkWrite")
+        return Cursor(
+            query=document,
+            collection=collection,
+            decoder=raw_decoder,
+            transaction=transaction,
+        )
 
     async def refresh_sessions(self, sessions: list[Session]) -> None:
         """Refresh the provided list of sessions.
 
         Parameters:
             sessions : A list of Session objects to be refreshed.
+
+        Raises:
+            ValueError: if session does not belong to ours.
         """
-        documents: list[xJsonT] = [x.document for x in sessions]
+        for session in sessions:
+            if session.client is not self:
+                raise ValueError("Cannot refresh foreign session")
+
+        documents: list[JsonT] = [x.document for x in sessions]
         await self.request({"refreshSessions": documents})
 
     async def end_sessions(self, sessions: list[Session]) -> None:
@@ -276,8 +246,15 @@ class Kover:
 
         Parameters:
             sessions : A list of Session objects to be ended.
+
+        Raises:
+            ValueError: if session does not belong to ours.
         """
-        documents: list[xJsonT] = [x.document for x in sessions]
+        for session in sessions:
+            if session.client is not self:
+                raise ValueError("Cannot end foreign session")
+
+        documents: list[JsonT] = [x.document for x in sessions]
         await self.request({"endSessions": documents})
 
     async def start_session(self) -> Session:
@@ -312,9 +289,9 @@ class Kover:
         Returns:
             A list containing the names of all databases.
         """
-        command: xJsonT = {
+        command: JsonT = {
             "listDatabases": 1.0,
-            "nameOnly": True  # noqa: COM812
+            "nameOnly": True,
         }
         request = await self.request(command)
         return [x["name"] for x in request["databases"]]
@@ -339,7 +316,7 @@ class Kover:
             hosts : A list of hostnames whose connections should be dropped.
             comment : Optional comment for the operation.
         """
-        document: xJsonT = filter_non_null({
+        document: JsonT = filter_non_null({
             "dropConnections": 1.0,
             "hostAndPort": hosts,
             "comment": comment,
@@ -373,7 +350,7 @@ class Kover:
         Parameters:
             config : The configuration document for the replica set.
         """
-        document: xJsonT = filter_non_null({
+        document: JsonT = filter_non_null({
             "replSetReconfig": maybe_to_dict(config) or {},
             "force": force,
             "maxTimeMS": max_time_ms,
@@ -381,7 +358,7 @@ class Kover:
         await self.request(document)
 
     # https://www.mongodb.com/docs/manual/reference/command/replSetGetStatus/
-    async def get_replica_set_status(self) -> xJsonT:
+    async def get_replica_set_status(self) -> JsonT:
         """Retrieve the status of the replica set.
 
         Returns:
@@ -394,7 +371,7 @@ class Kover:
         self,
         *,
         force: bool = False,
-        timeout: int | None = None,
+        timeout: int | None = None,  # ruff: ignore[async-function-with-timeout]
         comment: str | None = None,
     ) -> None:
         """Shut down the MongoDB server.
@@ -426,7 +403,7 @@ class Kover:
     async def get_log(
         self,
         parameter: Literal["global", "startupWarnings"] = "startupWarnings",
-    ) -> list[xJsonT]:
+    ) -> list[JsonT]:
         """Retrieve log entries from the MongoDB server.
 
         Parameters:
@@ -484,7 +461,7 @@ class Kover:
     async def fsync(
         self,
         *,
-        timeout: int = 90000,
+        timeout: int = 90000,  # ruff: ignore[async-function-with-timeout]
         lock: bool = True,
         comment: str | None = None,
     ) -> None:
@@ -528,8 +505,12 @@ class Kover:
         """Get the default read and write concern settings for the database.
 
         Parameters:
-            in_memory : If True, returns a WriteConcern instance without
-                querying the server, by default False.
+            in_memory : Set to true to return the in-memory cached copy
+                of the global default read or write concern settings.
+                The instance uses the in-memory copy when applying
+                the global defaults to an operation.
+                Set to false to return the on-disk copy of the deployment's
+                global default read or write concern. Defaults to false.
             comment : Optional comment for the operation.
 
         Returns:

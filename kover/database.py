@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .collection import Collection
-from .helpers import classrepr, filter_non_null, maybe_to_dict
+from .cursor import Cursor
+from .helpers import classrepr, filter_non_null, maybe_to_dict, raw_decoder
 from .models import User
 
 if TYPE_CHECKING:
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
     from .client import Kover
     from .models import WriteConcern
     from .session import Transaction
-    from .typings import xJsonT
+    from .typings import JsonT
 
 
 @classrepr("name", "client")
@@ -46,7 +47,7 @@ class Database:
 
     async def list_collections(
         self,
-        filter_: xJsonT | None = None,
+        filter_: JsonT | None = None,
         *,
         name_only: bool = False,
         authorized_collections: bool = False,
@@ -65,26 +66,35 @@ class Database:
             A list of Collection objects or collection names
                 if name_only is True.
         """
-        request = await self.command({
+        command = filter_non_null({
             "listCollections": 1.0,
             "filter": filter_ or {},
             "nameOnly": name_only,
             "authorizedCollections": authorized_collections,
             "comment": comment,
         })
-        return [Collection(
-            name=x["name"],
-            database=self,
-            options=x["options"],
-            info=x["info"],
-        ) if not name_only else x["name"]
-            for x in request["cursor"]["firstBatch"]
+        cursor: Cursor[JsonT] = Cursor(
+            command,
+            self.get_collection("$cmd.listCollections"),
+            decoder=raw_decoder,
+        )
+        if name_only:
+            return [entry["name"] async for entry in cursor]
+
+        return [
+            Collection(
+                name=entry["name"],
+                database=self,
+                options=entry.get("options"),
+                info=entry.get("info"),
+            )
+            async for entry in cursor
         ]
 
     async def create_collection(
         self,
         name: str,
-        params: xJsonT | None = None,
+        params: JsonT | None = None,
     ) -> Collection:
         """Creates a new collection in the database.
 
@@ -100,14 +110,19 @@ class Database:
         })
         return self.get_collection(name)
 
-    async def drop_collection(self, name: str) -> None:
+    async def drop_collection(
+        self,
+        name: str,
+        comment: str | None = None,
+    ) -> None:
         """Drops a collection by name.
 
         Parameters
             name : The name of the collection to drop.
+            comment : Optional comment for the operation.
         """
-        # TODO @megawattka: add `comment` parameter
-        await self.command({"drop": name})
+        command = filter_non_null({"drop": name, "comment": comment})
+        await self.command(command)
 
     # https://gist.github.com/xandout/61d25df23a77236ab28236650f84ce6b
     async def create_user(
@@ -115,8 +130,8 @@ class Database:
         name: str,
         password: str,
         *,
-        roles: Sequence[xJsonT | str] | None = None,
-        custom_data: xJsonT | None = None,
+        roles: Sequence[JsonT | str] | None = None,
+        custom_data: JsonT | None = None,
         mechanisms: list[str] | None = None,
         comment: str | None = None,
         root: bool = False,
@@ -137,6 +152,7 @@ class Database:
         """
         if mechanisms is None:
             mechanisms = ["SCRAM-SHA-1", "SCRAM-SHA-256"]
+
         if root is True and roles is None:
             roles = [
                 {"role": "userAdminAnyDatabase", "db": "admin"},
@@ -145,6 +161,7 @@ class Database:
             ]
         if roles is None:
             raise ValueError("You need to specify user roles.")
+
         command = filter_non_null({
             "createUser": name,
             "pwd": password,
@@ -157,13 +174,13 @@ class Database:
 
     async def users_info(
         self,
-        query: str | xJsonT | list[xJsonT] | float | None = None,
+        query: str | JsonT | list[JsonT] | float | None = None,
         *,
         show_credentials: bool = False,
         show_custom_data: bool = False,
         show_privileges: bool = False,
         show_auth_restrictions: bool = False,
-        filter_: xJsonT | None = None,
+        filter_: JsonT | None = None,
         comment: str | None = None,
     ) -> list[User]:
         """Retrieves information about users in the database.
@@ -186,6 +203,7 @@ class Database:
         """
         if query is None:
             query = 1.0
+
         command = filter_non_null({
             "usersInfo": query,
             "showCredentials": show_credentials,
@@ -240,7 +258,7 @@ class Database:
     async def grant_roles_to_user(
         self,
         username: str,
-        roles: list[str | xJsonT],
+        roles: list[str | JsonT],
     ) -> None:
         """Grants roles to a user in the database.
 
@@ -255,24 +273,33 @@ class Database:
 
     async def command(
         self,
-        doc: xJsonT,
+        doc: JsonT,
         /,
         *,
         transaction: Transaction | None = None,
-    ) -> xJsonT:
+        write_concern: WriteConcern | None = None,
+    ) -> JsonT:
         """Sends a command to the database.
 
         Parameters:
             doc : The command document to send.
             transaction : An optional transaction context.
+            write_concern : Optional write concern override for the operation.
 
         Returns:
             The response from the database.
+
+        Raises:
+            ValueError: if clients are different
         """
+        if transaction is not None and transaction.client is not self.client:
+            raise ValueError("Transaction belongs to a different client")
+
         return await self.client.request(
             doc=doc,
             transaction=transaction,
             db_name=self.name,
+            write_concern=write_concern,
         )
 
     # https://www.mongodb.com/docs/manual/reference/command/ping/
@@ -283,4 +310,4 @@ class Database:
             True if the database responds successfully.
         """
         r = await self.command({"ping": 1.0})
-        return r["ok"] == 1.0
+        return r["ok"] == 1

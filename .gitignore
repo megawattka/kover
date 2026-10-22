@@ -1,18 +1,47 @@
-# basic stuff
-uv.lock
-__pycache__
-.vscode
-test.py
-.git
-out
-badges.txt
-.venv
-dist
-.ruff_cache
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+
+# Virtual environments and local Python configuration
+.venv/
+venv/
+env/
 .python-version
+
+# Packaging and build artifacts
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Project-specific generated files and scratch content
+/_out/
+/test.py
+/badges.txt
+/hatch_build.py
+/rust/
+
+# Local secrets and environment files
 .token
-Cargo.lock
-Cargo.toml
-target
-hatch_build.py
-rust
+.env
+.env.*
+!.env.example
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Other
+/target
+uv.lock

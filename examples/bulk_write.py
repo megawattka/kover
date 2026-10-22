@@ -1,7 +1,9 @@
 """Example of using Bulk Writes with Kover."""
+from __future__ import annotations
 
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
 from kover import (
     BulkWriteBuilder,
@@ -9,6 +11,9 @@ from kover import (
     Kover,
     Update,
 )
+
+if TYPE_CHECKING:
+    from kover.typings import JsonT
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -30,7 +35,9 @@ async def main() -> None:
     # and instantly deleting.
     # all operations being done step by step
 
-    await client.bulk_write(builder.build())
+    # see result output by bulk write
+    results: list[JsonT] = await client.bulk_write(builder.build()).to_list()
+    log.info(results)
 
     docs = await client.test.foos.find().to_list()
     log.info(docs)  # no docs found

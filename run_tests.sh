@@ -1,8 +1,6 @@
-# powershell run_tests.sh
-
 echo "running ruff tests..."
 ruff check
 
 echo "running unittests..."
-python -m unittest discover ./tests --quiet
-read
+python3 -m unittest discover ./tests/unit
+python3 -m unittest discover ./tests/integration

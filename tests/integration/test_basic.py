@@ -67,6 +67,7 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
         cs = await collection.find().skip(10).to_list()
         assert len(cs) == 990
         await collection.clear()
+
         await collection.insert_many([users[0]] * 75)
         cs = await collection.find().batch_size(50).to_list()
         assert len(cs) == 75
@@ -106,7 +107,7 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
         assert not await collection.delete(Delete({"name": "drake"}, limit=1))
         assert await collection.delete(Delete({"name": "dima"}, limit=1))
 
-    async def test_documents(self) -> None:  # noqa: PLR6301
+    async def test_documents(self) -> None:  # ruff: ignore[no-self-use]
         assert issubclass(User, Document)
         user = User(name="john", age=16)
         assert user.get_id() is None

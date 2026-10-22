@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, TypeVar, overload
 
 from bson import ObjectId
-from typing_extensions import overload
 
 from .cursor import Cursor
 from .enums import IndexDirection, IndexType, ValidationLevel
-from .helpers import classrepr, filter_non_null, maybe_to_dict
+from .helpers import classrepr, filter_non_null, maybe_to_dict, raw_decoder
 from .models import Delete, Index
 from .schema import Document
 
@@ -19,9 +18,9 @@ if TYPE_CHECKING:
     from .database import Database
     from .models import Collation, ReadConcern, Update, WriteConcern
     from .session import Transaction
-    from .typings import xJsonT
+    from .typings import JsonT
 
-T = TypeVar("T", bound=Document)
+T_co = TypeVar("T_co", bound=Document, covariant=True)
 
 
 @classrepr("name", "database")
@@ -42,8 +41,8 @@ class Collection:
         self,
         name: str,
         database: Database,
-        options: xJsonT | None = None,
-        info: xJsonT | None = None,
+        options: JsonT | None = None,
+        info: JsonT | None = None,
     ) -> None:
         self.name = name
         self.database = database
@@ -82,7 +81,7 @@ class Collection:
         return infos[0]
 
     # https://www.mongodb.com/docs/manual/reference/command/collMod/
-    async def coll_mod(self, params: xJsonT) -> None:
+    async def coll_mod(self, params: JsonT) -> None:
         """Modify collection settings using the collMod command.
 
         Parameters:
@@ -95,7 +94,7 @@ class Collection:
 
     async def set_validator(
         self,
-        validator: xJsonT,
+        validator: JsonT,
         *,
         level: ValidationLevel = ValidationLevel.MODERATE,
     ) -> None:
@@ -114,7 +113,7 @@ class Collection:
     # https://www.mongodb.com/docs/manual/reference/command/insert/
     async def insert_one(
         self,
-        document: xJsonT | Document,
+        document: JsonT | Document,
         /,
         *,
         ordered: bool = True,
@@ -140,9 +139,9 @@ class Collection:
             The boolean value that indicates document insertion.
         """
         insertable = maybe_to_dict(document)
-        insertable.setdefault("id", ObjectId())
+        document_id = insertable.setdefault("_id", ObjectId())
 
-        command: xJsonT = filter_non_null({
+        command: JsonT = filter_non_null({
             "insert": self.name,
             "ordered": ordered,
             "documents": [insertable],
@@ -151,12 +150,12 @@ class Collection:
             "comment": comment,
         })
         await self.database.command(command, transaction=transaction)
-        return insertable["id"]
+        return document_id
 
     # https://www.mongodb.com/docs/manual/reference/command/insert/
     async def insert_many(
         self,
-        documents: Sequence[xJsonT | Document],
+        documents: Sequence[JsonT | Document],
         /,
         *,
         ordered: bool = True,
@@ -181,11 +180,13 @@ class Collection:
         Returns:
             The amount of documents that were successfully inserted.
         """
-        insertable = [*map(maybe_to_dict, documents)]
-        for value in insertable:
-            value.setdefault("id", ObjectId())
+        insertable = [maybe_to_dict(document) for document in documents]
+        document_ids: list[ObjectId] = []
+        for document in insertable:
+            document_id = document.setdefault("_id", ObjectId())
+            document_ids.append(document_id)
 
-        command: xJsonT = filter_non_null({
+        command: JsonT = filter_non_null({
             "insert": self.name,
             "ordered": ordered,
             "documents": insertable,
@@ -194,7 +195,7 @@ class Collection:
             "comment": comment,
         })
         await self.database.command(command, transaction=transaction)
-        return [value["id"] for value in insertable]
+        return document_ids
 
     # https://www.mongodb.com/docs/manual/reference/command/update/
     async def update(
@@ -204,7 +205,7 @@ class Collection:
         max_time_ms: int = 0,
         bypass_document_validation: bool = False,
         comment: str | None = None,
-        let: xJsonT | None = None,
+        let: JsonT | None = None,
         transaction: Transaction | None = None,
     ) -> int:
         """Update documents in the collection.
@@ -246,7 +247,7 @@ class Collection:
         self,
         *deletes: Delete,
         comment: str | None = None,
-        let: xJsonT | None = None,
+        let: JsonT | None = None,
         ordered: bool = True,
         write_concern: WriteConcern | None = None,
         max_time_ms: int = 0,
@@ -277,7 +278,11 @@ class Collection:
             "writeConcern": maybe_to_dict(write_concern),
             "maxTimeMS": max_time_ms,
         })
-        request = await self.database.command(command, transaction=transaction)
+
+        request = await self.database.command(
+            command,
+            transaction=transaction,
+        )
         return request["n"]
 
     # custom function not stated in docs
@@ -294,28 +299,28 @@ class Collection:
     @overload
     async def find_one(
         self,
-        filter_: xJsonT | None,
+        filter_: JsonT | None,
         cls: None = None,
         transaction: Transaction | None = None,
-    ) -> xJsonT | None:
+    ) -> JsonT | None:
         ...
 
     @overload
     async def find_one(
         self,
-        filter_: xJsonT | None = None,
-        cls: type[T] = Document,
+        filter_: JsonT | None = None,
+        cls: type[T_co] = Document,
         transaction: Transaction | None = None,
-    ) -> T | None:
+    ) -> T_co | None:
         ...
 
-    # same as .find but has implicit .to_list and limit 1
+    # same as .find but has explicit .to_list and limit 1
     async def find_one(
         self,
-        filter_: xJsonT | None = None,
-        cls: type[T] | None = None,
+        filter_: JsonT | None = None,
+        cls: type[T_co] | None = None,
         transaction: Transaction | None = None,
-    ) -> T | xJsonT | None:
+    ) -> T_co | JsonT | None:
         """Find a single document in the collection matching the filter.
 
         Parameters:
@@ -338,27 +343,37 @@ class Collection:
     @overload
     def find(
         self,
-        filter_: xJsonT | None,
-        cls: None,
+        filter_: JsonT | None = None,
+        cls: None = None,
         transaction: Transaction | None = None,
-    ) -> Cursor[xJsonT]:
+    ) -> Cursor[JsonT]:
         ...
 
     @overload
     def find(
         self,
-        filter_: xJsonT | None = None,
-        cls: type[T] = Document,
+        filter_: JsonT | None,
+        cls: type[T_co],
         transaction: Transaction | None = None,
-    ) -> Cursor[T]:
+    ) -> Cursor[T_co]:
+        ...
+
+    @overload
+    def find(
+        self,
+        filter_: JsonT | None = None,
+        *,
+        cls: type[T_co],
+        transaction: Transaction | None = None,
+    ) -> Cursor[T_co]:
         ...
 
     def find(
         self,
-        filter_: xJsonT | None = None,
-        cls: type[T] | None = None,
+        filter_: JsonT | None = None,
+        cls: type[T_co] | None = None,
         transaction: Transaction | None = None,
-    ) -> Cursor[T] | Cursor[xJsonT]:
+    ) -> Cursor[T_co] | Cursor[JsonT]:
         """Find documents in the collection matching the filter.
 
         Parameters:
@@ -369,22 +384,35 @@ class Collection:
         Returns:
             A cursor for iterating over the matching documents.
         """
+        query = {
+            "find": self.name,
+            "filter": filter_ or {},
+        }
+
+        if cls is None:
+            return Cursor(
+                query=query,
+                collection=self,
+                decoder=raw_decoder,
+                transaction=transaction,
+            )
+
         return Cursor(
-            filter_=filter_ or {},
+            query=query,
             collection=self,
-            cls=cls,
+            decoder=cls.from_document,
             transaction=transaction,
         )
 
     # TODO @megawattka: prob make overloads for cls like in "find"?
     # https://www.mongodb.com/docs/manual/reference/command/aggregate/
-    async def aggregate(
+    def aggregate(
         self,
-        pipeline: list[xJsonT],
+        pipeline: list[JsonT],
         *,
         explain: bool = False,
         allow_disk_use: bool = True,
-        cursor: xJsonT | None = None,
+        cursor: JsonT | None = None,
         max_time_ms: int = 0,
         bypass_document_validation: bool = False,
         read_concern: ReadConcern | None = None,
@@ -392,10 +420,10 @@ class Collection:
         hint: str | None = None,
         comment: str | None = None,
         write_concern: WriteConcern | None = None,
-        let: xJsonT | None = None,
+        let: JsonT | None = None,
         transaction: Transaction | None = None,
-    ) -> list[Any]:
-        """Run an aggregation pipeline on the collection.
+    ) -> Cursor[JsonT]:
+        """Create a cursor for an aggregation pipeline on the collection.
 
         Parameters:
             pipeline : The aggregation pipeline stages.
@@ -415,7 +443,7 @@ class Collection:
             transaction : The transaction context.
 
         Returns:
-            The result documents from the aggregation.
+            A cursor for iterating over the aggregation results.
         """
         command = filter_non_null({
             "aggregate": self.name,
@@ -432,25 +460,18 @@ class Collection:
             "writeConcern": maybe_to_dict(write_concern),
             "let": let,
         })
-        request = await self.database.command(
-            command,
+        return Cursor(
+            query=command,
+            collection=self,
+            decoder=raw_decoder,
             transaction=transaction,
         )
-        cursor_id = int(request["cursor"]["id"])
-        docs: list[xJsonT] = request["cursor"]["firstBatch"]
-        if cursor_id != 0:
-            next_req = await self.database.command({
-                "getMore": cursor_id,
-                "collection": self.name,
-            })
-            docs.extend(next_req["cursor"]["nextBatch"])
-        return docs
 
     # https://www.mongodb.com/docs/manual/reference/command/distinct/
     async def distinct(
         self,
         key: str,
-        query: xJsonT | None = None,
+        query: JsonT | None = None,
         collation: Collation | None = None,
         comment: str | None = None,
         read_concern: ReadConcern | None = None,
@@ -481,6 +502,7 @@ class Collection:
             "readConcern": maybe_to_dict(read_concern),
             "hint": hint,
         })
+
         request = await self.database.command(
             command,
             transaction=transaction,
@@ -490,7 +512,7 @@ class Collection:
     # https://www.mongodb.com/docs/manual/reference/command/count
     async def count(
         self,
-        query: xJsonT | None = None,
+        query: JsonT | None = None,
         limit: int = 0,
         skip: int = 0,
         hint: str | None = None,
@@ -575,6 +597,7 @@ class Collection:
         """
         if len(indexes) == 0:
             raise ValueError("Empty sequence of indexes")
+
         command = filter_non_null({
             "createIndexes": self.name,
             "indexes": [
@@ -589,19 +612,28 @@ class Collection:
         """List all indexes on the collection.
 
         Returns:
-            A list of Index objects representing the indexes on the collection.
+            Index objects representing the collection's indexes.
         """
-        r = await self.database.command({"listIndexes": self.name})
-        info = r["cursor"]["firstBatch"]
-        return [Index(
-            name=idx["name"],
-            key={
-                k: IndexDirection(v) if isinstance(v, int) else IndexType(v)
-                for k, v in idx["key"].items()
-            },
-            unique=idx.get("unique", False),
-            hidden=idx.get("hidden", False),
-        ) for idx in info]
+        cursor: Cursor[JsonT] = Cursor({
+            "listIndexes": self.name,
+        }, collection=self, decoder=raw_decoder)
+
+        return [
+            Index(
+                name=document["name"],
+                key={
+                    key: (
+                        IndexDirection(value)
+                        if isinstance(value, int)
+                        else IndexType(value)
+                    )
+                    for key, value in document["key"].items()
+                },
+                unique=document.get("unique", False),
+                hidden=document.get("hidden", False),
+            )
+            async for document in cursor
+        ]
 
     # https://www.mongodb.com/docs/manual/reference/command/reIndex/
     async def re_index(self) -> None:

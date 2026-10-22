@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from typing import NotRequired, TypedDict, Unpack
+
 from pydantic import BaseModel
-from typing_extensions import NotRequired, TypedDict, Unpack
 
 from ..helpers import filter_non_null
 from ..internals.mixins import ModelMixin as _ModelMixin
-from ..typings import xJsonT  # noqa: TC001
-from .other import Collation  # noqa: TC001
+from ..typings import JsonT  # ruff: ignore[typing-only-first-party-import]
+from .other import Collation  # ruff: ignore[typing-only-first-party-import]
 
 
 class _UpdateKwargs(TypedDict):
@@ -17,7 +18,7 @@ class _UpdateKwargs(TypedDict):
     upsert: NotRequired[bool]
     multi: NotRequired[bool]
     collation: NotRequired[Collation | None]
-    array_filters: NotRequired[xJsonT | None]
+    array_filters: NotRequired[JsonT | None]
     hint: NotRequired[str | None]
 
 
@@ -27,24 +28,24 @@ class Update(_ModelMixin):
 
     def __init__(
         self,
-        q: xJsonT,
-        u: xJsonT,
-        c: xJsonT | None = None,
+        q: JsonT,
+        u: JsonT,
+        c: JsonT | None = None,
         /,
         **kwargs: Unpack[_UpdateKwargs],
     ) -> None:
         BaseModel.__init__(self, q=q, u=u, c=c, **kwargs)
 
-    q: xJsonT
-    u: xJsonT
-    c: xJsonT | None = None  # constants
+    q: JsonT
+    u: JsonT
+    c: JsonT | None = None  # constants
     upsert: bool = False
     multi: bool = False
     collation: Collation | None = None
-    array_filters: xJsonT | None = None
+    array_filters: JsonT | None = None
     hint: str | None = None
 
-    def as_bulk_write_op(self) -> xJsonT:
+    def as_bulk_write_op(self) -> JsonT:
         """Serialize This model for BulkWriteBuilder.
 
         Returns:
@@ -58,6 +59,7 @@ class Update(_ModelMixin):
             "hint": self.hint,
             "constants": self.c,
             "collation": self.collation,
+            "upsert": self.upsert,
         })
 
 
@@ -66,22 +68,22 @@ class _DeleteKwargs(TypedDict):
 
     limit: int
     collation: NotRequired[Collation | None]
-    hint: NotRequired[xJsonT | str | None]
+    hint: NotRequired[JsonT | str | None]
 
 
 # https://www.mongodb.com/docs/manual/reference/command/delete/#syntax
 class Delete(_ModelMixin):
     """Represents a MongoDB delete document."""
 
-    def __init__(self, q: xJsonT, /, **kwargs: Unpack[_DeleteKwargs]) -> None:
+    def __init__(self, q: JsonT, /, **kwargs: Unpack[_DeleteKwargs]) -> None:
         BaseModel.__init__(self, q=q, **kwargs)
 
-    q: xJsonT  # query
+    q: JsonT  # query
     limit: int
     collation: Collation | None = None
-    hint: xJsonT | str | None = None
+    hint: JsonT | str | None = None
 
-    def as_bulk_write_op(self) -> xJsonT:
+    def as_bulk_write_op(self) -> JsonT:
         """Serialize This model for BulkWriteBuilder.
 
         Returns:

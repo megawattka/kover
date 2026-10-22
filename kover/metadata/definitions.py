@@ -14,7 +14,7 @@ from ..internals import EmptyReprMixin as _ReprMixin
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from ..typings import xJsonT
+    from ..typings import JsonT
 
 
 class ExcludeIfNone(_ReprMixin):
@@ -50,7 +50,7 @@ class SchemaMetadata(GroupedMetadata):
     pattern: str | None = field(default=None)
     unique_items: bool | None = field(default=None)
 
-    def serialize(self) -> xJsonT:
+    def serialize(self) -> JsonT:
         """Serialize the SchemaMetadata instance.
 
         Serializing to a dictionary with camelCase keys,
