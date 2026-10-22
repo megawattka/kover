@@ -32,7 +32,7 @@ async def main() -> None:
     log.info("total files: %d", len(files))
 
     deleted = await fs.delete(file_id)
-    log.info("is file deleted? %d", deleted)
+    log.info("is file deleted? %s", deleted)
 
 
 if __name__ == "__main__":

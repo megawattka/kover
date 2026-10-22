@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from kover.transaction import Transaction
+
     from .typings import JsonT
 
 
@@ -15,6 +17,7 @@ class OperationFailure(Exception):
         self.code = code
         self.message = message
         self.err_info = None
+        self.transaction: Transaction | None = None
 
 
 class SchemaGenerationException(Exception):

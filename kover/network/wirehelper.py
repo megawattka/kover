@@ -93,7 +93,7 @@ class WireHelper:
     ) -> int:
         return {"snappy": 1, "zlib": 2, "zstd": 3}[compressor]
 
-    def get_reply(  # noqa: D102
+    def get_reply(  # ruff: ignore[undocumented-public-method]
         self,
         msg: bytes,
         op_code: int,
@@ -156,11 +156,11 @@ class WireHelper:
     ) -> tuple[int, int]:
         """Verify that the request_id is correct.
 
-        Raises:
-            AssertionError: If the request_id does not match.
-
         Returns:
             A tuple containing the length of the message and the op_code.
+
+        Raises:
+            AssertionError: If the request_id does not match.
         """
         length, _, response_to, op_code = struct.unpack("<iiii", data)
         if response_to != rid:

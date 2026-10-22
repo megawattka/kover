@@ -134,6 +134,8 @@ class MongoTransport:
             exc_value = await self._helper.get_exception(reply=reply)
             if transaction is not None:
                 transaction.end(TxnState.ABORTED, exc_value=exc_value)
+
+            exc_value.transaction = transaction
             raise exc_value
 
         if transaction is not None:

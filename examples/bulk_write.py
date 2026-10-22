@@ -5,12 +5,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-from kover import (
-    BulkWriteBuilder,
-    Delete,
-    Kover,
-    Update,
-)
+from kover import AuthCredentials, BulkWriteBuilder, Delete, Kover, Update
 
 if TYPE_CHECKING:
     from kover.typings import JsonT
@@ -21,7 +16,8 @@ logging.basicConfig(level=logging.INFO)
 
 async def main() -> None:
     """Entrypoint."""
-    client = await Kover.from_uri("mongodb://127.0.0.1:27017?tls=false")
+    credentials = AuthCredentials.from_environ()
+    client = await Kover.make_client(credentials=credentials)
 
     builder = BulkWriteBuilder()
     builder.add_insert([{"foo": "bar"}], ns="test.foos")

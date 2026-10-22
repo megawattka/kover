@@ -55,18 +55,14 @@ class User(Document):  # ruff: ignore[undocumented-public-class]
 
 
 async def main() -> None:
-    """Entrypoint.
-
-    Raises:
-        SystemExit: because of invalid user creation.
-    """
+    """Entrypoint."""
     credentials = AuthCredentials.from_environ()
-    kover = await Kover.make_client(credentials=credentials)
+    client = await Kover.make_client(credentials=credentials)
 
     generator = SchemaGenerator()
     schema = generator.generate(User)
 
-    collection = await kover.db.test.create_if_not_exists()
+    collection = await client.db.test.create_if_not_exists()
     await collection.set_validator(schema)
 
     valid_user = User(
@@ -80,23 +76,30 @@ async def main() -> None:
     log.info("%s, added!", object_id)
 
     try:
-        invalid_user = User(
+        User(
             name="Rick",
             age=15,
             user_type=UserType.ADMIN,
             friend=Friend(name="roma", age=25),
         )
     except ValidationError as e:  # it wont let you create such model
-        raise SystemExit(e.errors()) from e
+        log.info("%s", e)
 
-    # somehow if you try to insert invalid_user.to_dict()
+    # somehow if you try to insert invalid object
     # kover.exceptions.ErrDocumentValidationFailure: Rick's age is less than 18
     try:
-        await collection.insert_one(invalid_user)
+        invalid = {
+            "name": "Rick",
+            "age": 15,
+            "user_type": "ADMIN",
+            "friend": {"name": "roma", "age": 25},
+        }
+        await collection.insert_one(invalid)
     except OperationFailure as e:
-        msg: str = e.message["errmsg"]
-        log.info("got Error: %s", msg)
+        log.info("got Error: %s, %s", e.__class__, e)
         assert e.code == 121  # ErrDocumentValidationFailure  # ruff: ignore[magic-value-comparison, pytest-assert-in-except]
+
+    await client.db.drop_collection("test")
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from bson import ObjectId
 
 from kover import AuthCredentials, Kover
+from kover.exceptions import OperationFailure
 
 if TYPE_CHECKING:
     from kover import JsonT
@@ -18,21 +19,25 @@ logging.basicConfig(level=logging.INFO)
 async def main() -> None:
     """Entrypoint."""
     credentials = AuthCredentials.from_environ()
-    kover = await Kover.make_client(credentials=credentials)
-    session = await kover.start_session()
+    client = await Kover.make_client(credentials=credentials)
+    session = await client.start_session()
 
     # specify _id directly
     doc: JsonT = {"_id": ObjectId(), "name": "John", "age": 30}
-    collection = await kover.db.test.create_if_not_exists()
+    collection = await client.db.test.create_if_not_exists()
+    try:
+        async with session.start_transaction() as transaction:
+            await collection.insert_one(doc, transaction=transaction)
 
-    async with session.start_transaction() as transaction:
-        await collection.insert_one(doc, transaction=transaction)
-        # it should error with duplicate key now
-        await collection.insert_one(doc, transaction=transaction)
+            # it should error with duplicate key now
+            await collection.insert_one(doc, transaction=transaction)
+    except OperationFailure as exc:
+        log.info("Got error: %s", exc)
+        log.info("%s, %s", exc, type(exc))
 
-    exc = transaction.exception  # if exist
-    log.info("%s, %s", exc, type(exc))
-    log.info("trx state: %s", transaction.state)
+        # such try/except's will always have .transaction field
+        assert exc.transaction is not None  # ruff: ignore[pytest-assert-in-except]
+        log.info("%s", exc.transaction.state)
 
     found = await collection.find().to_list()
     log.info(found)  # no documents found due to transaction abort
