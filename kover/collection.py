@@ -10,7 +10,7 @@ from .cursor import Cursor
 from .enums import IndexDirection, IndexType, ValidationLevel
 from .helpers import classrepr, filter_non_null, maybe_to_dict, raw_decoder
 from .models import Delete, Index
-from .schema import Document
+from .schema.document import Document
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

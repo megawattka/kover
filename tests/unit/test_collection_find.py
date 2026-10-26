@@ -1,13 +1,11 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_type
 import unittest
 from unittest.mock import AsyncMock, Mock
-
-from typing_extensions import assert_type
 
 from kover.collection import Collection
 from kover.cursor import Cursor
 from kover.database import Database
-from kover.schema import Document
+from kover.schema.document import Document
 from kover.typings import JsonT
 
 if TYPE_CHECKING:
@@ -71,7 +69,3 @@ class CollectionFindTests(unittest.IsolatedAsyncioTestCase):
             assert len(items) == 1
             assert isinstance(items[0], Item)
             assert items[0].value == 1
-
-
-if __name__ == "__main__":
-    unittest.main()

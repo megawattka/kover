@@ -456,7 +456,3 @@ class ClientPoolTests(unittest.IsolatedAsyncioTestCase):
         assert "WriteConcern(w=1," in repr(client)
         await client.close()
         self.pool.close.assert_awaited_once_with()
-
-
-if __name__ == "__main__":
-    unittest.main()

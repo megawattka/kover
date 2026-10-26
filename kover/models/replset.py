@@ -5,7 +5,7 @@ from __future__ import annotations
 from bson import ObjectId  # ruff: ignore[typing-only-third-party-import]
 from pydantic import Field
 
-from ..internals.mixins import ModelMixin as _ModelMixin
+from ..mixins import ModelMixin as _ModelMixin
 from ..typings import JsonT  # ruff: ignore[typing-only-first-party-import]
 
 

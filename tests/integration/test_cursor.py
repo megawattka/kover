@@ -7,7 +7,6 @@ Credentials: MONGO_USER, MONGO_PASSWORD, optional MONGO_AUTH_DB (admin).
 
 import os
 from typing import TYPE_CHECKING
-import unittest
 from unittest.mock import AsyncMock
 
 from kover import AuthCredentials, Document, Kover, OperationFailure
@@ -211,7 +210,3 @@ class CursorIntegrationTests(MongoTestCase):
 
         assert client.pool.closed
         assert client._pool._connections.qsize() == 0  # pyright: ignore[reportPrivateUsage] # ruff: ignore[private-member-access]
-
-
-if __name__ == "__main__":
-    unittest.main()

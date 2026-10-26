@@ -3,11 +3,9 @@ from __future__ import annotations
 
 import asyncio
 import os
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict, Unpack
 import unittest
 from unittest.mock import patch
-
-from typing_extensions import Unpack
 
 from kover import AuthCredentials, Kover
 from kover.network.transport import MongoTransport
@@ -89,7 +87,3 @@ class ConnectionIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
             await pool.close()
             assert pool._connections.qsize() == 0  # pyright: ignore[reportPrivateUsage]  # ruff: ignore[private-member-access]
-
-
-if __name__ == "__main__":
-    unittest.main()

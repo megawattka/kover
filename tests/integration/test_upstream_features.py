@@ -1,5 +1,4 @@
 import os
-import unittest
 from urllib.parse import quote
 
 from kover import (
@@ -92,7 +91,3 @@ class UpstreamFeatureTests(MongoTestCase):
         for size in (0, -1, True, 16 * 1024 * 1024):
             with self.assertRaises(ValueError):
                 await fs.put(b"data", chunk_size=size)
-
-
-if __name__ == "__main__":
-    unittest.main()

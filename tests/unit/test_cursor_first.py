@@ -8,7 +8,7 @@ from kover.cursor import Cursor
 from kover.database import Database
 from kover.gridfs.gridfs import GridFS
 from kover.helpers import raw_decoder
-from kover.schema import Document
+from kover.schema.document import Document
 
 if TYPE_CHECKING:
     from kover.typings import JsonT
@@ -264,7 +264,3 @@ class CommandCursorTests(unittest.IsolatedAsyncioTestCase):
             await database.command({"ping": 1}, transaction=transaction)
 
         socket.request.assert_not_awaited()
-
-
-if __name__ == "__main__":
-    unittest.main()

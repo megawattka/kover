@@ -37,10 +37,10 @@ async def main() -> None:
 
         # such try/except's will always have .transaction field
         assert exc.transaction is not None  # ruff: ignore[pytest-assert-in-except]
-        log.info("%s", exc.transaction.state)
+        log.info("State after transaction: %s", exc.transaction.state)
 
     found = await collection.find().to_list()
-    log.info(found)  # no documents found due to transaction abort
+    log.info("documents found: %s", found)  # no documents found due to abort
 
 
 if __name__ == "__main__":

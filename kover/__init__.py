@@ -59,7 +59,7 @@ from .models import (
 )
 from .network import AuthCredentials, MongoTransport
 from .network.pool import ConnectionPool
-from .schema import Document, SchemaGenerator
+from .schema.document import Document
 from .session import Session
 from .transaction import Transaction
 from .typings import JsonT
@@ -91,7 +91,6 @@ __all__ = (
     "ReplicaSetConfigSettings",
     "ReplicaSetMember",
     "SchemaGenerationException",
-    "SchemaGenerator",
     "Session",
     "Transaction",
     "Update",

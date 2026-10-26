@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from asyncio import CancelledError
 from collections import deque
-from typing import TYPE_CHECKING, NoReturn, Self, TypeVar, cast
+from typing import TYPE_CHECKING, NoReturn, Self, cast
 
 from bson import Int64
 
@@ -14,14 +14,12 @@ from .helpers import maybe_to_dict
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from types import TracebackType
 
     from .collection import Collection
     from .models import Collation
     from .session import Transaction
     from .typings import JsonT
-
-
-T = TypeVar("T")
 
 
 class Cursor[T]:
@@ -61,9 +59,9 @@ class Cursor[T]:
 
     async def __aexit__(
         self,
-        exc_type: object,
+        exc_type: type[BaseException] | None,
         exc_value: BaseException | None,
-        traceback: object,
+        traceback: TracebackType | None,
     ) -> None:
         if exc_value is None:
             await self.close()

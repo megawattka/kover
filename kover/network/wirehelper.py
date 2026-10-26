@@ -8,16 +8,14 @@ import struct
 import sys
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from bson import (
-    DEFAULT_CODEC_OPTIONS,
-    decode,  # type: ignore[reportUnknownVariableType]
-    encode,
-)
+from bson import decode, encode  # pyright: ignore[reportUnknownVariableType]
+from bson.codec_options import CodecOptions, TypeRegistry
 
 from .. import __version__
+from ..error_codes import get_exception_type
 from ..exceptions import OperationFailure
-from ..internals.error_codes import get_exception_type
 from . import get_context_by_id
+from .type_codecs import BytesToBinaryDecoder
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -30,6 +28,13 @@ OP_COMPRESSED: Final[int] = 2012
 
 class WireHelper:
     """Helpers and serializers for MongoDB transport."""
+
+    def __init__(self) -> None:
+        self._codec_options: CodecOptions[JsonT] = CodecOptions(
+            type_registry=TypeRegistry(type_codecs=[
+                BytesToBinaryDecoder(),
+            ]),
+        )
 
     @staticmethod
     def _randint() -> int:  # request_id must be any integer
@@ -50,8 +55,8 @@ class WireHelper:
         )
         return rid, header + message
 
-    @staticmethod
     def _query_impl(
+        self,
         doc: JsonT,
         collection: str = "admin",
     ) -> bytes:
@@ -59,7 +64,7 @@ class WireHelper:
         encoded = encode(
             doc,
             check_keys=False,
-            codec_options=DEFAULT_CODEC_OPTIONS,
+            codec_options=self._codec_options,
         )
         return b"".join([
             struct.pack("<i", 0),  # flags
@@ -69,8 +74,8 @@ class WireHelper:
             encoded,  # doc itself
         ])
 
-    @staticmethod
     def _op_msg_impl(
+        self,
         command: Mapping[str, Any],
         flags: int = 0,
     ) -> bytes:
@@ -79,7 +84,7 @@ class WireHelper:
         encoded = encode(
             command,
             check_keys=False,
-            codec_options=DEFAULT_CODEC_OPTIONS,
+            codec_options=self._codec_options,
         )
         return b"".join([
             struct.pack("<i", flags),
@@ -114,7 +119,7 @@ class WireHelper:
         else:
             raise AssertionError(f"Unsupported op_code from server: {op_code}")
 
-        return decode(message, codec_options=DEFAULT_CODEC_OPTIONS)
+        return decode(message, codec_options=self._codec_options)
 
     def get_message(
         self,

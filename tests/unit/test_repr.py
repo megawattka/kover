@@ -22,7 +22,3 @@ class InvalidUriTests(unittest.IsolatedAsyncioTestCase):
         transport = MongoTransport("127.0.0.1", 27017, tls=False)
         await transport.connect()
         repr(transport)
-
-
-if __name__ == "__main__":
-    unittest.main()

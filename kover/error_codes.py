@@ -2,7 +2,7 @@
 
 from asyncio import Lock
 
-from ..exceptions import OperationFailure
+from .exceptions import OperationFailure
 
 # https://www.mongodb.com/docs/manual/reference/error-codes/
 _codes_to_exc_name: dict[str, str] = {

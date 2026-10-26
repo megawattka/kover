@@ -9,16 +9,14 @@ from enum import Enum
 import logging
 from typing import Annotated
 
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 
 from kover import (
     AuthCredentials,
     Document,
     Kover,
     OperationFailure,
-    SchemaGenerator,
 )
-from kover.metadata import SchemaMetadata
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -32,7 +30,7 @@ class UserType(Enum):  # ruff: ignore[undocumented-public-class]
 
 class Friend(Document):  # ruff: ignore[undocumented-public-class]
     name: str
-    age: Annotated[int, SchemaMetadata(minimum=18)]  # minimum age is 18.
+    age: Annotated[int, Field(ge=18)]  # minimum age is 18.
 
 
 # kover automatically generates aliases using camel case.
@@ -40,16 +38,14 @@ class Friend(Document):  # ruff: ignore[undocumented-public-class]
 # if you still need to snake cased field_name
 # use explicit alias="<snake_cased_name>"
 class User(Document):  # ruff: ignore[undocumented-public-class]
-    name: Annotated[str, SchemaMetadata(description="must be a string")]
+    name: Annotated[str, Field(description="must be a string")]
     age: Annotated[
         int,
-        SchemaMetadata(
-            description="age must be int and more that 18", minimum=18,
-        ),
+        Field(description="age must be int and more that 18", ge=18),
     ]
     user_type: Annotated[
         UserType,
-        SchemaMetadata(description="can only be one of the enum values"),
+        Field(description="can only be one of the enum values"),
     ]
     friend: Friend | None
 
@@ -59,8 +55,7 @@ async def main() -> None:
     credentials = AuthCredentials.from_environ()
     client = await Kover.make_client(credentials=credentials)
 
-    generator = SchemaGenerator()
-    schema = generator.generate(User)
+    schema = User.model_mongodb_schema()
 
     collection = await client.db.test.create_if_not_exists()
     await collection.set_validator(schema)

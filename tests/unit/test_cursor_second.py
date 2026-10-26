@@ -12,7 +12,7 @@ from kover.collection import Collection
 from kover.cursor import Cursor
 from kover.database import Database
 from kover.helpers import raw_decoder
-from kover.schema import Document
+from kover.schema.document import Document
 
 if TYPE_CHECKING:
     from kover.typings import JsonT
@@ -282,7 +282,3 @@ class CursorTests(unittest.IsolatedAsyncioTestCase):
             release.set()
             assert await task == {"value": 1}
         self.command.assert_awaited_once()
-
-
-if __name__ == "__main__":
-    unittest.main()

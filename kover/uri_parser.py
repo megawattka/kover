@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import Field
 from pymongo.asynchronous.uri_parser import parse_uri as _parse_uri
 
-from .internals.mixins import ModelMixin as _ModelMixin
+from .mixins import ModelMixin as _ModelMixin
 from .network import AuthCredentials
 from .typings import JsonT  # ruff: ignore[typing-only-first-party-import]
 

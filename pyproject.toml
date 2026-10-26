@@ -93,10 +93,10 @@ strict-checking = true
 
 [tool.ruff.lint.per-file-ignores]
 "kover/__init__.py" = ["line-too-long"]  # line too long
-"kover/metadata/definitions.py" = ["docstring-missing-yields"]  # undocumented yield
 "tests/*" = [
     "undocumented-public-class",  # undocumented public class/method
     "undocumented-public-method",  # undocumented public method
+    "undocumented-public-function",
     "hardcoded-password-func-arg",  # hardcoded password
     "typing-only-standard-library-import",  # type checking blocks
     "pytest-unittest-raises-assertion",  # unittest style
@@ -112,6 +112,7 @@ strict-checking = true
 ]
 "kover/network/compressors.py" = ["no-self-use"]  # Could be staticmethod no self
 "kover/typings.py" = ["undocumented-public-method"]  # public method docstring
+"kover/schema/serializers.py" = ["undocumented-public-function"]
 
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = ["typing", "typing_extensions"]
@@ -132,6 +133,8 @@ dev = [
     "flake8 >= 7.4.1",
     "hatchling>=1.27.0",
     "pyright >= 1.1.414",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.1",
     "ruff >= 0.17.1",
 ]
 
@@ -145,14 +148,16 @@ include = [
     # "rust/*.rs"
 ]
 exclude = [
-    "benchmarks",
     "examples",
     "tests",
 ]
 
 [tool.pyright]
-exclude = ["benchmarks"]
+exclude = ["_out"]
 typeCheckingMode = "strict"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 # [tool.maturin]
 # python-source = "."

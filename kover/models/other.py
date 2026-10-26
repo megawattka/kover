@@ -12,7 +12,7 @@ from pydantic.functional_validators import (
 )
 
 from ..enums import CollationStrength, IndexDirection, IndexType  # ruff: ignore[typing-only-first-party-import]
-from ..internals.mixins import ModelMixin as _ModelMixin
+from ..mixins import ModelMixin as _ModelMixin
 from ..typings import COMPRESSION_T, AuthTypesT, JsonT
 
 

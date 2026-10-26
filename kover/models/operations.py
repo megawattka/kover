@@ -7,7 +7,7 @@ from typing import NotRequired, TypedDict, Unpack
 from pydantic import BaseModel
 
 from ..helpers import filter_non_null
-from ..internals.mixins import ModelMixin as _ModelMixin
+from ..mixins import ModelMixin as _ModelMixin
 from ..typings import JsonT  # ruff: ignore[typing-only-first-party-import]
 from .other import Collation  # ruff: ignore[typing-only-first-party-import]
 

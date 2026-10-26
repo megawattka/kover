@@ -51,8 +51,11 @@ class TestMethods(unittest.IsolatedAsyncioTestCase):
         assert count == 101, count
 
         found = await self.collection.find_one({"name": doc.name}, cls=Sample)
-        assert found == doc, (found, doc)
+        assert found is not None
 
-
-if __name__ == "__main__":
-    unittest.main()
+        new = Sample(
+            name=found.name,
+            age=found.age,
+            uuid=found.uuid,
+        )
+        assert new.to_dict() == doc.to_dict(), (new, doc)

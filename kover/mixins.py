@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
 if TYPE_CHECKING:
-    from ..typings import JsonT
+    from .typings import JsonT
 
 
 class EmptyReprMixin:
@@ -26,7 +26,7 @@ class ModelMixin(BaseModel):
 
     model_config = ConfigDict(
         alias_generator=to_camel,
-        extra="ignore",
+        extra="allow",
         arbitrary_types_allowed=True,
         use_enum_values=True,
     )

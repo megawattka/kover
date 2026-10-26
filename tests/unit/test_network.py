@@ -314,7 +314,3 @@ class NetworkTests(unittest.IsolatedAsyncioTestCase):
         assert type(first) is type(second)
         assert first.err_info == {"detail": "first"}
         assert second.err_info == {"detail": "second"}
-
-
-if __name__ == "__main__":
-    unittest.main()

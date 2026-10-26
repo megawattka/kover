@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from .typings import JsonT
 
 
-@classrepr("document")
+@classrepr("document", "tx_id")
 class Session:
     """Represents a MongoDB session.
 
@@ -27,6 +27,11 @@ class Session:
         self.document: JsonT = document
         self.client = client
         self._transaction_number = Int64(-1)
+
+    @property
+    def tx_id(self) -> Int64:
+        """Gives current transaction id."""
+        return self._transaction_number
 
     def start_transaction(self) -> Transaction:
         """Start a new transaction for this session.

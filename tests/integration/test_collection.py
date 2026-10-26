@@ -1,4 +1,3 @@
-import unittest
 from uuid import UUID, uuid4
 
 from bson import ObjectId
@@ -23,7 +22,11 @@ class CollectionIntegrationTests(MongoTestCase):
         document_id = await collection.insert_one(sample)
         assert isinstance(document_id, ObjectId)
         found = await collection.find_one({"_id": document_id}, cls=Sample)
-        assert found == sample
+        assert found is not None
+        converted = found.to_dict()
+        del converted["_id"]
+
+        assert converted == sample.to_dict()
         assert isinstance(await collection.find_one(), dict)
         assert await collection.update(Update({"_id": document_id}, {
             "$set": {"age": 21},
@@ -45,7 +48,3 @@ class CollectionIntegrationTests(MongoTestCase):
         assert await collection.count() == 100
         assert await collection.clear() == 100
         assert await collection.count() == 0
-
-
-if __name__ == "__main__":
-    unittest.main()

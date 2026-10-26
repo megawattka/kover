@@ -1,7 +1,6 @@
 from hashlib import sha1
 import logging
 import os
-import unittest
 
 from kover.gridfs import GridFS
 from kover.gridfs.exceptions import GridFSFileNotFound
@@ -36,7 +35,7 @@ class GridFSIntegrationTests(MongoTestCase):
 
         assert await fs.exists(file_id)
         by_name, _ = await fs.get_by_filename("large.bin")
-        assert by_name.get_id() == file_id
+        assert by_name.get_object_id() == file_id
         assert len(await fs.list()) == 1
         assert await fs.delete(file_id)
 
@@ -47,7 +46,3 @@ class GridFSIntegrationTests(MongoTestCase):
 
         with self.assertRaises(GridFSFileNotFound):
             await fs.get_by_file_id(file_id)
-
-
-if __name__ == "__main__":
-    unittest.main()

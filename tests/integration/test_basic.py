@@ -10,7 +10,6 @@ from kover import (
     Delete,
     Document,
     Kover,
-    SchemaGenerator,
 )
 
 
@@ -35,7 +34,6 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
 
     def __init__(self, *args: str, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
-        self.schema_generator = SchemaGenerator()
         self.test_collection_name: str = "test"
         self.credentials = AuthCredentials(
             username="main_m1",
@@ -110,7 +108,7 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
     async def test_documents(self) -> None:  # ruff: ignore[no-self-use]
         assert issubclass(User, Document)
         user = User(name="john", age=16)
-        assert user.get_id() is None
+        assert user.get_object_id() is None
         document = user.to_dict()
         assert "_id" not in document
         serialized = User.from_document(document)
@@ -137,27 +135,32 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
         assert serialized.subdocument.a == 1
         assert serialized.subdocument.b == "5"
 
-    async def test_base_schema(self) -> None:
-        schema = self.schema_generator.generate(User)
+    @staticmethod
+    async def test_base_schema() -> None:
+        schema = User.model_mongodb_schema()
         assert schema == {
             "$jsonSchema": {
                 "additionalProperties": False,
-                "bsonType": ["object"],
                 "properties": {
-                    "_id": {
-                        "bsonType": ["objectId"],
+                    "name": {
+                        "bsonType": "string",
                     },
                     "age": {
-                        "bsonType": ["int", "long"],
+                        "bsonType": [
+                            "int",
+                            "long",
+                        ],
                     },
-                    "name": {
-                        "bsonType": ["string"],
+                    "_id": {
+                        "bsonType": "objectId",
                     },
                 },
-                "required": ["name", "age", "_id"],
+                "required": [
+                    "name",
+                    "age",
+                    "_id",
+                ],
+                "title": "User",
+                "bsonType": "object",
             },
         }
-
-
-if __name__ == "__main__":
-    unittest.main()

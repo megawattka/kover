@@ -206,7 +206,3 @@ class ClientTests(unittest.IsolatedAsyncioTestCase):
             await client.refresh_sessions([session])
             await client.end_sessions([session])
             assert connection.request.await_count == 2
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -7,7 +7,6 @@ MONGO_PORT, MONGO_USER and MONGO_PASSWORD. Each test uses an isolated database.
 import asyncio
 from collections.abc import Coroutine
 import os
-import unittest
 
 from kover import AuthCredentials, Delete, Kover, Update
 from tests.integration.base import MongoTestCase
@@ -147,7 +146,3 @@ class MultipleWorkersIntegrationTests(MongoTestCase):
         assert all(doc["updates"] == expected_updates for doc in documents)
         assert all(doc["payload"] == payload for doc in documents)
         assert await self.database.ping()
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -8,8 +8,7 @@ from typing import Annotated
 from bson import Binary, ObjectId  # ruff: ignore[typing-only-third-party-import]
 from pydantic import Field
 
-from ..metadata import SchemaMetadata
-from ..schema import Document
+from ..schema.document import Document
 
 
 class Chunk(Document):
@@ -22,7 +21,7 @@ class Chunk(Document):
     """
 
     files_id: ObjectId = Field(alias="files_id")
-    n: Annotated[int, SchemaMetadata(minimum=0)]
+    n: Annotated[int, Field(ge=0)]
     data: Binary = Field(repr=False)
 
 
@@ -38,9 +37,7 @@ class File(Document):
     """
 
     length: int
-    upload_date: dt.datetime = Field(alias="upload_date")
+    upload_date: dt.datetime
     filename: str | None = None
     metadata: dict[str, object] = Field(default_factory=dict)
-    chunk_size: Annotated[int, SchemaMetadata(minimum=0)] = Field(
-        alias="chunk_size",
-    )
+    chunk_size: Annotated[int, Field(ge=0)]

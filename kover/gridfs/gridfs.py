@@ -161,7 +161,8 @@ class GridFS:
             metadata={
                 "sha1": sha1(binary.getvalue()).hexdigest(),
             } if add_sha1 else {},
-        ).set_id(file_id)
+        )
+        file.set_object_id(file_id)
 
         file.metadata.update(metadata or {})
         await self._files.insert_one(
@@ -224,8 +225,9 @@ class GridFS:
         """
         file = await self._files.find_one({"filename": filename}, cls=File)
         if file is not None:
-            document_id = file.get_id()
+            document_id = file.get_object_id()
             return await self.get_by_file_id(document_id)
+
         raise GridFSFileNotFound("No file with that filename found")
 
     async def delete(
