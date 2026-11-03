@@ -7,6 +7,7 @@ from ..exceptions import (
     PoolPausedError,
     PoolTimeoutError,
     ProtocolError,
+    ServerSelectionError,
 )
 from .auth import Auth, AuthCredentials
 from .compressors import get_context_by_id
@@ -30,6 +31,7 @@ __all__ = (
     "PoolPausedError",
     "PoolTimeoutError",
     "ProtocolError",
+    "ServerSelectionError",
     "Transport",
     "get_context_by_id",
 )

@@ -5,7 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from kover import AuthCredentials, Kover, WriteConcern
+from kover.models.network import Address
 from kover.models.replset import ReplicaSetConfig
+from kover.network.discovery import DiscoveryOptions
 from kover.network.pool import ConnectionPool
 from kover.session import Session
 from kover.uri_parser import parse_uri
@@ -150,7 +152,7 @@ async def test_context_closes_pool_and_preserves_body_exception() -> None:
     assert client.pool is pool
 
 
-async def test_factory_is_lazy_and_passes_network_configuration() -> None:
+async def test_factory_discovers_and_passes_network_configuration() -> None:
     credentials = AuthCredentials(username="user", password="password")
     with patch("kover.client.ConnectionPool", autospec=True) as pool_type:
         client = await Kover.make_client(
@@ -163,9 +165,9 @@ async def test_factory_is_lazy_and_passes_network_configuration() -> None:
             w=2,
             max_pool_size=3,
         )
-        pool_type.assert_called_once_with(
-            "host",
-            27018,
+        pool_type.discover.assert_awaited_once_with(
+            [Address(host="host", port=27018)],
+            options=DiscoveryOptions(),
             credentials=credentials,
             loop=None,
             compression=["zlib"],
@@ -173,17 +175,16 @@ async def test_factory_is_lazy_and_passes_network_configuration() -> None:
             application={"name": "test"},
             max_pool_size=3,
         )
-        pool_type.return_value.request.assert_not_awaited()
+        pool = pool_type.discover.return_value
+        pool.request.assert_not_awaited()
         await client.request({"insert": "items"})
-        assert pool_type.return_value.request.await_args.args[0][
+        assert pool.request.await_args.args[0][
             "writeConcern"
         ] == {"w": 2}
         await client.close()
 
 
-async def test_from_uri_delegates_discovery_and_preserves_write_concern() -> (
-    None
-):
+async def test_from_uri_delegates_discovery_and_preserves_w_concern() -> None:
     uri = "mongodb://seed/?w=2&journal=true&wTimeoutMS=50"
     parsed = await parse_uri(uri)
     pool = MagicMock(spec=ConnectionPool)

@@ -13,7 +13,7 @@ from pydantic.functional_validators import (
 
 from ..enums import CollationStrength, IndexDirection, IndexType  # ruff: ignore[typing-only-first-party-import]
 from ..mixins import ModelMixin as _ModelMixin
-from ..typings import CompressionT, AuthTypesT, DictT
+from ..typings import AuthTypesT, CompressionT, DictT
 
 
 class HelloResult(_ModelMixin):
@@ -30,8 +30,16 @@ class HelloResult(_ModelMixin):
     is_primary: bool = Field(alias="isWritablePrimary")
     primary_node: str | None = Field(default=None, alias="primary")
     hosts: list[str] | None = Field(default=None)
+    passives: list[str] = Field(default_factory=list)
+    arbiters: list[str] = Field(default_factory=list)
+    secondary: bool = False
+    arbiter_only: bool = False
+    hidden: bool = False
+    is_replica_set: bool = Field(default=False, alias="isreplicaset")
     set_name: str | None = Field(default=None)
     set_version: int | None = Field(default=None)
+    tags: dict[str, str] = Field(default_factory=dict)
+    last_write: DictT = Field(default_factory=dict)
 
     @property
     def requires_auth(self) -> bool:

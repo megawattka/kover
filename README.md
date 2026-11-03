@@ -22,6 +22,7 @@ Built directly over `asyncio` streams and the MongoDB Wire Protocol (`OP_MSG` an
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Server Discovery & Read Preferences](#server-discovery--read-preferences)
 - [Documents & MongoDB Schema Generation](#documents--mongodb-schema-generation)
 - [CRUD & Collection Operations](#crud--collection-operations)
 - [Bulk Writes](#bulk-writes)
@@ -39,7 +40,8 @@ Built directly over `asyncio` streams and the MongoDB Wire Protocol (`OP_MSG` an
 
 ## Key Features
 
-- **Native `asyncio` Networking:** Communicates directly over `asyncio.StreamReader` / `asyncio.StreamWriter` using MongoDB's modern wire protocol (`OP_MSG` / `OP_COMPRESSED`) and a lazy `ConnectionPool`—zero thread-pool overhead.
+- **Native `asyncio` Networking:** Communicates directly over `asyncio.StreamReader` / `asyncio.StreamWriter` using MongoDB's modern wire protocol (`OP_MSG` / `OP_COMPRESSED`). Factories discover servers eagerly; application connections are opened lazily in per-server pools.
+- **Read Preference Routing:** Supports all five modes, ordered tag sets, max staleness, and RTT latency windows. Eligible reads route per operation; writes use primary routing, cursors retain server affinity, and transactions require primary reads. Discovery is snapshot-based, without background monitoring or automatic failover.
 - **First-Class Pydantic v2 Integration:** Define typed `Document` models with automatic BSON/Python serialization (`ObjectId`, `Binary`, `UUID`, `Decimal`, `Enum`, nested models, unions, and tuples).
 - **MongoDB `$jsonSchema` Generation:** Compile Pydantic v2 models straight into MongoDB-compatible `$jsonSchema` validators via `Document.model_mongodb_schema()`, automatically resolving `$defs`/`$ref`, Draft 2020-12 constraints, and BSON type mappings.
 - **Strictly Typed (`py.typed`):** Engineered for `pyright` in `strict` mode and linted with `ruff`. Overloaded query methods (`find`, `find_one`) return `Cursor[Model]` / `Model | None` when `cls=Model` is supplied, or `DictT` dictionaries otherwise.
@@ -57,7 +59,7 @@ Built directly over `asyncio` streams and the MongoDB Wire Protocol (`OP_MSG` an
 
 Core runtime dependencies (installed automatically):
 - `pydantic >= 2.10.6`
-- `pymongo >= 4.19` *(used strictly for its `bson` package and asynchronous MongoDB URI parser—all networking and protocol handling is native to Kover)*
+- `pymongo >= 4.19` *(used for BSON, URI parsing/validation, and host parsing; application networking and protocol handling are native to Kover)*
 - `typing-extensions >= 4.16.0`
 
 ---
@@ -86,7 +88,7 @@ uv add "kover[snappy,zstd]"
 
 ### Connecting via MongoDB URI
 
-`Kover.from_uri()` parses MongoDB URI options, resolves the writable primary node, configures the connection pool, and closes idle connections when exiting `async with`:
+`Kover.from_uri()` parses supported MongoDB URI options and discovers a suitable server before returning. Use the client as an async context manager to close its per-server pools on exit:
 
 ```python
 import asyncio
@@ -143,6 +145,154 @@ db = client.get_database("shop")      # or client.shop
 orders = db.get_collection("orders")  # or client.shop.orders
 files = client.shop.fs.files          # namespaced collection "fs.files"
 ```
+
+---
+
+## Server Discovery & Read Preferences
+
+### Discovery and Connection Lifecycle
+
+Both factories perform initial discovery before returning. All URI seeds are
+probed concurrently, and replica set members advertised by `hello` are followed
+until a server satisfies the read preference (primary by default).
+Standalone servers (one seed) and mongos routers are also supported.
+`replicaSet` constrains the expected set name;
+`directConnection=true` instead selects the single seed regardless of its role.
+
+For replica sets, use reachable hostnames from the replica set configuration:
+seed aliases are replaced by the canonical addresses advertised by the servers.
+
+```python
+client = await Kover.from_uri(
+    "mongodb://seed1:27017,seed2:27017/?replicaSet=rs0"
+    "&serverSelectionTimeoutMS=5000&connectTimeoutMS=1000"
+)
+await client.close()
+# Equivalent discovery settings for a single seed (timeouts in seconds):
+client = await Kover.make_client(
+    "seed1", replica_set="rs0",
+    server_selection_timeout=5.0, connect_timeout=1.0,
+)
+await client.close()
+```
+
+If no suitable server is found, `ServerSelectionError` includes per-server
+diagnostics. Probe connections are closed on success, failure and cancellation.
+Authentication uses `authSource`, the URI database, or `admin`, in that order.
+Use these factories for discovery and routing; directly constructing a
+`ConnectionPool(host, port)` creates a low-level single-server pool instead.
+
+| URI option | `Kover.make_client()` argument | Default |
+| --- | --- | --- |
+| `replicaSet` | `replica_set` | No expected set name |
+| `directConnection` | `direct_connection` | `False` |
+| `serverSelectionTimeoutMS` | `server_selection_timeout` | 30 seconds |
+| `connectTimeoutMS` | `connect_timeout` | 10 seconds per discovery probe |
+| `localThresholdMS` | `local_threshold` | 0.015 seconds |
+| `maxPoolSize` | `max_pool_size` | 100 connections **per server** |
+
+URI timeout and latency options above use milliseconds; programmatic arguments
+use seconds. `connect_timeout=None` (URI `connectTimeoutMS=0`) disables the
+per-probe timeout, not the overall selection deadline. Discovery timeouts do
+not configure timeouts for subsequent application connection setup or commands.
+
+### Read Preferences
+
+All five modes are supported. The following rules apply to replica sets and
+the currently observed discovery snapshot:
+
+| Mode | Eligible servers and fallback |
+| --- | --- |
+| `primary` | Primary only; the default. |
+| `primaryPreferred` | Primary if observed; otherwise matching secondaries. |
+| `secondary` | Matching secondaries only; never falls back to primary. |
+| `secondaryPreferred` | Matching secondaries; otherwise primary. |
+| `nearest` | Matching primary and secondaries within the RTT latency window; does not mean geographically nearest. |
+
+Configure a client default via URI options
+(`readPreference`, repeated `readPreferenceTags`, `maxStalenessSeconds`, and
+`localThresholdMS`) or programmatically:
+
+```python
+client = await Kover.from_uri(
+    "mongodb://seed1:27017,seed2:27017/shop?replicaSet=rs0"
+    "&readPreference=secondaryPreferred"
+    "&readPreferenceTags=region:east&readPreferenceTags="
+    "&maxStalenessSeconds=120&localThresholdMS=15"
+)
+await client.close()
+```
+
+```python
+from kover import Kover, ReadPreference
+
+client = await Kover.make_client(
+    "seed1", replica_set="rs0",
+    read_preference=ReadPreference(
+        "secondaryPreferred",
+        tag_sets=({"region": "east"}, {}),
+        max_staleness_seconds=120,
+    ),
+    local_threshold=0.015,  # seconds; URI localThresholdMS uses milliseconds
+)
+async with client:
+    collection = client.get_database("shop").get_collection("orders")
+    # Override a lazy find or aggregate cursor before execution:
+    orders = await (
+        collection.find({})
+        .read_preference(ReadPreference("nearest"))
+        .to_list()
+    )
+    # Low-level per-operation override (also on Database.command):
+    reply = await client.request(
+        {"count": "orders"}, db_name="shop",
+        read_preference=ReadPreference("primary"),
+    )
+```
+
+Tag sets are tried in order after staleness filtering; `{}` is a catch-all.
+Omit tags for unrestricted matching. `primary` rejects nonempty tags and
+enabled max staleness. Max staleness is disabled by `-1`; otherwise it must be
+an integer of at least 90 seconds. Tag sets and max staleness do not constrain
+the primary fallback in preferred modes.
+Selection randomly chooses among eligible servers within the fastest observed
+RTT plus the latency window (15 ms by default). Mongos receives the read policy
+for downstream routing; standalone servers omit it.
+
+`find`, `count`, `distinct`, read-only `aggregate`, and their `explain` wrappers
+can use non-primary routing; legacy inline `mapReduce` is also classified as a
+read. Other commands conservatively use primary routing. Collection helpers
+inherit the client default; only cursors, `Kover.request()`, and
+`Database.command()` expose per-operation read preference overrides.
+Set a cursor override before iteration, `first()`, `to_list()`, or
+`command_result()`; it cannot be changed after execution starts.
+
+Writes, unknown/admin commands, and aggregates containing `$out` or `$merge`
+use primary routing regardless of the read policy. Transactions require
+`primary` for reads and pin their server; `getMore` and `killCursors` always
+return to the server that created the cursor, not necessarily the same socket.
+Sessions pin a **server address**, never a connection. `server_address` on
+low-level requests is reserved for `getMore`/`killCursors`; it is not a general
+write-routing override.
+
+**Direct-connection exception:** `directConnection=true` requires exactly one
+seed and keeps every operation on that server regardless of role. A write to
+a directly connected secondary is not redirected to primary and may be rejected
+by MongoDB. For nontransactional primary-mode reads against a direct replica
+set member, Kover sends `primaryPreferred` wire metadata to permit reading from
+that member. Direct mode does not make secondary transactions valid.
+
+This is **not full SDAM**: discovery snapshots are cached, and on-demand scans
+run when no cached server satisfies an operation. There is no background
+monitoring, automatic failover, or retry after a command fails. Staleness uses
+the observed `hello` timestamps and a nominal 10-second heartbeat interval,
+not continuously refreshed measurements. Cached roles can become outdated after
+an election, and preferred modes can continue using a cached fallback without
+discovering a recovered preferred server. Recreate the client when a fresh
+topology view is needed. A slow member can delay non-primary selection until
+its probe timeout or the overall selection deadline. Load-balanced mode is
+unsupported; accepting URI syntax does not imply support for every PyMongo
+option (for example, automatic retries or custom TLS certificate options).
 
 ---
 
@@ -295,19 +445,22 @@ await users.update(
 )
 
 # Batch multiple update specs in one command
-await users.update_many([
+await users.update(
     Update({"role": "MEMBER"}, {"$set": {"profile": {"bio": "New", "rating": 5.0}}}, multi=True),
-])
+)
 
 # Delete one (limit=1) or all matching documents (limit=0)
 deleted_one = await users.delete(Delete({"username": "dana"}, limit=1))
-deleted_many = await users.delete_many([Delete({"age": {"$lt": 20}}, limit=0)])
+deleted_many = await users.delete(Delete({"age": {"$lt": 20}}, limit=0))
 
 # Remove all documents from the collection
 cleared = await users.clear()
 ```
 
-> **Important:** Always use update operators (`$set`, `$inc`, `$push`, etc.) in `Update(q, u)` when modifying specific fields—passing a plain dictionary without `$`-operators replaces the entire document!
+`update(*updates)` and `delete(*deletes)` accept multiple operation models as
+positional arguments; use `*operations` to unpack an existing list.
+
+> **Important:** Use update operators (`$set`, `$inc`, `$push`, etc.) when modifying specific fields. A replacement document is not a field-level update and is subject to MongoDB command restrictions.
 
 ### Aggregation, Indexes & Collection Utilities
 
@@ -320,6 +473,8 @@ pipeline = [
     {"$group": {"_id": "$role", "count": {"$sum": 1}}},
 ]
 stats = await users.aggregate(pipeline, allow_disk_use=True).to_list()
+# Commands that return a document rather than a cursor use command_result():
+plan = await users.aggregate(pipeline, explain=True).command_result()
 
 # Index management
 await users.create_indexes(
@@ -340,7 +495,9 @@ await users.drop()
 
 ## Bulk Writes
 
-`BulkWriteBuilder` constructs a server-level `bulkWrite` command capable of targeting multiple `database.collection` namespaces in a single round-trip:
+`BulkWriteBuilder` constructs a MongoDB 8.0+ server-level `bulkWrite` command
+capable of targeting multiple `database.collection` namespaces. Execution is
+lazy, and result cursors may require additional `getMore` round trips:
 
 ```python
 from kover import BulkWriteBuilder, Delete, Update
@@ -365,28 +522,59 @@ results = await client.bulk_write(builder.build()).to_list()
 
 ## Sessions & ACID Transactions
 
-Start a logical session via `await client.start_session()` and execute atomic multi-document operations inside `async with session.start_transaction() as transaction:`:
+Start a logical session via `await client.start_session()`. Transactions use
+explicit lifecycle methods: `session.start_transaction()` is synchronous and
+returns `None`; commit and abort must be awaited. Neither sessions nor
+transactions are context managers, and no automatic commit, abort, or retry
+wrapper is provided.
 
 ```python
 from kover.exceptions import OperationFailure
 
-session = await client.start_session()
 orders = await client.demo.orders.create_if_not_exists()
+session = await client.start_session()
 
 try:
-        session.start_transaction()
-        await orders.insert_one({"status": "created"}, session=session)
-        await orders.insert_one({"status": "queued"}, session=session)
-        await session.commit_transaction()
-        # Automatically commits on clean exit; aborts if any exception is raised.
+    session.start_transaction()
+    await orders.insert_one({"status": "created"}, session=session)
+    await orders.insert_one({"status": "queued"}, session=session)
+    await session.commit_transaction()
 except OperationFailure as exc:
-    if exc.transaction is not None:
-        print("Transaction state:", exc.transaction.state)  # TxnState.ABORTED
+    print("Transaction state:", session.state)
+    print("Error labels:", exc.error_labels)
+    raise
 finally:
-    await client.end_sessions([session])
+    # close() aborts an unfinished transaction and clears the server pin.
+    try:
+        await session.close()
+    finally:
+        await client.end_sessions([session])
 ```
 
-> Multi-document transactions require a MongoDB replica set or sharded cluster deployment. You can also refresh active sessions with `await client.refresh_sessions([session])`.
+Multi-document transactions require a replica set or sharded cluster. Pass the
+same `session=` to each operation; it must belong to the same client. Reads
+inside a transaction require an effective `ReadPreference("primary")`, even
+when a non-primary preference would select primary as a fallback. With a
+non-primary client default, override transaction read cursors explicitly:
+
+```python
+from kover import ReadPreference
+
+# Inside an active transaction:
+documents = await (
+    orders.find({}, session=session)
+    .read_preference(ReadPreference("primary"))
+    .to_list()
+)
+```
+
+`start_transaction(options=...)` currently stores options locally but does not
+apply them to commands. `OperationFailure.is_transient_transaction_error` and
+`.is_unknown_commit_result` expose server labels for application-controlled
+retry decisions. An unknown commit result retains the transaction number and
+server pin so an explicit commit retry can use them; the cleanup example above
+does not implement such retries. You can refresh sessions with
+`await client.refresh_sessions([session])`.
 
 ---
 
@@ -424,7 +612,7 @@ await fs.delete(file_id)         # Deletes file document and all associated chun
 
 ## Authentication, TLS & Network Compression
 
-- **URI Configuration:** Pass standard MongoDB URI options to `Kover.from_uri()`, e.g.:
+- **URI Configuration:** Pass supported MongoDB URI options to `Kover.from_uri()`, e.g.:
   ```python
   client = await Kover.from_uri(
       "mongodb://user:pass@127.0.0.1:27017/demo"
@@ -436,10 +624,11 @@ await fs.delete(file_id)         # Deletes file document and all associated chun
   ```bash
   export MONGO_USER="my-user"
   export MONGO_PASSWORD="my-password"
+  export MONGO_AUTH_DB="admin"
   ```
-  It returns `None` when neither variable is set, or raises `CredentialsException` if only one of the two is provided.
+  It returns `None` when neither credential variable is set, or raises `CredentialsException` if only one of the two is provided. `MONGO_AUTH_DB` defaults to `admin` for environment credentials; URI credentials instead use `authSource`, the URI database, or `admin`.
 - **Supported Auth Mechanisms:** Negotiates `SCRAM-SHA-256` or `SCRAM-SHA-1` automatically during the `hello` handshake.
-- **Write & Read Concerns:** Configure global client write concern via `client.set_write_concern(w="majority", j=True, wtimeout=5000)` or pass `WriteConcern` / `ReadConcern` per operation.
+- **Write & Read Concerns:** Configure client write concern via `client.set_write_concern(w="majority", j=True, wtimeout=5000)`. `Kover.request()` and `Database.command()` accept a `write_concern=WriteConcern(...)` override; helpers that expose `read_concern=` accept `ReadConcern`. Read concern controls consistency, whereas read preference controls routing; they are not interchangeable.
 
 ---
 
@@ -501,10 +690,14 @@ raw_reply = await client.request({"hello": 1.0}, db_name="admin")
 
 All MongoDB server and write errors inherit from `kover.exceptions.OperationFailure`:
 
-- **`OperationFailure`** — Carries `.code` (`int`), `.message` (`str | DictT`), `.err_info` (detailed validation failure info when returned by MongoDB), and `.transaction` (`Transaction | None` if raised inside a transaction).
+- **`OperationFailure`** — Carries `.code` (`int`), `.message` (`str`), `.code_name`, `.details` (the server reply), `.err_info`, and `.error_labels`. Inspect transaction state on the `Session`, not on the exception.
   - Kover dynamically maps hundreds of MongoDB server error codes to dedicated `OperationFailure` subclasses (e.g., `11000` -> `DuplicateKey`, `121` -> `DocumentValidationFailure`, `13` -> `Unauthorized`, `18` -> `AuthenticationFailed`). Catch `OperationFailure` and inspect `exc.code` or `type(exc).__name__`.
 - **`CredentialsException`** — Raised by `AuthCredentials.from_environ()` when only one of `MONGO_USER` or `MONGO_PASSWORD` is set.
-- **`SchemaGenerationException`** — Schema validation and document deserialization exception.
+- **`ServerSelectionError`** — No suitable server was discovered before the selection deadline; includes per-server diagnostics.
+- **`PoolTimeoutError`** — A pool checkout or selection-lock wait exceeded its deadline. `PoolClosedError` and `PoolPausedError` report unavailable pools.
+- **`NetworkError`** / **`ProtocolError`** — A socket exchange failed or the server returned an invalid wire message. Connection setup may also propagate `OSError`.
+- **`ValueError`** / **`TypeError`** — Invalid configuration, session ownership, or read preference (including non-primary reads in a transaction). These are not server `OperationFailure` errors.
+- **`SchemaGenerationException`** — Schema generation failure. Invalid document data is validated by Pydantic and may raise `pydantic.ValidationError`.
 - **`GridFSFileNotFound`** / **`IncorrectGridFSData`** — Raised by `kover.gridfs.GridFS` when a requested file does not exist or an unsupported payload type is passed to `put()`.
 
 ---
@@ -516,7 +709,7 @@ Runnable scripts demonstrating core features are located in [`examples/`](https:
 - [`examples/schema.py`](examples/schema.py) — Pydantic `Document` models, `model_mongodb_schema()`, and server-side collection validation.
 - [`examples/update_delete.py`](examples/update_delete.py) — Inserting `Document` models and using `Update` (`$set`) and `Delete`.
 - [`examples/bulk_write.py`](examples/bulk_write.py) — Multi-operation `BulkWriteBuilder` pipelines.
-- [`examples/transactions.py`](examples/transactions.py) — Sessions, `async with session.start_transaction()`, and automatic abort on duplicate key errors.
+- [`examples/transactions.py`](examples/transactions.py) — Sessions, explicit transaction start/commit, and an explicit abort after a duplicate key error.
 - [`examples/gridfs.py`](examples/gridfs.py) — Uploading, reading, listing, and deleting files in `GridFS`.
 
 Most examples connect to `127.0.0.1:27017` and read optional credentials via `AuthCredentials.from_environ()` (`MONGO_USER` and `MONGO_PASSWORD`).
@@ -534,12 +727,14 @@ uv sync --dev
 ### Unit Tests (No MongoDB Server Required)
 
 ```bash
-# Run unittest suite
-python -m unittest discover -s tests/unit -v
+python -m pytest tests/unit -v
 
-# Run pytest suite (including schema generation tests)
-pytest tests/unit -v
+# Run all tests without a live deployment, even if integration flags are set:
+KOVER_RUN_INTEGRATION=0 KOVER_RUN_SHARDED=0 python -m pytest tests -q
 ```
+
+Use pytest to run both pytest-style async tests and unittest-based tests.
+The unit suite includes local TCP wire-protocol tests; no MongoDB is required.
 
 ### Integration Tests (Requires Running MongoDB)
 
@@ -549,24 +744,28 @@ Integration tests are skipped by default unless explicitly enabled via environme
 export KOVER_RUN_INTEGRATION=1
 export MONGO_HOST=127.0.0.1
 export MONGO_PORT=27017
-# Optional authentication for unittest integration suite:
+# Optional authentication:
 export MONGO_USER="my-user"
 export MONGO_PASSWORD="my-password"
+export MONGO_AUTH_DB="admin"
 
-# URI used by pytest schema integration suite:
-export MONGODB_URI="mongodb://127.0.0.1:27017/"
-
-python -m unittest discover -s tests/integration -v
-pytest tests/integration -v
+python -m pytest tests/integration -v
 ```
+
+Integration tests use `MONGO_HOST`, `MONGO_PORT`, and optional environment
+credentials, including schema integration tests. Use a deployment supporting
+the tested features (for example, replica-set transactions and MongoDB 8.0+
+`bulkWrite`); `MONGODB_URI` is not consumed by the current test suite.
 
 ### Type Checking & Linting
 
 Kover enforces **strict** static typing with Pyright and comprehensive linting rules with Ruff:
 
 ```bash
-pyright ./
-ruff check ./
+pyright kover tests
+ruff check kover
+python -m compileall -q kover tests
+git diff --check
 ```
 
 ---

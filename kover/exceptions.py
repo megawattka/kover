@@ -61,6 +61,10 @@ class PoolTimeoutError(DriverError, TimeoutError):
     """The checkout deadline expired."""
 
 
+class ServerSelectionError(DriverError, TimeoutError):
+    """No suitable server was discovered before the selection deadline."""
+
+
 class InvalidOperationError(DriverError, ValueError):
     """An operation is not permitted in the current state."""
 

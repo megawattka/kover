@@ -16,7 +16,7 @@ from . import __version__
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    from .typings import HasToDict, DictT
+    from .typings import DictT, HasToDict
 
 
 def resolve_auth_db_from_env(

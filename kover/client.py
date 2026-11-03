@@ -15,7 +15,10 @@ from .helpers import (
     raw_decoder,
 )
 from .models import BuildInfo, ReadConcern, WriteConcern
+from .models.network import Address
 from .network import ConnectionPool
+from .network.discovery import DiscoveryOptions
+from .read_preferences import ReadPreference
 from .session import Session
 from .typings import DEFAULT_MONGODB_PORT
 from .uri_parser import parse_uri
@@ -149,6 +152,12 @@ class Kover:
         application: DictT | None = None,
         w: str | int = "majority",
         max_pool_size: int = 100,
+        replica_set: str | None = None,
+        direct_connection: bool = False,
+        server_selection_timeout: float = 30.0,
+        connect_timeout: float | None = 10.0,
+        read_preference: ReadPreference | None = None,
+        local_threshold: float = 0.015,
     ) -> Kover:
         """Create and return a new Kover client instance.
 
@@ -162,14 +171,27 @@ class Kover:
             application : document that will be included in hello payload
                 under the "application" field.
             w : the value of default write concern used.
-            max_pool_size : The maximum number of pooled connections.
+            max_pool_size : The maximum connections per server pool.
+            replica_set : Expected replica set name, if specified.
+            direct_connection : Use the given server regardless of its role.
+            server_selection_timeout : Initial selection deadline in seconds.
+            connect_timeout : Per-probe timeout in seconds, or None.
+            read_preference : Read routing policy, defaulting to primary.
+            local_threshold : Latency window in seconds.
 
         Returns:
             An instance of the Kover client.
         """
-        pool = ConnectionPool(
-            host,
-            port,
+        pool = await ConnectionPool.discover(
+            [Address(host=host, port=port)],
+            options=DiscoveryOptions(
+                replica_set=replica_set,
+                direct_connection=direct_connection,
+                server_selection_timeout=server_selection_timeout,
+                connect_timeout=connect_timeout,
+                read_preference=read_preference or ReadPreference(),
+                local_threshold=local_threshold,
+            ),
             credentials=credentials,
             loop=loop,
             compression=list(compression) if compression is not None else None,
@@ -189,14 +211,21 @@ class Kover:
         wait_response: bool = True,
         write_concern: WriteConcern | None = None,
         deadline: float | None = None,
+        read_preference: ReadPreference | None = None,
+        server_address: Address | None = None,
     ) -> DictT:
         """Send a request to MongoDB Server.
+
+        Read preference overrides apply only to eligible reads; writes and
+        unknown commands use primary routing. Transactions require primary
+        reads. server_address is reserved for getMore/killCursors affinity.
 
         Returns:
             Document, containing response from the server.
 
         Raises:
-            ValueError: if session belongs to different client.
+            ValueError: If the session belongs to another client or a
+                transaction read requests a non-primary preference.
         """
         doc = doc.copy()
         wc_allowed = next(iter(doc.keys()), None) in _WRITE_CONCERN_COMMANDS
@@ -211,12 +240,18 @@ class Kover:
         if session is not None and session.client is not self:
             raise ValueError("Session belongs to a different client")
 
+        routing: DictT = {}
+        if read_preference is not None:
+            routing["read_preference"] = read_preference
+        if server_address is not None:
+            routing["server_address"] = server_address
         return await self._pool.request(
             doc,
             db_name=db_name,
             session=session,
             wait_response=wait_response,
             deadline=deadline,
+            **routing,
         )
 
     def bulk_write(

@@ -30,6 +30,9 @@ class ParsedUri(_ModelMixin):
         return AuthCredentials(
             username=self.username,
             password=self.password,
+            auth_database=self.options.get(
+                "authSource", self.database or "admin",
+            ),
         )
 
 

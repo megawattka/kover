@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 
     from .client import Kover
     from .models import WriteConcern
+    from .models.network import Address
+    from .read_preferences import ReadPreference
     from .session import Session
     from .typings import DictT
 
@@ -278,6 +280,8 @@ class Database:
         *,
         session: Session | None = None,
         write_concern: WriteConcern | None = None,
+        read_preference: ReadPreference | None = None,
+        server_address: Address | None = None,
     ) -> DictT:
         """Sends a command to the database.
 
@@ -285,6 +289,8 @@ class Database:
             doc : The command document to send.
             session : An optional logical session.
             write_concern : Optional write concern override for the operation.
+            read_preference : Optional read routing override.
+            server_address : Source address for cursor continuation commands.
 
         Returns:
             The response from the database.
@@ -295,11 +301,17 @@ class Database:
         if session is not None and session.client is not self.client:
             raise ValueError("Session belongs to a different client")
 
+        routing: DictT = {}
+        if read_preference is not None:
+            routing["read_preference"] = read_preference
+        if server_address is not None:
+            routing["server_address"] = server_address
         return await self.client.request(
             doc=doc,
             session=session,
             db_name=self.name,
             write_concern=write_concern,
+            **routing,
         )
 
     # https://www.mongodb.com/docs/manual/reference/command/ping/

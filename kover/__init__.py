@@ -48,6 +48,7 @@ from .exceptions import (
     PoolTimeoutError,
     ProtocolError,
     SchemaGenerationException,
+    ServerSelectionError,
 )
 from .helpers import chain, filter_non_null, maybe_to_dict
 from .models import (
@@ -66,6 +67,7 @@ from .models import (
 )
 from .network import AuthCredentials, Connection, Transport
 from .network.pool import ConnectionPool
+from .read_preferences import ReadPreference
 from .schema.document import Document
 from .session import Session
 from .typings import DictT
@@ -100,10 +102,12 @@ __all__ = (
     "PoolTimeoutError",
     "ProtocolError",
     "ReadConcern",
+    "ReadPreference",
     "ReplicaSetConfig",
     "ReplicaSetConfigSettings",
     "ReplicaSetMember",
     "SchemaGenerationException",
+    "ServerSelectionError",
     "Session",
     "Transport",
     "Update",

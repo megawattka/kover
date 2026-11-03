@@ -15,7 +15,9 @@ from kover.exceptions import (
     PoolTimeoutError,
 )
 from kover.models import HelloResult
+from kover.models.network import Address
 from kover.network.connection import Connection
+from kover.network.discovery import DiscoveryOptions
 from kover.network.pool import ConnectionPool
 from kover.session import Session
 from kover.uri_parser import parse_uri
@@ -39,7 +41,9 @@ def test_invalid_pool_size(size: int) -> None:
 async def test_lazy_creation_reuse_and_idempotent_release() -> None:
     connection = socket_mock()
     with patch.object(
-        ConnectionPool, "_create_connection", return_value=connection,
+        ConnectionPool,
+        "_create_connection",
+        return_value=connection,
     ) as factory:
         pool = ConnectionPool(max_pool_size=1)
         factory.assert_not_called()
@@ -61,14 +65,17 @@ async def test_lazy_creation_reuse_and_idempotent_release() -> None:
 
 
 @pytest.mark.parametrize(
-    "error", [RuntimeError("body"), asyncio.CancelledError()],
+    "error",
+    [RuntimeError("body"), asyncio.CancelledError()],
 )
 async def test_lease_exception_discards_connection(
     error: BaseException,
 ) -> None:
     connection = socket_mock()
     with patch.object(
-        ConnectionPool, "_create_connection", return_value=connection,
+        ConnectionPool,
+        "_create_connection",
+        return_value=connection,
     ):
         pool = ConnectionPool(max_pool_size=1)
         with pytest.raises(type(error)):
@@ -81,7 +88,9 @@ async def test_lease_exception_discards_connection(
 
 async def test_bounded_checkout_waits_for_release() -> None:
     with patch.object(
-        ConnectionPool, "_create_connection", side_effect=socket_mock,
+        ConnectionPool,
+        "_create_connection",
+        side_effect=socket_mock,
     ):
         pool = ConnectionPool(max_pool_size=2)
         first, second = await pool.acquire(), await pool.acquire()
@@ -104,7 +113,9 @@ async def test_bounded_checkout_waits_for_release() -> None:
 
 async def test_checkout_deadline_and_cancel_leave_no_resource_loss() -> None:
     with patch.object(
-        ConnectionPool, "_create_connection", side_effect=socket_mock,
+        ConnectionPool,
+        "_create_connection",
+        side_effect=socket_mock,
     ):
         pool = ConnectionPool(max_pool_size=1)
         lease = await pool.acquire()
@@ -126,7 +137,9 @@ async def test_checkout_deadline_and_cancel_leave_no_resource_loss() -> None:
 async def test_close_wakes_waiters_and_discards_late_returns() -> None:
     connection = socket_mock()
     with patch.object(
-        ConnectionPool, "_create_connection", return_value=connection,
+        ConnectionPool,
+        "_create_connection",
+        return_value=connection,
     ):
         pool = ConnectionPool(max_pool_size=1)
         lease = await pool.acquire()
@@ -146,7 +159,9 @@ async def test_close_wakes_waiters_and_discards_late_returns() -> None:
 async def test_clear_pauses_discards_idle_and_ready_resumes() -> None:
     connection = socket_mock()
     with patch.object(
-        ConnectionPool, "_create_connection", return_value=connection,
+        ConnectionPool,
+        "_create_connection",
+        return_value=connection,
     ):
         pool = ConnectionPool(max_pool_size=1)
         lease = await pool.acquire()
@@ -178,7 +193,9 @@ async def test_request_failure_discards_connection(
     connection = socket_mock()
     connection.command.side_effect = error
     with patch.object(
-        ConnectionPool, "_create_connection", return_value=connection,
+        ConnectionPool,
+        "_create_connection",
+        return_value=connection,
     ):
         pool = ConnectionPool(max_pool_size=1)
         with pytest.raises(type(error)):
@@ -195,7 +212,9 @@ async def test_server_error_preserves_connection_and_reuses_it() -> None:
         {"ok": 1},
     ]
     with patch.object(
-        ConnectionPool, "_create_connection", return_value=connection,
+        ConnectionPool,
+        "_create_connection",
+        return_value=connection,
     ) as factory:
         pool = ConnectionPool(max_pool_size=1)
         with pytest.raises(OperationFailure):
@@ -233,14 +252,19 @@ async def test_failed_initialization_closes_and_allows_replacement(
 async def test_request_session_metadata_options_and_fire_and_forget() -> None:
     connection = socket_mock()
     with patch.object(
-        ConnectionPool, "_create_connection", return_value=connection,
+        ConnectionPool,
+        "_create_connection",
+        return_value=connection,
     ):
         pool = ConnectionPool(max_pool_size=1)
         session = Session({"id": "logical"}, Kover(pool=pool))
         session.start_transaction()
         document = {"insert": "items"}
         await pool.request(
-            document, db_name="test", session=session, deadline=42,
+            document,
+            db_name="test",
+            session=session,
+            deadline=42,
         )
         sent = connection.command.await_args.args[0]
         assert sent["lsid"] == session.document
@@ -259,57 +283,35 @@ async def test_request_session_metadata_options_and_fire_and_forget() -> None:
         await pool.close()
 
 
-@pytest.mark.parametrize("primary", [True, False])
-async def test_uri_discovery_uses_primary_and_preserves_options(
-    *, primary: bool,
-) -> None:
+async def test_uri_discovery_preserves_options() -> None:
     parsed = await parse_uri(
         "mongodb://user:password@seed:27018/?tls=true&compressors=zlib"
-        "&appName=test&maxPoolSize=3",
+        "&appName=test&maxPoolSize=3&replicaSet=rs"
+        "&serverSelectionTimeoutMS=1200&connectTimeoutMS=300&authSource=auth",
     )
-    connection = socket_mock()
-    hello = MagicMock(spec=HelloResult)
-    hello.is_primary = primary
-    hello.primary_node = "primary:27019"
-    connection.hello.return_value = hello
     with patch.object(
-        ConnectionPool, "_create_connection", return_value=connection,
-    ):
-        pool = await ConnectionPool.from_parsed_uri(parsed)
-        assert pool.address.host == ("seed" if primary else "primary")
-        assert pool.address.port == (27018 if primary else 27019)
-        connection.connect.assert_awaited_once()
-        connection.hello.assert_awaited_once_with(
-            ["zlib"],
-            parsed.credentials,
-            {"name": "test"},
-        )
-        connection.close.assert_awaited_once()
-        await pool.close()
-
-
-@pytest.mark.parametrize("failure", ["hello", "primary", "cancel"])
-async def test_discovery_failure_always_closes_probe(failure: str) -> None:
-    parsed = await parse_uri("mongodb://seed/")
-    connection = socket_mock()
-    error_type = RuntimeError
-    if failure == "primary":
-        connection.hello.return_value.is_primary = False
-        connection.hello.return_value.primary_node = None
-    else:
-        error = (
-            asyncio.CancelledError()
-            if failure == "cancel"
-            else RuntimeError("hello")
-        )
-        connection.hello.side_effect = error
-        error_type = type(error)
-    with patch.object(
-        ConnectionPool, "_create_connection", return_value=connection,
-    ):
-        with pytest.raises(error_type):
+        ConnectionPool,
+        "discover",
+        return_value=MagicMock(spec=ConnectionPool),
+    ) as discover:
+        assert (
             await ConnectionPool.from_parsed_uri(parsed)
-        connection.close.assert_awaited_once()
+            is discover.return_value
+        )
+        discover.assert_awaited_once_with(
+            [Address(host="seed", port=27018)],
+            options=DiscoveryOptions(
+                replica_set="rs",
+                server_selection_timeout=1.2,
+                connect_timeout=0.3,
+            ),
+            credentials=parsed.credentials,
+            loop=None,
+            compression=["zlib"],
+            tls=True,
+            application={"name": "test"},
+            max_pool_size=3,
+        )
 
 
 async def test_load_balanced_uri_is_rejected_before_connect() -> None:

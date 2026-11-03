@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, NoReturn, Self, cast
 from bson import Int64
 
 from .helpers import maybe_to_dict
+from .network.pool import CommandReply
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -15,6 +16,8 @@ if TYPE_CHECKING:
 
     from .collection import Collection
     from .models import Collation
+    from .models.network import Address
+    from .read_preferences import ReadPreference
     from .session import Session
     from .typings import DictT
 
@@ -36,6 +39,8 @@ class Cursor[T]:
         self._query = query.copy()
         self._collection = collection
         self._session = session
+        self._server_address: Address | None = None
+        self._read_preference: ReadPreference | None = None
 
         self._id: Int64 | None = None
         self._server_collection = collection.name
@@ -110,6 +115,29 @@ class Cursor[T]:
             maybe_to_dict(collation),
         )
 
+    def read_preference(self, preference: ReadPreference) -> Self:
+        """Override read routing before execution.
+
+        Returns:
+            This cursor.
+        """
+        self._ensure_at_start()
+        self._read_preference = preference
+        return self
+
+    async def _command(self, command: DictT) -> DictT:
+        routing: DictT = {}
+        if self._server_address is not None:
+            routing["server_address"] = self._server_address
+        if self._read_preference is not None:
+            routing["read_preference"] = self._read_preference
+        response = await self._collection.database.command(
+            command, session=self._session, **routing,
+        )
+        if isinstance(response, CommandReply):
+            self._server_address = response.server_address
+        return response
+
     def _get_query(self) -> DictT:
         query = self._query.copy()
         options = self._options.copy()
@@ -179,10 +207,7 @@ class Cursor[T]:
     async def _start(self) -> None:
         self._started = True
 
-        response = await self._collection.database.command(
-            self._get_query(),
-            session=self._session,
-        )
+        response = await self._command(self._get_query())
 
         if "cursor" in response:
             self._accept_batch(response, "firstBatch")
@@ -206,10 +231,7 @@ class Cursor[T]:
         if self._get_more_batch_size > 0:
             command["batchSize"] = self._get_more_batch_size
 
-        response = await self._collection.database.command(
-            command,
-            session=self._session,
-        )
+        response = await self._command(command)
         self._accept_batch(response, "nextBatch")
 
     def _stop_iteration(self) -> NoReturn:
@@ -294,10 +316,10 @@ class Cursor[T]:
         if cursor_id is None or cursor_id == 0:
             return
 
-        await self._collection.database.command({
+        await self._command({
             "killCursors": self._server_collection,
             "cursors": [cursor_id],
-        }, session=self._session)
+        })
 
     async def _close_after_error(
         self,
