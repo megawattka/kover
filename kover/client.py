@@ -25,8 +25,7 @@ if TYPE_CHECKING:
 
     from .models import ReplicaSetConfig
     from .network import AuthCredentials
-    from .transaction import Transaction
-    from .typings import COMPRESSION_T, DocumentT, JsonT
+    from .typings import CompressionT, DictT, DocumentT
 
 
 _WRITE_CONCERN_COMMANDS = frozenset({
@@ -69,6 +68,11 @@ class Kover:
     async def __aexit__(self, *exc: object) -> bool:
         await self.close()
         return False
+
+    @property
+    def pool(self) -> ConnectionPool:
+        """Acquire raw connection pool obj."""
+        return self._pool
 
     async def close(self) -> None:
         """Release the resources owned by the client."""
@@ -140,9 +144,9 @@ class Kover:
         *,
         credentials: AuthCredentials | None = None,
         loop: asyncio.AbstractEventLoop | None = None,
-        compression: COMPRESSION_T | None = None,
+        compression: CompressionT | None = None,
         tls: bool = False,
-        application: JsonT | None = None,
+        application: DictT | None = None,
         w: str | int = "majority",
         max_pool_size: int = 100,
     ) -> Kover:
@@ -168,7 +172,7 @@ class Kover:
             port,
             credentials=credentials,
             loop=loop,
-            compression=compression,
+            compression=list(compression) if compression is not None else None,
             tls=tls,
             application=application,
             max_pool_size=max_pool_size,
@@ -181,17 +185,22 @@ class Kover:
         doc: DocumentT,
         *,
         db_name: str = "admin",
-        transaction: Transaction | None = None,
+        session: Session | None = None,
         wait_response: bool = True,
         write_concern: WriteConcern | None = None,
-    ) -> JsonT:
+        deadline: float | None = None,
+    ) -> DictT:
         """Send a request to MongoDB Server.
 
         Returns:
             Document, containing response from the server.
+
+        Raises:
+            ValueError: if session belongs to different client.
         """
+        doc = doc.copy()
         wc_allowed = next(iter(doc.keys()), None) in _WRITE_CONCERN_COMMANDS
-        in_transaction = transaction is not None and transaction.is_active
+        in_transaction = session is not None and session.in_transaction
 
         if write_concern is None:
             write_concern = self._write_concern
@@ -199,18 +208,22 @@ class Kover:
         if not in_transaction and wc_allowed and "writeConcern" not in doc:
             doc["writeConcern"] = maybe_to_dict(write_concern)
 
+        if session is not None and session.client is not self:
+            raise ValueError("Session belongs to a different client")
+
         return await self._pool.request(
             doc,
             db_name=db_name,
-            transaction=transaction,
+            session=session,
             wait_response=wait_response,
+            deadline=deadline,
         )
 
     def bulk_write(
         self,
-        document: JsonT,
-        transaction: Transaction | None = None,
-    ) -> Cursor[JsonT]:
+        document: DictT,
+        session: Session | None = None,
+    ) -> Cursor[DictT]:
         """Execute a bulkWrite operation and return info about it.
 
         Returns:
@@ -222,7 +235,7 @@ class Kover:
             query=document,
             collection=collection,
             decoder=raw_decoder,
-            transaction=transaction,
+            session=session,
         )
 
     async def refresh_sessions(self, sessions: list[Session]) -> None:
@@ -238,7 +251,7 @@ class Kover:
             if session.client is not self:
                 raise ValueError("Cannot refresh foreign session")
 
-        documents: list[JsonT] = [x.document for x in sessions]
+        documents: list[DictT] = [x.document for x in sessions]
         await self.request({"refreshSessions": documents})
 
     async def end_sessions(self, sessions: list[Session]) -> None:
@@ -254,7 +267,7 @@ class Kover:
             if session.client is not self:
                 raise ValueError("Cannot end foreign session")
 
-        documents: list[JsonT] = [x.document for x in sessions]
+        documents: list[DictT] = [x.document for x in sessions]
         await self.request({"endSessions": documents})
 
     async def start_session(self) -> Session:
@@ -289,7 +302,7 @@ class Kover:
         Returns:
             A list containing the names of all databases.
         """
-        command: JsonT = {
+        command: DictT = {
             "listDatabases": 1.0,
             "nameOnly": True,
         }
@@ -316,7 +329,7 @@ class Kover:
             hosts : A list of hostnames whose connections should be dropped.
             comment : Optional comment for the operation.
         """
-        document: JsonT = filter_non_null({
+        document: DictT = filter_non_null({
             "dropConnections": 1.0,
             "hostAndPort": hosts,
             "comment": comment,
@@ -350,7 +363,7 @@ class Kover:
         Parameters:
             config : The configuration document for the replica set.
         """
-        document: JsonT = filter_non_null({
+        document: DictT = filter_non_null({
             "replSetReconfig": maybe_to_dict(config) or {},
             "force": force,
             "maxTimeMS": max_time_ms,
@@ -358,7 +371,7 @@ class Kover:
         await self.request(document)
 
     # https://www.mongodb.com/docs/manual/reference/command/replSetGetStatus/
-    async def get_replica_set_status(self) -> JsonT:
+    async def get_replica_set_status(self) -> DictT:
         """Retrieve the status of the replica set.
 
         Returns:
@@ -403,7 +416,7 @@ class Kover:
     async def get_log(
         self,
         parameter: Literal["global", "startupWarnings"] = "startupWarnings",
-    ) -> list[JsonT]:
+    ) -> list[DictT]:
         """Retrieve log entries from the MongoDB server.
 
         Parameters:

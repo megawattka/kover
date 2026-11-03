@@ -15,7 +15,7 @@ from kover.helpers import raw_decoder
 from kover.schema.document import Document
 
 if TYPE_CHECKING:
-    from kover.typings import JsonT
+    from kover.typings import DictT
 
 
 T_co = TypeVar("T_co", bound=Document, covariant=True)
@@ -23,10 +23,10 @@ T_co = TypeVar("T_co", bound=Document, covariant=True)
 
 def batch(
     cursor_id: int,
-    documents: list[JsonT],
+    documents: list[DictT],
     *,
     first: bool = False,
-) -> JsonT:
+) -> DictT:
     """Generate test batches.
 
     Returns:
@@ -47,7 +47,7 @@ class CursorTests(unittest.IsolatedAsyncioTestCase):
         self,
         responses: Any,  # ruff: ignore[any-type]
         cls: Any = None,  # ruff: ignore[any-type]
-        transaction: Any = None,  # ruff: ignore[any-type]
+        session: Any = None,  # ruff: ignore[any-type]
     ) -> Cursor[Any]:
         self.command = AsyncMock(
             side_effect=responses if responses is not None else (),
@@ -56,18 +56,18 @@ class CursorTests(unittest.IsolatedAsyncioTestCase):
         database = Database("test", client)
         self.database = database
         collection = Collection("items", database)
-        if transaction is sentinel.transaction:
-            transaction = SimpleNamespace(client=client)
+        if session is sentinel.session:
+            session = SimpleNamespace(client=client)
 
         return Cursor(  # pyright: ignore[reportReturnType]
             {"find": "items", "filter": {}},
             collection,
             decoder=cls.from_document if cls is not None else raw_decoder,
-            transaction=transaction,  # pyright: ignore[reportArgumentType]
+            session=session,  # pyright: ignore[reportArgumentType]
         )
 
     async def test_reads_all_batches_and_updates_id(self) -> None:
-        cursor: Cursor[JsonT] = self.make_cursor([
+        cursor: Cursor[DictT] = self.make_cursor([
             batch(10, [{"value": 1}], first=True),
             batch(20, [{"value": 2}]),
             batch(0, [{"value": 3}]),
@@ -100,7 +100,7 @@ class CursorTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_first_repeated_calls_return_same_document(self) -> None:
         cursor = self.make_cursor([
-            batch(10, [{"value": 1}, {"value": 2}], first=True),
+            batch(0, [{"value": 1}, {"value": 2}], first=True),
         ])
 
         assert await cursor.first() == {"value": 1}
@@ -109,7 +109,7 @@ class CursorTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_first_returns_first_remaining_document(self) -> None:
         cursor = self.make_cursor([
-            batch(10, [{"value": 1}, {"value": 2}], first=True),
+            batch(0, [{"value": 1}, {"value": 2}], first=True),
         ])
 
         assert await anext(cursor) == {"value": 1}
@@ -178,7 +178,7 @@ class CursorTests(unittest.IsolatedAsyncioTestCase):
             batch(10, [{"value": 1}], first=True), {},
         ], cls=Item)
 
-        def throw_on_decode(_document: JsonT) -> NoReturn:
+        def throw_on_decode(_document: DictT) -> NoReturn:
             raise ValueError("decode")
 
         cursor._decoder = throw_on_decode  # pyright: ignore[reportPrivateUsage] # ruff: ignore[private-member-access]
@@ -203,17 +203,17 @@ class CursorTests(unittest.IsolatedAsyncioTestCase):
         await cursor.close()
         assert await cursor.to_list() == []
 
-    async def test_transaction_propagated_to_all_commands(self) -> None:
+    async def test_session_propagated_to_all_commands(self) -> None:
         cursor = self.make_cursor([
             batch(10, [{"value": 1}], first=True),
             batch(20, [{"value": 2}]), {},
-        ], transaction=sentinel.transaction)
+        ], session=sentinel.session)
         await anext(cursor)
         await anext(cursor)
         await cursor.close()
         assert self.command.await_count == 3
         for call in self.command.await_args_list:
-            assert call.kwargs["transaction"].client is self.database.client
+            assert call.kwargs["session"].client is self.database.client
 
     async def test_options_cannot_change_after_start(self) -> None:
         cursor = self.make_cursor([batch(0, [{"value": 1}], first=True)])
@@ -265,7 +265,7 @@ class CursorTests(unittest.IsolatedAsyncioTestCase):
         cursor = self.make_cursor([])
         entered, release = asyncio.Event(), asyncio.Event()
 
-        async def respond(*_args: object, **_kwargs: object) -> JsonT:
+        async def respond(*_args: object, **_kwargs: object) -> DictT:
             entered.set()
             await release.wait()
             return batch(0, [{"value": 1}], first=True)

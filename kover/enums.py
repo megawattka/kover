@@ -38,6 +38,15 @@ class CollationStrength(Enum):
 class TxnState(Enum):
     """Transaction states for MongoDB transactions."""
     NONE = "NONE"
-    STARTED = "STARTED"
+    STARTING = "STARTING"
+    IN_PROGRESS = "IN_PROGRESS"
     ABORTED = "ABORTED"
+    COMMITTING = "COMMITTING"
     COMMITTED = "COMMITTED"
+
+
+class PoolState(Enum):
+    """Pool states for kover ConnectionPool."""
+    PAUSED = "PAUSED"
+    READY = "READY"
+    CLOSED = "CLOSED"

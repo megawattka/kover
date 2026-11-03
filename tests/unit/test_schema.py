@@ -13,7 +13,7 @@ from kover.schema.document import Document
 from kover.schema.generator import MongoDBSchemaGenerator
 
 if TYPE_CHECKING:
-    from kover.typings import JsonT
+    from kover.typings import DictT
 
 
 class UserType(StrEnum):
@@ -93,11 +93,11 @@ class AdvancedUser(Document):
     cats_or_dogs: Cat | Dog = Field(alias="catsOrDogs")
 
 
-def mongodb_schema(model: type[Document]) -> JsonT:
+def mongodb_schema(model: type[Document]) -> DictT:
     return model.model_mongodb_schema()
 
 
-def get_root_schema(model: type[Document]) -> JsonT:
+def get_root_schema(model: type[Document]) -> DictT:
     schema = mongodb_schema(model)
     root = schema.get("$jsonSchema")
 
@@ -247,14 +247,14 @@ def test_root_id_is_required() -> None:
 
 def test_nested_documents_do_not_receive_id() -> None:
     root = get_root_schema(User)
-    properties: JsonT = root["properties"]
+    properties: DictT = root["properties"]
 
     assert isinstance(properties, dict)
 
-    friend: JsonT = properties["friend"]
+    friend: DictT = properties["friend"]
     assert isinstance(friend, dict)
 
-    any_of: JsonT = friend["anyOf"]
+    any_of: DictT = friend["anyOf"]
     assert isinstance(any_of, list)
 
     friend_object = next(
@@ -275,11 +275,11 @@ def test_nested_documents_do_not_receive_id() -> None:
 
 def test_string_field_is_converted_to_bson_string() -> None:
     root = get_root_schema(User)
-    properties: JsonT = root["properties"]
+    properties: DictT = root["properties"]
 
     assert isinstance(properties, dict)
 
-    name: JsonT = properties["name"]
+    name: DictT = properties["name"]
     assert isinstance(name, dict)
 
     assert schema_type(name) == "string"
@@ -288,11 +288,11 @@ def test_string_field_is_converted_to_bson_string() -> None:
 
 def test_integer_field_is_converted_to_int_or_long() -> None:
     root = get_root_schema(User)
-    properties: JsonT = root["properties"]
+    properties: DictT = root["properties"]
 
     assert isinstance(properties, dict)
 
-    age: JsonT = properties["age"]
+    age: DictT = properties["age"]
     assert isinstance(age, dict)
 
     assert schema_type(age) == ["int", "long"]
@@ -300,11 +300,11 @@ def test_integer_field_is_converted_to_int_or_long() -> None:
 
 def test_integer_gt_constraint_uses_mongodb_draft_4_format() -> None:
     root = get_root_schema(User)
-    properties: JsonT = root["properties"]
+    properties: DictT = root["properties"]
 
     assert isinstance(properties, dict)
 
-    age: JsonT = properties["age"]
+    age: DictT = properties["age"]
     assert isinstance(age, dict)
 
     assert age["minimum"] == 18
@@ -313,11 +313,11 @@ def test_integer_gt_constraint_uses_mongodb_draft_4_format() -> None:
 
 def test_enum_schema_is_generated() -> None:
     root = get_root_schema(User)
-    properties: JsonT = root["properties"]
+    properties: DictT = root["properties"]
 
     assert isinstance(properties, dict)
 
-    user_type: JsonT = properties["userType"]
+    user_type: DictT = properties["userType"]
     assert isinstance(user_type, dict)
 
     assert schema_type(user_type) == "string"
@@ -326,7 +326,7 @@ def test_enum_schema_is_generated() -> None:
 
 def test_integer_enum_schema_is_generated() -> None:
     root = get_root_schema(User)
-    properties: JsonT = root["properties"]
+    properties: DictT = root["properties"]
 
     assert isinstance(properties, dict)
 
@@ -338,7 +338,7 @@ def test_integer_enum_schema_is_generated() -> None:
 
 def test_mixed_literal_does_not_get_invalid_single_bson_type() -> None:
     root = get_root_schema(User)
-    properties: JsonT = root["properties"]
+    properties: DictT = root["properties"]
 
     assert isinstance(properties, dict)
 
@@ -353,14 +353,14 @@ def test_mixed_literal_does_not_get_invalid_single_bson_type() -> None:
 
 def test_nullable_nested_document_uses_any_of() -> None:
     root = get_root_schema(User)
-    properties: JsonT = root["properties"]
+    properties: DictT = root["properties"]
 
     assert isinstance(properties, dict)
 
-    friend: JsonT = properties["friend"]
+    friend: DictT = properties["friend"]
     assert isinstance(friend, dict)
 
-    any_of: JsonT = friend["anyOf"]
+    any_of: DictT = friend["anyOf"]
     assert isinstance(any_of, list)
     assert len(any_of) == 2
 
@@ -383,7 +383,7 @@ def test_nullable_default_is_not_required() -> None:
 
 def test_required_non_nullable_fields_are_required() -> None:
     root = get_root_schema(User)
-    required: JsonT = root["required"]
+    required: DictT = root["required"]
 
     assert isinstance(required, list)
 
@@ -419,7 +419,7 @@ def test_any_field_has_empty_schema() -> None:
 
 def test_bytes_and_uuid_are_binary() -> None:
     root = get_root_schema(User)
-    properties: JsonT = root["properties"]
+    properties: DictT = root["properties"]
 
     assert isinstance(properties, dict)
 
@@ -435,7 +435,7 @@ def test_bytes_and_uuid_are_binary() -> None:
 
 def test_decimal_is_bson_decimal() -> None:
     root = get_root_schema(User)
-    properties: JsonT = root["properties"]
+    properties: DictT = root["properties"]
 
     assert isinstance(properties, dict)
 
@@ -447,14 +447,14 @@ def test_decimal_is_bson_decimal() -> None:
 
 def test_dict_of_integers_uses_additional_properties_schema() -> None:
     root = get_root_schema(User)
-    properties: JsonT = root["properties"]
+    properties: DictT = root["properties"]
 
     assert isinstance(properties, dict)
 
-    attributes: JsonT = properties["attributes"]
+    attributes: DictT = properties["attributes"]
     assert isinstance(attributes, dict)
 
-    additional_properties: JsonT = attributes["additionalProperties"]
+    additional_properties: DictT = attributes["additionalProperties"]
     assert isinstance(additional_properties, dict)
 
     assert schema_type(additional_properties) == ["int", "long"]
@@ -462,14 +462,14 @@ def test_dict_of_integers_uses_additional_properties_schema() -> None:
 
 def test_dict_of_models_uses_additional_properties_schema() -> None:
     root = get_root_schema(User)
-    properties: JsonT = root["properties"]
+    properties: DictT = root["properties"]
 
     assert isinstance(properties, dict)
 
-    addresses: JsonT = properties["addresses"]
+    addresses: DictT = properties["addresses"]
     assert isinstance(addresses, dict)
 
-    additional_properties: JsonT = addresses["additionalProperties"]
+    additional_properties: DictT = addresses["additionalProperties"]
     assert isinstance(additional_properties, dict)
 
     assert schema_type(additional_properties) in ("object", ["object"])
@@ -479,16 +479,16 @@ def test_dict_of_models_uses_additional_properties_schema() -> None:
 
 def test_array_of_integers_uses_items_schema() -> None:
     root = get_root_schema(User)
-    properties: JsonT = root["properties"]
+    properties: DictT = root["properties"]
 
     assert isinstance(properties, dict)
 
-    scores: JsonT = properties["scores"]
+    scores: DictT = properties["scores"]
     assert isinstance(scores, dict)
 
     assert schema_type(scores) == "array"
 
-    items: JsonT = scores["items"]
+    items: DictT = scores["items"]
     assert isinstance(items, dict)
 
     assert schema_type(items) == ["int", "long"]
@@ -496,11 +496,11 @@ def test_array_of_integers_uses_items_schema() -> None:
 
 def test_fixed_tuple_is_converted_to_mongodb_array() -> None:
     root = get_root_schema(AdvancedUser)
-    properties: JsonT = root["properties"]
+    properties: DictT = root["properties"]
 
     assert isinstance(properties, dict)
 
-    fixed_tuple: JsonT = properties["fixedTuple"]
+    fixed_tuple: DictT = properties["fixedTuple"]
     assert isinstance(fixed_tuple, dict)
 
     assert schema_type(fixed_tuple) == "array"
@@ -514,11 +514,11 @@ def test_fixed_tuple_is_converted_to_mongodb_array() -> None:
 
 def test_variadic_tuple_is_converted_to_mongodb_array() -> None:
     root = get_root_schema(AdvancedUser)
-    properties: JsonT = root["properties"]
+    properties: DictT = root["properties"]
 
     assert isinstance(properties, dict)
 
-    variadic_tuple: JsonT = properties["variadicTuple"]
+    variadic_tuple: DictT = properties["variadicTuple"]
     assert isinstance(variadic_tuple, dict)
 
     assert schema_type(variadic_tuple) == "array"

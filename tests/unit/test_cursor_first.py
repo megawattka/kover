@@ -11,7 +11,7 @@ from kover.helpers import raw_decoder
 from kover.schema.document import Document
 
 if TYPE_CHECKING:
-    from kover.typings import JsonT
+    from kover.typings import DictT
 
 
 class InsertDocument(Document):
@@ -47,7 +47,7 @@ class CommandCursorTests(unittest.IsolatedAsyncioTestCase):
 
     @staticmethod
     async def test_aggregate_explain_returns_document_wo_get_more() -> None:
-        response: JsonT = {"ok": 1, "queryPlanner": {}}
+        response: DictT = {"ok": 1, "queryPlanner": {}}
         command = AsyncMock(return_value=response)
         database: Any = SimpleNamespace(command=command)
         collection = Collection("items", database)
@@ -56,7 +56,7 @@ class CommandCursorTests(unittest.IsolatedAsyncioTestCase):
         command.assert_awaited_once()
 
     @staticmethod
-    async def test_aggregate_reads_all_batches_in_transaction() -> None:
+    async def test_aggregate_reads_all_batches_in_session() -> None:
         command = AsyncMock(side_effect=[
             {"cursor": {"id": 10, "firstBatch": [{"n": 1}]}},
             {"cursor": {"id": 20, "nextBatch": [{"n": 2}]}},
@@ -64,14 +64,14 @@ class CommandCursorTests(unittest.IsolatedAsyncioTestCase):
         ])
         database: Any = SimpleNamespace(command=command)
         collection = Collection("items", database)
-        transaction: Any = SimpleNamespace(is_active=True)
+        session: Any = SimpleNamespace(is_active=True)
         cursor = collection.aggregate(
-            [], cursor={"batchSize": 1}, transaction=transaction,
+            [], cursor={"batchSize": 1}, session=session,
         )
 
         assert await cursor.to_list() == [{"n": 1}, {"n": 2}, {"n": 3}]
         for call in command.await_args_list:
-            assert call.kwargs["transaction"] is transaction
+            assert call.kwargs["session"] is session
         assert command.await_args_list[1].args[0]["getMore"] == 10
         assert command.await_args_list[2].args[0]["getMore"] == 20
 
@@ -140,7 +140,7 @@ class CommandCursorTests(unittest.IsolatedAsyncioTestCase):
         ])
         client: Any = SimpleNamespace(command=command)
         collection = Collection("unused", client)
-        cursor: Cursor[JsonT] = Cursor({
+        cursor: Cursor[DictT] = Cursor({
             "find": 1,
         }, collection, decoder=raw_decoder)
         await anext(cursor)
@@ -202,18 +202,18 @@ class CommandCursorTests(unittest.IsolatedAsyncioTestCase):
         assert "killCursors" in command.await_args_list[-1].args[0]
 
     @staticmethod
-    async def test_database_routes_transactions_wo_socket_callback() -> None:
+    async def test_database_routes_sessions_wo_socket_callback() -> None:
         socket = AsyncMock()
         socket.request.return_value = {"ok": 1}
         client: Any = SimpleNamespace(request=socket.request)
         database = Database("test", client)
-        transaction: Any = SimpleNamespace(client=client)
-        response = await database.command({"ping": 1}, transaction=transaction)
+        session: Any = SimpleNamespace(client=client)
+        response = await database.command({"ping": 1}, session=session)
 
         assert response == {"ok": 1}
         socket.request.assert_awaited_once_with(
             doc={"ping": 1},
-            transaction=transaction,
+            session=session,
             db_name="test",
             write_concern=None,
         )
@@ -230,7 +230,7 @@ class CommandCursorTests(unittest.IsolatedAsyncioTestCase):
 
         client.request.assert_awaited_once_with(
             doc={"insert": "items"},
-            transaction=None,
+            session=None,
             db_name="test",
             write_concern=write_concern,
         )
@@ -256,11 +256,11 @@ class CommandCursorTests(unittest.IsolatedAsyncioTestCase):
     async def test_database_rejects_tx_from_another_connection(self) -> None:
         socket = AsyncMock()
         client: Any = SimpleNamespace(request=socket.request)
-        transaction: Any = SimpleNamespace(
+        session: Any = SimpleNamespace(
             client=AsyncMock(),
         )
         database = Database("test", client)
         with self.assertRaises(ValueError):
-            await database.command({"ping": 1}, transaction=transaction)
+            await database.command({"ping": 1}, session=session)
 
         socket.request.assert_not_awaited()

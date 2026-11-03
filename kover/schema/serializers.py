@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from pydantic import GetJsonSchemaHandler
     from pydantic_core import CoreSchema
 
-    from ..typings import JsonT
+    from ..typings import DictT
 
 
 def validate_uuid(value: UUID | Binary) -> UUID:
@@ -24,7 +24,7 @@ def bin_data_json_schema(
     _cls: type[UUID | Binary],
     _core_schema: CoreSchema,
     _handler: GetJsonSchemaHandler,
-) -> JsonT:
+) -> DictT:
     return {"bsonType": "binData"}
 
 
@@ -32,7 +32,7 @@ def object_id_json_schema(
     _cls: type[ObjectId],
     _core_schema: CoreSchema,
     _handler: GetJsonSchemaHandler,
-) -> JsonT:
+) -> DictT:
     return {"bsonType": "objectId"}
 
 
@@ -40,7 +40,7 @@ def long_json_schema(
     _cls: type[Int64],
     _core_schema: CoreSchema,
     _handler: GetJsonSchemaHandler,
-) -> JsonT:
+) -> DictT:
     return {"bsonType": "long"}
 
 
@@ -48,7 +48,7 @@ def decimal_json_schema(
     _cls: type[Decimal128],
     _core_schema: CoreSchema,
     _handler: GetJsonSchemaHandler,
-) -> JsonT:
+) -> DictT:
     return {"bsonType": "decimal"}
 
 
@@ -56,7 +56,7 @@ def regex_json_schema(
     _cls: type[Regex[str]],
     _core_schema: CoreSchema,
     _handler: GetJsonSchemaHandler,
-) -> JsonT:
+) -> DictT:
     return {"bsonType": "regex"}
 
 
@@ -64,5 +64,5 @@ def date_schema(
     _cls: type[Timestamp],
     _core_schema: CoreSchema,
     _handler: GetJsonSchemaHandler,
-) -> JsonT:
+) -> DictT:
     return {"bsonType": "date"}

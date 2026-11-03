@@ -8,7 +8,7 @@ from .helpers import filter_non_null
 
 if TYPE_CHECKING:
     from .models import Delete, Update
-    from .typings import JsonT
+    from .typings import DictT
 
 
 # https://www.mongodb.com/docs/manual/reference/command/bulkWrite
@@ -21,7 +21,7 @@ class BulkWriteBuilder:
         ordered: bool = True,
         bypass_document_validation: bool = False,
         comment: str | None = None,
-        let: JsonT | None = None,
+        let: DictT | None = None,
         errors_only: bool = False,
         cursor_batch_size: int | None = None,
         write_concern: str | int = "majority",
@@ -33,10 +33,10 @@ class BulkWriteBuilder:
         self.errors_only = errors_only
         self.cursor = {"batchSize": cursor_batch_size or 101}
         self.write_concern = write_concern
-        self._operations: list[JsonT] = []
+        self._operations: list[DictT] = []
         self._namespaces: list[str] = []
 
-    def _prepair_additional_params(self) -> JsonT:
+    def _prepair_additional_params(self) -> DictT:
         return filter_non_null({
             "ordered": self.ordered,
             "bypassDocumentValidation": self.bypass_document_validation,
@@ -54,7 +54,7 @@ class BulkWriteBuilder:
 
     def add_insert(
         self,
-        documents: list[JsonT],
+        documents: list[DictT],
         /,
         *,
         ns: str,
@@ -88,7 +88,7 @@ class BulkWriteBuilder:
             **delete.as_bulk_write_op(),
         })
 
-    def build(self) -> JsonT:
+    def build(self) -> DictT:
         """Build the command.
 
         Returns:

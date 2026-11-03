@@ -42,7 +42,7 @@ Built directly over `asyncio` streams and the MongoDB Wire Protocol (`OP_MSG` an
 - **Native `asyncio` Networking:** Communicates directly over `asyncio.StreamReader` / `asyncio.StreamWriter` using MongoDB's modern wire protocol (`OP_MSG` / `OP_COMPRESSED`) and a lazy `ConnectionPool`—zero thread-pool overhead.
 - **First-Class Pydantic v2 Integration:** Define typed `Document` models with automatic BSON/Python serialization (`ObjectId`, `Binary`, `UUID`, `Decimal`, `Enum`, nested models, unions, and tuples).
 - **MongoDB `$jsonSchema` Generation:** Compile Pydantic v2 models straight into MongoDB-compatible `$jsonSchema` validators via `Document.model_mongodb_schema()`, automatically resolving `$defs`/`$ref`, Draft 2020-12 constraints, and BSON type mappings.
-- **Strictly Typed (`py.typed`):** Engineered for `pyright` in `strict` mode and linted with `ruff`. Overloaded query methods (`find`, `find_one`) return `Cursor[Model]` / `Model | None` when `cls=Model` is supplied, or `JsonT` dictionaries otherwise.
+- **Strictly Typed (`py.typed`):** Engineered for `pyright` in `strict` mode and linted with `ruff`. Overloaded query methods (`find`, `find_one`) return `Cursor[Model]` / `Model | None` when `cls=Model` is supplied, or `DictT` dictionaries otherwise.
 - **Lazy Asynchronous Cursors:** Chainable query modifiers (`sort`, `skip`, `limit`, `batch_size`, `projection`, `hint`, `comment`, `collation`), async iteration, `first()`, `to_list()`, and deterministic `killCursors` cleanup via `async with`.
 - **Rich MongoDB Feature Coverage:** Supports aggregation pipelines, index management, server-level `bulkWrite`, logical sessions, multi-document ACID transactions, user/role management, replica set administration, and **GridFS** for large files.
 - **Security & Wire Compression:** Supports `SCRAM-SHA-256` and `SCRAM-SHA-1` authentication, TLS connections, and wire compression (`zlib` built-in; `snappy` and `zstd` via optional extras).
@@ -180,10 +180,10 @@ class User(Document):
 ```
 
 Key `Document` methods:
-- `doc.to_dict(exclude_id: bool = False) -> JsonT` — dumps the model with `by_alias=True` (including `"_id"` when set).
-- `Document.from_document(payload: JsonT) -> Self` — validates a raw MongoDB document and attaches `_id`.
+- `doc.to_dict(exclude_id: bool = False) -> DictT` — dumps the model with `by_alias=True` (including `"_id"` when set).
+- `Document.from_document(payload: DictT) -> Self` — validates a raw MongoDB document and attaches `_id`.
 - `doc.get_object_id() -> ObjectId | None` / `doc.set_object_id(_id: ObjectId)` — get or set the document's `ObjectId`.
-- `Document.model_mongodb_schema() -> JsonT` — builds a MongoDB `$jsonSchema` validator dictionary.
+- `Document.model_mongodb_schema() -> DictT` — builds a MongoDB `$jsonSchema` validator dictionary.
 
 > **Field Aliases:** `Document` dumps fields with `by_alias=True`. Use `Field(alias="camelName")` per field or configure `ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid", use_enum_values=True)` on a shared base class if you prefer automatic `camelCase` field names in MongoDB.
 
@@ -314,7 +314,7 @@ cleared = await users.clear()
 ```python
 from kover import Index, IndexDirection, IndexType
 
-# Aggregation pipeline (returns Cursor[JsonT])
+# Aggregation pipeline (returns Cursor[DictT])
 pipeline = [
     {"$match": {"age": {"$gte": 18}}},
     {"$group": {"_id": "$role", "count": {"$sum": 1}}},
@@ -374,9 +374,10 @@ session = await client.start_session()
 orders = await client.demo.orders.create_if_not_exists()
 
 try:
-    async with session.start_transaction() as transaction:
-        await orders.insert_one({"status": "created"}, transaction=transaction)
-        await orders.insert_one({"status": "queued"}, transaction=transaction)
+        session.start_transaction()
+        await orders.insert_one({"status": "created"}, session=session)
+        await orders.insert_one({"status": "queued"}, session=session)
+        await session.commit_transaction()
         # Automatically commits on clean exit; aborts if any exception is raised.
 except OperationFailure as exc:
     if exc.transaction is not None:
@@ -500,10 +501,10 @@ raw_reply = await client.request({"hello": 1.0}, db_name="admin")
 
 All MongoDB server and write errors inherit from `kover.exceptions.OperationFailure`:
 
-- **`OperationFailure`** — Carries `.code` (`int`), `.message` (`str | JsonT`), `.err_info` (detailed validation failure info when returned by MongoDB), and `.transaction` (`Transaction | None` if raised inside a transaction).
+- **`OperationFailure`** — Carries `.code` (`int`), `.message` (`str | DictT`), `.err_info` (detailed validation failure info when returned by MongoDB), and `.transaction` (`Transaction | None` if raised inside a transaction).
   - Kover dynamically maps hundreds of MongoDB server error codes to dedicated `OperationFailure` subclasses (e.g., `11000` -> `DuplicateKey`, `121` -> `DocumentValidationFailure`, `13` -> `Unauthorized`, `18` -> `AuthenticationFailed`). Catch `OperationFailure` and inspect `exc.code` or `type(exc).__name__`.
 - **`CredentialsException`** — Raised by `AuthCredentials.from_environ()` when only one of `MONGO_USER` or `MONGO_PASSWORD` is set.
-- **`SchemaGenerationException`** / **`CorruptedDocument`** — Schema validation and document deserialization exceptions.
+- **`SchemaGenerationException`** — Schema validation and document deserialization exception.
 - **`GridFSFileNotFound`** / **`IncorrectGridFSData`** — Raised by `kover.gridfs.GridFS` when a requested file does not exist or an unsupported payload type is passed to `put()`.
 
 ---

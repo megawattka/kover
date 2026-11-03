@@ -12,7 +12,7 @@ from bson import Binary, Decimal128, ObjectId
 from pydantic import ConfigDict, Field
 import pytest
 
-from kover import Kover
+from kover import AuthCredentials, Kover
 from kover.exceptions import OperationFailure
 from kover.schema import Document
 
@@ -75,25 +75,22 @@ class User(Document):
 
 @pytest.fixture
 async def database() -> AsyncGenerator[Database, Any]:
-    uri = os.getenv("MONGODB_URI")
+    if os.environ.get("KOVER_RUN_INTEGRATION") != "1":
+        pytest.skip("Set KOVER_RUN_INTEGRATION=1 to use a real MongoDB")
+    client = await Kover.make_client(
+        host=os.environ.get("MONGO_HOST", "127.0.0.1"),
+        port=int(os.environ.get("MONGO_PORT", "27017")),
+        credentials=AuthCredentials.from_environ(),
+    )
 
-    if not uri:
-        pytest.skip("MONGODB_URI is not configured")
-
-    client: Kover = await Kover.from_uri(uri)
-
-    try:
+    async with client:
         await client.admin.ping()
-    except Exception:
-        await client.close()
-        raise
+        database_name = f"schema_generator_{uuid4().hex}"
 
-    database_name = f"schema_generator_{uuid4().hex}"
-
-    yield client.get_database(database_name)
-
-    await client.drop_database(database_name)
-    await client.close()
+        try:
+            yield client.get_database(database_name)
+        finally:
+            await client.drop_database(database_name)
 
 
 @pytest.fixture
@@ -112,6 +109,12 @@ async def collection(
             "validationAction": "error",
         },
     )
+
+    options = (await collection.with_options()).options
+    assert options is not None
+    assert options["validator"] == validator
+    assert options["validationLevel"] == "strict"
+    assert options["validationAction"] == "error"
 
     yield collection
 

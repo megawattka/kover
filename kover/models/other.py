@@ -13,19 +13,20 @@ from pydantic.functional_validators import (
 
 from ..enums import CollationStrength, IndexDirection, IndexType  # ruff: ignore[typing-only-first-party-import]
 from ..mixins import ModelMixin as _ModelMixin
-from ..typings import COMPRESSION_T, AuthTypesT, JsonT
+from ..typings import CompressionT, AuthTypesT, DictT
 
 
 class HelloResult(_ModelMixin):
     """Represents the result of a hello command."""
 
     me: str | None = Field(default=None)
+    msg: str | None = Field(default=None)
     local_time: dt.datetime
     connection_id: int
-    read_only: bool
+    read_only: bool | None = None
     sasl_supported_mechs: list[AuthTypesT] = Field(
         default_factory=list[AuthTypesT])
-    compression: COMPRESSION_T = Field(default_factory=COMPRESSION_T)
+    compression: CompressionT = Field(default_factory=CompressionT)
     is_primary: bool = Field(alias="isWritablePrimary")
     primary_node: str | None = Field(default=None, alias="primary")
     hosts: list[str] | None = Field(default=None)
@@ -43,7 +44,7 @@ class HelloResult(_ModelMixin):
             if "SCRAM-SHA-256" in self.sasl_supported_mechs:
                 return "SCRAM-SHA-256"
 
-            if "SCRAM-SHA-1":
+            if "SCRAM-SHA-1" in self.sasl_supported_mechs:
                 return "SCRAM-SHA-1"
         return None
 
@@ -65,7 +66,7 @@ class BuildInfo(_ModelMixin):
     @classmethod
     def _validate_openssl(
         cls,
-        data: JsonT,
+        data: DictT,
         wrap: ModelWrapValidatorHandler[Self],
     ) -> Self:
         data["openssl"] = data["openssl"]["running"]
@@ -81,16 +82,16 @@ class User(_ModelMixin):
     mechanisms: list[
         Literal["SCRAM-SHA-1", "SCRAM-SHA-256"]
     ] = Field(repr=False)
-    credentials: JsonT = Field(repr=False, default_factory=JsonT)
-    roles: list[JsonT]
-    authentication_restrictions: list[JsonT] = Field(
-        repr=False, default_factory=list[JsonT],
+    credentials: DictT = Field(repr=False, default_factory=DictT)
+    roles: list[DictT]
+    authentication_restrictions: list[DictT] = Field(
+        repr=False, default_factory=list[DictT],
     )
-    inherited_privileges: list[JsonT] = Field(
-        repr=False, default_factory=list[JsonT],
+    inherited_privileges: list[DictT] = Field(
+        repr=False, default_factory=list[DictT],
     )
-    custom_data: JsonT = Field(
-        repr=False, default_factory=JsonT,
+    custom_data: DictT = Field(
+        repr=False, default_factory=DictT,
     )
 
 
@@ -139,7 +140,7 @@ class WriteConcern(_ModelMixin):
     j: bool | None = None
     wtimeout: int = 0
 
-    def to_dict(self) -> JsonT:
+    def to_dict(self) -> DictT:
         """Return the write concern document."""
         return {
             "w": self.w,

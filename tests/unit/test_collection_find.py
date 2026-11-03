@@ -6,10 +6,10 @@ from kover.collection import Collection
 from kover.cursor import Cursor
 from kover.database import Database
 from kover.schema.document import Document
-from kover.typings import JsonT
+from kover.typings import DictT
 
 if TYPE_CHECKING:
-    from kover.session import Transaction
+    from kover.session import Session
 
 
 class Item(Document):
@@ -17,19 +17,19 @@ class Item(Document):
 
 
 if TYPE_CHECKING:
-    def check_transaction_types(
+    def check_session_types(
         collection: Collection,
-        transaction: Transaction,
-        cls: type[Item] | None,
+        session: Session,
+        cls: type[Item],
     ) -> None:
         """Does check for certain types."""
-        assert_type(collection.find(transaction=transaction), Cursor[JsonT])
+        assert_type(collection.find(session=session), Cursor[DictT])
         assert_type(
-            collection.find(cls=Item, transaction=transaction), Cursor[Item],
+            collection.find(cls=Item, session=session), Cursor[Item],
         )
-        assert_type(collection.find({}, Item, transaction), Cursor[Item])
+        assert_type(collection.find({}, Item, session), Cursor[Item])
         assert_type(
-            collection.find(cls=cls), Cursor[Item] | Cursor[JsonT],
+            collection.find(cls=cls), Cursor[Item],
         )
 
 
@@ -44,14 +44,14 @@ class CollectionFindTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_find_without_model_returns_documents(self) -> None:
         cursors = (
-            assert_type(self.collection.find(), Cursor[JsonT]),
-            assert_type(self.collection.find({}), Cursor[JsonT]),
-            assert_type(self.collection.find(None), Cursor[JsonT]),
-            assert_type(self.collection.find(cls=None), Cursor[JsonT]),
-            assert_type(self.collection.find({}, cls=None), Cursor[JsonT]),
+            assert_type(self.collection.find(), Cursor[DictT]),
+            assert_type(self.collection.find({}), Cursor[DictT]),
+            assert_type(self.collection.find(None), Cursor[DictT]),
+            assert_type(self.collection.find(cls=None), Cursor[DictT]),
+            assert_type(self.collection.find({}, cls=None), Cursor[DictT]),
         )
         for cursor in cursors:
-            documents = assert_type(await cursor.to_list(), list[JsonT])
+            documents = assert_type(await cursor.to_list(), list[DictT])
             assert documents == [{"value": 1}]
 
     async def test_find_with_model_returns_items(self) -> None:

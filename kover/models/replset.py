@@ -6,7 +6,7 @@ from bson import ObjectId  # ruff: ignore[typing-only-third-party-import]
 from pydantic import Field
 
 from ..mixins import ModelMixin as _ModelMixin
-from ..typings import JsonT  # ruff: ignore[typing-only-first-party-import]
+from ..typings import DictT  # ruff: ignore[typing-only-first-party-import]
 
 
 # https://www.mongodb.com/docs/manual/reference/replica-configuration/#members
@@ -19,7 +19,7 @@ class ReplicaSetMember(_ModelMixin):
     build_indexes: bool = Field(default=True)
     hidden: bool = Field(default=False)
     priority: int = Field(default=1)
-    tags: JsonT | None = Field(default=None)
+    tags: DictT | None = Field(default=None)
     secondary_delay_secs: int = Field(default=0)
     votes: int = Field(default=1)
 
@@ -30,7 +30,7 @@ class ReplicaSetConfigSettings(_ModelMixin):
 
     replica_set_id: ObjectId
     chaining_allowed: bool = Field(default=True)
-    get_last_error_modes: JsonT | None = Field(default=None)
+    get_last_error_modes: DictT | None = Field(default=None)
     heartbeat_timeout_secs: int = Field(default=10)
     election_timeout_millis: int = Field(default=10000)
     catch_up_timeout_millis: int = Field(default=-1)

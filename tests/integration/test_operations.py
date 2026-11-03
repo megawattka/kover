@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import os
-import unittest
 from uuid import UUID, uuid4
 
-from kover import AuthCredentials, Document, Kover
+from kover import Document
+from tests.integration.base import MongoTestCase
 
 
 class Sample(Document):
@@ -21,23 +21,10 @@ class Sample(Document):
         )
 
 
-class TestMethods(unittest.IsolatedAsyncioTestCase):
-    def __init__(self, *args: str, **kwargs: object) -> None:
-        super().__init__(*args, **kwargs)
-        self.credentials = AuthCredentials(
-            username="main_m1",
-            password="incunaby!",
-        )
-        self.coll_name = "test"
-
+class TestMethods(MongoTestCase):
     async def asyncSetUp(self) -> None:
-        self.client = await Kover.make_client(credentials=self.credentials)
-        assert self.client.signature is not None
-        self.addAsyncCleanup(self.client.close)
-        self.collection = self.client.db.get_collection(self.coll_name)
-
-    async def asyncTearDown(self) -> None:
-        await self.client.db.drop_collection(self.coll_name)
+        await super().asyncSetUp()
+        self.collection = self.database.get_collection("items")
 
     async def test_insert(self) -> None:
         doc = Sample.random()

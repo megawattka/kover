@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import unittest
 from uuid import UUID, uuid4
 
 from bson import Binary
@@ -9,8 +8,8 @@ from kover import (
     AuthCredentials,
     Delete,
     Document,
-    Kover,
 )
+from tests.integration.base import MongoTestCase
 
 
 class User(Document):
@@ -29,31 +28,20 @@ class Subclass(User):
     subdocument: SubDocument
 
 
-class BasicTests(unittest.IsolatedAsyncioTestCase):
+class BasicTests(MongoTestCase):
     """Basic tests related to document operations."""
 
-    def __init__(self, *args: str, **kwargs: object) -> None:
-        super().__init__(*args, **kwargs)
-        self.test_collection_name: str = "test"
-        self.credentials = AuthCredentials(
-            username="main_m1",
-            password="incunaby!",
-        )
-
     async def asyncSetUp(self) -> None:
-        self.client = await Kover.make_client(credentials=self.credentials)
-        assert self.client.signature is not None
-        self.addAsyncCleanup(self.client.close)
+        await super().asyncSetUp()
+        self.test_collection_name = "items"
 
-    async def asyncTearDown(self) -> None:
-        await self.client.db.drop_collection(self.test_collection_name)
-
-    async def test_credentials_md5(self) -> None:
-        hashed = self.credentials.md5_hash()
-        assert hashed == b"f79a93932f4e10c3654be025a576398c"
+    @staticmethod
+    async def test_credentials_md5() -> None:
+        credentials = AuthCredentials(username="user", password="password")
+        assert credentials.md5_hash() == b"3bcfc22a1cd6be41bc7814c13d3ce94c"
 
     async def test_cursor(self) -> None:
-        collection = await self.client.db.create_collection(
+        collection = await self.database.create_collection(
             self.test_collection_name,
         )
         assert await collection.count() == 0
@@ -76,14 +64,14 @@ class BasicTests(unittest.IsolatedAsyncioTestCase):
         await collection.clear()
 
     async def test_collection_create(self) -> None:
-        collection = await self.client.db.create_collection(
+        collection = await self.database.create_collection(
             self.test_collection_name,
         )
         assert collection.name == self.test_collection_name
-        assert collection.database.name == "db"
+        assert collection.database is self.database
 
     async def test_basic_operations(self) -> None:
-        collection = await self.client.db.create_collection(
+        collection = await self.database.create_collection(
             self.test_collection_name,
         )
 

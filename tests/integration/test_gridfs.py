@@ -16,7 +16,7 @@ class GridFSIntegrationTests(MongoTestCase):
         super().__init__(*args)
 
     async def test_gridfs(self) -> None:
-        fs = await GridFS(self.client.gridfsdb).indexed()
+        fs = await GridFS(self.database).indexed()
         payload = os.urandom(self._9_mb)
         file_id = await fs.put(payload)
         file, binary = await fs.get_by_file_id(file_id)

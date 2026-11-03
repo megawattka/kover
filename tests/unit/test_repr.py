@@ -1,24 +1,29 @@
-import unittest
+from unittest.mock import MagicMock
 
-from kover import Kover, MongoTransport
+from kover import AuthCredentials, Kover
+from kover.network.pool import ConnectionPool
+from kover.network.transport import Transport
+from kover.session import Session
 
 
-class InvalidUriTests(unittest.IsolatedAsyncioTestCase):
-    def __init__(self, *args: ..., **kwargs: ...) -> None:
-        super().__init__(*args, **kwargs)
-        self.uri = "mongodb://main_m1:incunaby!@localhost:27017?tls=false&maxpoolsize=10"
-
-    async def test_all_reprs(self) -> None:
-        client = await Kover.from_uri(self.uri)
-        repr(client)
-        database = client.get_database("test")
-        repr(database)
-        collection = database.get_collection("test")
-        repr(collection)
-        session = await client.start_session()
-        repr(session)
-        transaction = session.start_transaction()
-        repr(transaction)
-        transport = MongoTransport("127.0.0.1", 27017, tls=False)
-        await transport.connect()
-        repr(transport)
+def test_representations_are_offline_and_do_not_expose_passwords() -> None:
+    credentials = AuthCredentials(username="user", password="secret-value")
+    pool = MagicMock(spec=ConnectionPool)
+    client = Kover(pool=pool)
+    database = client.get_database("test")
+    collection = database.get_collection("items")
+    session = Session({"id": "logical"}, client)
+    for instance in (
+        client,
+        database,
+        collection,
+        session,
+        credentials,
+        collection.find(),
+        Transport("localhost", 27017),
+    ):
+        assert repr(instance)
+        assert "secret-value" not in repr(instance)
+    assert "items" in repr(collection)
+    assert "test" in repr(database)
+    pool.request.assert_not_awaited()

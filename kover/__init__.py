@@ -37,9 +37,16 @@ from .enums import (
     ValidationLevel,
 )
 from .exceptions import (
-    CorruptedDocument,
+    ConnectionClosedError,
     CredentialsException,
+    DriverError,
+    InvalidOperationError,
+    NetworkError,
     OperationFailure,
+    PoolClosedError,
+    PoolPausedError,
+    PoolTimeoutError,
+    ProtocolError,
     SchemaGenerationException,
 )
 from .helpers import chain, filter_non_null, maybe_to_dict
@@ -57,12 +64,11 @@ from .models import (
     User,
     WriteConcern,
 )
-from .network import AuthCredentials, MongoTransport
+from .network import AuthCredentials, Connection, Transport
 from .network.pool import ConnectionPool
 from .schema.document import Document
 from .session import Session
-from .transaction import Transaction
-from .typings import JsonT
+from .typings import DictT
 
 __all__ = (
     "AuthCredentials",
@@ -71,28 +77,35 @@ __all__ = (
     "Collation",
     "CollationStrength",
     "Collection",
+    "Connection",
+    "ConnectionClosedError",
     "ConnectionPool",
-    "CorruptedDocument",
     "CredentialsException",
     "Cursor",
     "Database",
     "Delete",
+    "DictT",
     "Document",
+    "DriverError",
     "HelloResult",
     "Index",
     "IndexDirection",
     "IndexType",
-    "JsonT",
+    "InvalidOperationError",
     "Kover",
-    "MongoTransport",
+    "NetworkError",
     "OperationFailure",
+    "PoolClosedError",
+    "PoolPausedError",
+    "PoolTimeoutError",
+    "ProtocolError",
     "ReadConcern",
     "ReplicaSetConfig",
     "ReplicaSetConfigSettings",
     "ReplicaSetMember",
     "SchemaGenerationException",
     "Session",
-    "Transaction",
+    "Transport",
     "Update",
     "User",
     "ValidationLevel",

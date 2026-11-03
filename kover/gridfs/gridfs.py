@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import datetime as dt
 from hashlib import sha1
-from io import BytesIO
+from io import BytesIO, IOBase
 import math
 from pathlib import Path
-from typing import TYPE_CHECKING, BinaryIO, Final, Self
+from typing import TYPE_CHECKING, Final, Self
 
 from bson import Binary, ObjectId
 
@@ -18,7 +18,7 @@ from .models import Chunk, File
 
 if TYPE_CHECKING:
     from ..database import Database
-    from ..typings import GridFSPayloadT, JsonT
+    from ..typings import DictT, GridFSPayloadT
 
 # pre-created index models
 FS_IDX: Final[Index] = Index("_fs_idx", {
@@ -55,7 +55,7 @@ class GridFS:
     ) -> tuple[BytesIO, str | None]:
         name = None
 
-        if isinstance(data, BinaryIO):  # io-like obj
+        if isinstance(data, IOBase):  # io-like obj
             if data.tell() != 0 and data.seekable():
                 data.seek(0)
             data = data.read()
@@ -102,7 +102,7 @@ class GridFS:
         encoding: str = "utf-8",
         chunk_size: int | None = None,
         add_sha1: bool = True,
-        metadata: JsonT | None = None,
+        metadata: DictT | None = None,
     ) -> ObjectId:
         """Store a file in GridFS, splitting it into chunks.
 
@@ -161,8 +161,7 @@ class GridFS:
             metadata={
                 "sha1": sha1(binary.getvalue()).hexdigest(),
             } if add_sha1 else {},
-        )
-        file.set_object_id(file_id)
+        ).set_object_id(file_id)
 
         file.metadata.update(metadata or {})
         await self._files.insert_one(
@@ -188,6 +187,7 @@ class GridFS:
 
         Raises:
             GridFSFileNotFound : If no file with the given ID is found.
+            RuntimeError: if sha1 hash mismatch occur.
         """
         file = await self._files.find_one({"_id": file_id}, cls=File)
         if file is not None:
@@ -195,16 +195,19 @@ class GridFS:
                 {"$match": {"files_id": file_id}},
                 {"$sort": {"n": 1}},
             ]).to_list()
+
             binary = BytesIO()
             for chunk in chunks:
                 binary.write(chunk["data"])
+
             binary.seek(0)
             if check_sha1:
                 stored_sha1 = file.metadata.get("sha1")
                 if stored_sha1 is not None:
-                    assert stored_sha1 == sha1(
-                        binary.getvalue(),
-                    ).hexdigest(), "sha1 hash mismatch"
+                    calculated = sha1(binary.getvalue()).hexdigest()
+
+                    if stored_sha1 != calculated:
+                        raise RuntimeError("sha1 hash mismatch")
             return file, binary
         raise GridFSFileNotFound("No file with that id found")
 

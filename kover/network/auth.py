@@ -7,18 +7,16 @@ import hashlib
 from hmac import HMAC, compare_digest
 import os
 from typing import TYPE_CHECKING, Final
-from urllib.parse import unquote_plus
 
 from bson import Binary
 from pydantic import BaseModel, Field
 
 from ..exceptions import CredentialsException
+from ..helpers import resolve_auth_db_from_env
 
 if TYPE_CHECKING:
-    from urllib.parse import ParseResult
-
-    from ..network.transport import MongoTransport
-    from ..typings import JsonT
+    from ..network.connection import Connection
+    from ..typings import DictT
 
 ITERATIONS: Final[int] = 4096
 
@@ -35,14 +33,14 @@ class AuthCredentials(BaseModel):
 
     username: str
     password: str = Field(repr=False)
-    auth_database: str = Field(default="admin")
+    auth_database: str = Field(default_factory=resolve_auth_db_from_env)
 
     def md5_hash(self) -> bytes:
         """Returns md5 hashed string for MongoDB. Internal use."""
         hashed = hashlib.md5(f"{self.username}:mongo:{self.password}".encode())
         return hashed.hexdigest().encode("u8")
 
-    def apply_to(self, document: JsonT) -> None:
+    def apply_to(self, document: DictT) -> None:
         """Internal use only. Applies auth credentials to hello payload."""
         formatted = f"{self.auth_database}.{self.username}"
         document["saslSupportedMechs"] = formatted
@@ -59,8 +57,8 @@ class AuthCredentials(BaseModel):
             CredentialsException : If only one of MONGO_USER
                 or MONGO_PASSWORD is set.
         """
-        user, password = os.environ.get("MONGO_USER"), \
-            os.environ.get("MONGO_PASSWORD")
+        user = os.environ.get("MONGO_USER")
+        password = os.environ.get("MONGO_PASSWORD")
 
         if user is not None and password is not None:
             return cls(username=user, password=password)
@@ -68,21 +66,6 @@ class AuthCredentials(BaseModel):
         if (user and not password) or (password and not user):
             raise CredentialsException
 
-        return None
-
-    @classmethod
-    def from_parts(cls, parts: ParseResult) -> AuthCredentials | None:
-        """Return auth credentials based on uri UserInfo."""
-        if parts.username is not None and parts.password is not None:
-            if len(parts.path) > 1:
-                auth_database = unquote_plus(parts.path[1:])
-            else:
-                auth_database = "admin"
-            return cls(
-                username=parts.username,
-                password=parts.password,
-                auth_database=auth_database,
-            )
         return None
 
 
@@ -94,7 +77,7 @@ class Auth:
             with the MongoDB server.
     """
 
-    def __init__(self, transport: MongoTransport) -> None:
+    def __init__(self, transport: Connection) -> None:
         self._transport = transport
 
     @staticmethod
@@ -133,7 +116,7 @@ class Auth:
         user = self._clear_username(credentials.username.encode("u8"))
         nonce = b64encode(os.urandom(32))
         first_bare = b"n=" + user + b",r=" + nonce
-        command: JsonT = {
+        command: DictT = {
             "saslStart": 1.0,
             "mechanism": mechanism,
             "payload": Binary(b"n,," + first_bare),
@@ -142,9 +125,9 @@ class Auth:
                 "skipEmptyExchange": True,
             },
         }
-        request = await self._transport.request(
-            doc=command,
-            db_name=credentials.auth_database,
+        request = await self._transport.command(
+            document=command,
+            database=credentials.auth_database,
         )
         return nonce, request["payload"], first_bare, request["conversationId"]
 
@@ -153,16 +136,18 @@ class Auth:
         client_final: bytes,
         cid: int,
         credentials: AuthCredentials,
-    ) -> JsonT:
-        cmd: JsonT = {
+    ) -> DictT:
+        cmd: DictT = {
             "saslContinue": 1.0,
             "conversationId": cid,
             "payload": Binary(client_final),
         }
-        request = await self._transport.request(
-            cmd, db_name=credentials.auth_database)
+        request = await self._transport.command(
+            cmd, database=credentials.auth_database)
 
-        assert request["done"], "SASL conversation not completed."
+        if not request.get("done"):
+            raise RuntimeError("SASL conversation not completed.")
+
         return self._parse_scram_response(request["payload"])
 
     async def create(
@@ -201,8 +186,12 @@ class Auth:
         )
         parsed = self._parse_scram_response(server_first)
         iterations = int(parsed["i"])
-        assert iterations > ITERATIONS, "Server sent an wrong iteration count."
-        assert parsed["r"].startswith(nonce), "Server sent an invalid nonce."
+
+        if iterations <= ITERATIONS:
+            raise ValueError("Server sent an wrong iteration count.")
+
+        if not parsed["r"].startswith(nonce):
+            raise ValueError("Server sent an invalid nonce.")
 
         salted_pass = hashlib.pbkdf2_hmac(
             digest,
@@ -234,6 +223,8 @@ class Auth:
             HMAC(keys[1], auth_msg, digestmod).digest(),
         )
         parsed = await self._sasl_continue(client_final, cid, credentials)
-        assert compare_digest(parsed["v"], server_sig)
+
+        if not compare_digest(parsed["v"], server_sig):
+            raise ValueError("Auth failed. Digests are different.")
 
         return parsed["v"]

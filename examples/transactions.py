@@ -10,7 +10,7 @@ from kover import AuthCredentials, Kover
 from kover.exceptions import OperationFailure
 
 if TYPE_CHECKING:
-    from kover import JsonT
+    from kover import DictT
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -23,21 +23,21 @@ async def main() -> None:
     session = await client.start_session()
 
     # specify _id directly
-    doc: JsonT = {"_id": ObjectId(), "name": "John", "age": 30}
+    doc: DictT = {"_id": ObjectId(), "name": "John", "age": 30}
     collection = await client.db.test.create_if_not_exists()
     try:
-        async with session.start_transaction() as transaction:
-            await collection.insert_one(doc, transaction=transaction)
+        session.start_transaction()
+        await collection.insert_one(doc, session=session)
 
-            # it should error with duplicate key now
-            await collection.insert_one(doc, transaction=transaction)
+        # it should error with duplicate key now
+        await collection.insert_one(doc, session=session)
+        await session.commit_transaction()
     except OperationFailure as exc:
         log.info("Got error: %s", exc)
         log.info("%s, %s", exc, type(exc))
 
-        # such try/except's will always have .transaction field
-        assert exc.transaction is not None  # ruff: ignore[pytest-assert-in-except]
-        log.info("State after transaction: %s", exc.transaction.state)
+        log.info("Transaction failed in session: %s", session)
+        await session.abort_transaction()
 
     found = await collection.find().to_list()
     log.info("documents found: %s", found)  # no documents found due to abort

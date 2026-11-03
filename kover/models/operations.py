@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from ..helpers import filter_non_null
 from ..mixins import ModelMixin as _ModelMixin
-from ..typings import JsonT  # ruff: ignore[typing-only-first-party-import]
+from ..typings import DictT  # ruff: ignore[typing-only-first-party-import]
 from .other import Collation  # ruff: ignore[typing-only-first-party-import]
 
 
@@ -18,7 +18,7 @@ class _UpdateKwargs(TypedDict):
     upsert: NotRequired[bool]
     multi: NotRequired[bool]
     collation: NotRequired[Collation | None]
-    array_filters: NotRequired[JsonT | None]
+    array_filters: NotRequired[DictT | None]
     hint: NotRequired[str | None]
 
 
@@ -28,24 +28,24 @@ class Update(_ModelMixin):
 
     def __init__(
         self,
-        q: JsonT,
-        u: JsonT,
-        c: JsonT | None = None,
+        q: DictT,
+        u: DictT,
+        c: DictT | None = None,
         /,
         **kwargs: Unpack[_UpdateKwargs],
     ) -> None:
         BaseModel.__init__(self, q=q, u=u, c=c, **kwargs)
 
-    q: JsonT
-    u: JsonT
-    c: JsonT | None = None  # constants
+    q: DictT
+    u: DictT
+    c: DictT | None = None  # constants
     upsert: bool = False
     multi: bool = False
     collation: Collation | None = None
-    array_filters: JsonT | None = None
+    array_filters: DictT | None = None
     hint: str | None = None
 
-    def as_bulk_write_op(self) -> JsonT:
+    def as_bulk_write_op(self) -> DictT:
         """Serialize This model for BulkWriteBuilder.
 
         Returns:
@@ -68,22 +68,22 @@ class _DeleteKwargs(TypedDict):
 
     limit: int
     collation: NotRequired[Collation | None]
-    hint: NotRequired[JsonT | str | None]
+    hint: NotRequired[DictT | str | None]
 
 
 # https://www.mongodb.com/docs/manual/reference/command/delete/#syntax
 class Delete(_ModelMixin):
     """Represents a MongoDB delete document."""
 
-    def __init__(self, q: JsonT, /, **kwargs: Unpack[_DeleteKwargs]) -> None:
+    def __init__(self, q: DictT, /, **kwargs: Unpack[_DeleteKwargs]) -> None:
         BaseModel.__init__(self, q=q, **kwargs)
 
-    q: JsonT  # query
+    q: DictT  # query
     limit: int
     collation: Collation | None = None
-    hint: JsonT | str | None = None
+    hint: DictT | str | None = None
 
-    def as_bulk_write_op(self) -> JsonT:
+    def as_bulk_write_op(self) -> DictT:
         """Serialize This model for BulkWriteBuilder.
 
         Returns:

@@ -51,7 +51,11 @@ class User(Document):  # ruff: ignore[undocumented-public-class]
 
 
 async def main() -> None:
-    """Entrypoint."""
+    """Entrypoint.
+
+    Raises:
+        OperationFailure: If insertion fails for an unexpected reason.
+    """
     credentials = AuthCredentials.from_environ()
     client = await Kover.make_client(credentials=credentials)
 
@@ -91,8 +95,9 @@ async def main() -> None:
         }
         await collection.insert_one(invalid)
     except OperationFailure as e:
+        if e.code != 121:  # ErrDocumentValidationFailure  # ruff: ignore[magic-value-comparison]
+            raise
         log.info("got Error: %s, %s", e.__class__, e)
-        assert e.code == 121  # ErrDocumentValidationFailure  # ruff: ignore[magic-value-comparison, pytest-assert-in-except]
 
     await client.db.drop_collection("test")
 

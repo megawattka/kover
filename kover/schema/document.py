@@ -14,7 +14,7 @@ from pydantic import (
 from .generator import MongoDBSchemaGenerator
 
 if TYPE_CHECKING:
-    from kover.typings import JsonT
+    from kover.typings import DictT
 
 
 class Document(BaseModel):
@@ -30,13 +30,14 @@ class Document(BaseModel):
     _id: ObjectId | None = PrivateAttr(default=None)
 
     @classmethod
-    def from_document(cls, payload: JsonT) -> Self:
+    def from_document(cls, payload: DictT) -> Self:
         """Create a Document instance from a dictionary.
 
         Returns:
             An instance of the Document subclass with
                 the data from the dictionary.
         """
+        payload = dict(payload)
         object_id = payload.pop("_id", None)
 
         document = cls.model_validate(payload)
@@ -45,7 +46,7 @@ class Document(BaseModel):
 
         return document
 
-    def to_dict(self, *, exclude_id: bool = False) -> JsonT:
+    def to_dict(self, *, exclude_id: bool = False) -> DictT:
         """Convert the document to a dictionary.
 
         Returns:
@@ -59,9 +60,14 @@ class Document(BaseModel):
 
         return dumped
 
-    def set_object_id(self, _id: ObjectId) -> None:
-        """Set the document's ObjectId."""
+    def set_object_id(self, _id: ObjectId) -> Self:
+        """Set the document's ObjectId.
+
+        Returns:
+            self.
+        """
         self._id = _id
+        return self
 
     def get_object_id(self) -> ObjectId | None:
         """Get the document's ObjectId.
@@ -75,7 +81,7 @@ class Document(BaseModel):
         return self.__repr__()
 
     @classmethod
-    def model_mongodb_schema(cls) -> JsonT:
+    def model_mongodb_schema(cls) -> DictT:
         """Generate the MongoDB JSON Schema validator for this document model.
 
         Returns:

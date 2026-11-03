@@ -17,8 +17,8 @@ if TYPE_CHECKING:
 
     from .database import Database
     from .models import Collation, ReadConcern, Update, WriteConcern
-    from .session import Transaction
-    from .typings import JsonT
+    from .session import Session
+    from .typings import DictT
 
 T_co = TypeVar("T_co", bound=Document, covariant=True)
 
@@ -41,8 +41,8 @@ class Collection:
         self,
         name: str,
         database: Database,
-        options: JsonT | None = None,
-        info: JsonT | None = None,
+        options: DictT | None = None,
+        info: DictT | None = None,
     ) -> None:
         self.name = name
         self.database = database
@@ -81,7 +81,7 @@ class Collection:
         return infos[0]
 
     # https://www.mongodb.com/docs/manual/reference/command/collMod/
-    async def coll_mod(self, params: JsonT) -> None:
+    async def coll_mod(self, params: DictT) -> None:
         """Modify collection settings using the collMod command.
 
         Parameters:
@@ -94,7 +94,7 @@ class Collection:
 
     async def set_validator(
         self,
-        validator: JsonT,
+        validator: DictT,
         *,
         level: ValidationLevel = ValidationLevel.MODERATE,
     ) -> None:
@@ -113,14 +113,14 @@ class Collection:
     # https://www.mongodb.com/docs/manual/reference/command/insert/
     async def insert_one(
         self,
-        document: JsonT | Document,
+        document: DictT | Document,
         /,
         *,
         ordered: bool = True,
         max_time_ms: int = 0,
         bypass_document_validation: bool = False,
         comment: str | None = None,
-        transaction: Transaction | None = None,
+        session: Session | None = None,
     ) -> ObjectId:
         """Insert one document into the collection.
 
@@ -133,15 +133,15 @@ class Collection:
             bypass_document_validation : Allows the write to circumvent
                 document validation (default is False).
             comment : A comment to attach to the operation.
-            transaction : The transaction context for the operation.
+            session : The logical session for the operation.
 
         Returns:
             The boolean value that indicates document insertion.
         """
-        insertable = maybe_to_dict(document)
+        insertable = dict(maybe_to_dict(document))
         document_id = insertable.setdefault("_id", ObjectId())
 
-        command: JsonT = filter_non_null({
+        command: DictT = filter_non_null({
             "insert": self.name,
             "ordered": ordered,
             "documents": [insertable],
@@ -149,20 +149,20 @@ class Collection:
             "bypassDocumentValidation": bypass_document_validation,
             "comment": comment,
         })
-        await self.database.command(command, transaction=transaction)
+        await self.database.command(command, session=session)
         return document_id
 
     # https://www.mongodb.com/docs/manual/reference/command/insert/
     async def insert_many(
         self,
-        documents: Sequence[JsonT | Document],
+        documents: Sequence[DictT | Document],
         /,
         *,
         ordered: bool = True,
         max_time_ms: int = 0,
         bypass_document_validation: bool = False,
         comment: str | None = None,
-        transaction: Transaction | None = None,
+        session: Session | None = None,
     ) -> list[ObjectId]:
         """Insert many documents at once into the collection.
 
@@ -175,18 +175,18 @@ class Collection:
             bypass_document_validation : Allows the write to circumvent
                 document validation (default is False).
             comment : A comment to attach to the operation.
-            transaction : The transaction context for the operation.
+            session : The logical session for the operation.
 
         Returns:
             The amount of documents that were successfully inserted.
         """
-        insertable = [maybe_to_dict(document) for document in documents]
+        insertable = [dict(maybe_to_dict(document)) for document in documents]
         document_ids: list[ObjectId] = []
         for document in insertable:
             document_id = document.setdefault("_id", ObjectId())
             document_ids.append(document_id)
 
-        command: JsonT = filter_non_null({
+        command: DictT = filter_non_null({
             "insert": self.name,
             "ordered": ordered,
             "documents": insertable,
@@ -194,7 +194,7 @@ class Collection:
             "bypassDocumentValidation": bypass_document_validation,
             "comment": comment,
         })
-        await self.database.command(command, transaction=transaction)
+        await self.database.command(command, session=session)
         return document_ids
 
     # https://www.mongodb.com/docs/manual/reference/command/update/
@@ -205,8 +205,8 @@ class Collection:
         max_time_ms: int = 0,
         bypass_document_validation: bool = False,
         comment: str | None = None,
-        let: JsonT | None = None,
-        transaction: Transaction | None = None,
+        let: DictT | None = None,
+        session: Session | None = None,
     ) -> int:
         """Update documents in the collection.
 
@@ -221,7 +221,7 @@ class Collection:
                 to circumvent document validation (default is False).
             comment : A comment to attach to the operation.
             let : Variables that can be used in the update expressions.
-            transaction : The transaction context for the operation.
+            session : The logical session for the operation.
 
         Returns:
             The number of documents updated.
@@ -238,7 +238,7 @@ class Collection:
 
         request = await self.database.command(
             command,
-            transaction=transaction,
+            session=session,
         )
         return request["nModified"]
 
@@ -247,11 +247,11 @@ class Collection:
         self,
         *deletes: Delete,
         comment: str | None = None,
-        let: JsonT | None = None,
+        let: DictT | None = None,
         ordered: bool = True,
         write_concern: WriteConcern | None = None,
         max_time_ms: int = 0,
-        transaction: Transaction | None = None,
+        session: Session | None = None,
     ) -> int:
         """Delete documents from the collection.
 
@@ -264,7 +264,7 @@ class Collection:
             write_concern : The write concern for the operation.
             max_time_ms : The maximum amount of time
                 to allow the operation to run.
-            transaction : The transaction context for the operation.
+            session : The logical session for the operation.
 
         Returns:
             The number of documents deleted.
@@ -281,7 +281,7 @@ class Collection:
 
         request = await self.database.command(
             command,
-            transaction=transaction,
+            session=session,
         )
         return request["n"]
 
@@ -299,34 +299,34 @@ class Collection:
     @overload
     async def find_one(
         self,
-        filter_: JsonT | None,
+        filter_: DictT | None,
         cls: None = None,
-        transaction: Transaction | None = None,
-    ) -> JsonT | None:
+        session: Session | None = None,
+    ) -> DictT | None:
         ...
 
     @overload
     async def find_one(
         self,
-        filter_: JsonT | None = None,
+        filter_: DictT | None = None,
         cls: type[T_co] = Document,
-        transaction: Transaction | None = None,
+        session: Session | None = None,
     ) -> T_co | None:
         ...
 
     # same as .find but has explicit .to_list and limit 1
     async def find_one(
         self,
-        filter_: JsonT | None = None,
+        filter_: DictT | None = None,
         cls: type[T_co] | None = None,
-        transaction: Transaction | None = None,
-    ) -> T_co | JsonT | None:
+        session: Session | None = None,
+    ) -> T_co | DictT | None:
         """Find a single document in the collection matching the filter.
 
         Parameters:
             filter_ : The filter criteria for selecting the document.
             cls : The class to deserialize the document into.
-            transaction : The transaction context for the operation.
+            session : The logical session for the operation.
 
         Returns:
             The first matching document or None if no document matches.
@@ -334,7 +334,7 @@ class Collection:
         documents = await self.find(
             filter_=filter_,
             cls=cls,
-            transaction=transaction,
+            session=session,
         ).limit(1).to_list()
         if documents:
             return documents[0]
@@ -343,43 +343,43 @@ class Collection:
     @overload
     def find(
         self,
-        filter_: JsonT | None = None,
+        filter_: DictT | None = None,
         cls: None = None,
-        transaction: Transaction | None = None,
-    ) -> Cursor[JsonT]:
+        session: Session | None = None,
+    ) -> Cursor[DictT]:
         ...
 
     @overload
     def find(
         self,
-        filter_: JsonT | None,
+        filter_: DictT | None,
         cls: type[T_co],
-        transaction: Transaction | None = None,
+        session: Session | None = None,
     ) -> Cursor[T_co]:
         ...
 
     @overload
     def find(
         self,
-        filter_: JsonT | None = None,
+        filter_: DictT | None = None,
         *,
         cls: type[T_co],
-        transaction: Transaction | None = None,
+        session: Session | None = None,
     ) -> Cursor[T_co]:
         ...
 
     def find(
         self,
-        filter_: JsonT | None = None,
+        filter_: DictT | None = None,
         cls: type[T_co] | None = None,
-        transaction: Transaction | None = None,
-    ) -> Cursor[T_co] | Cursor[JsonT]:
+        session: Session | None = None,
+    ) -> Cursor[T_co] | Cursor[DictT]:
         """Find documents in the collection matching the filter.
 
         Parameters:
             filter_ : The filter criteria for selecting documents.
             cls : The class to deserialize the documents into.
-            transaction : The transaction context for the operation.
+            session : The logical session for the operation.
 
         Returns:
             A cursor for iterating over the matching documents.
@@ -394,25 +394,25 @@ class Collection:
                 query=query,
                 collection=self,
                 decoder=raw_decoder,
-                transaction=transaction,
+                session=session,
             )
 
         return Cursor(
             query=query,
             collection=self,
             decoder=cls.from_document,
-            transaction=transaction,
+            session=session,
         )
 
     # TODO @megawattka: prob make overloads for cls like in "find"?
     # https://www.mongodb.com/docs/manual/reference/command/aggregate/
     def aggregate(
         self,
-        pipeline: list[JsonT],
+        pipeline: list[DictT],
         *,
         explain: bool = False,
         allow_disk_use: bool = True,
-        cursor: JsonT | None = None,
+        cursor: DictT | None = None,
         max_time_ms: int = 0,
         bypass_document_validation: bool = False,
         read_concern: ReadConcern | None = None,
@@ -420,9 +420,9 @@ class Collection:
         hint: str | None = None,
         comment: str | None = None,
         write_concern: WriteConcern | None = None,
-        let: JsonT | None = None,
-        transaction: Transaction | None = None,
-    ) -> Cursor[JsonT]:
+        let: DictT | None = None,
+        session: Session | None = None,
+    ) -> Cursor[DictT]:
         """Create a cursor for an aggregation pipeline on the collection.
 
         Parameters:
@@ -440,7 +440,7 @@ class Collection:
             comment : Comment to attach to the operation.
             write_concern : The write concern for the operation.
             let : Variables for use in the pipeline.
-            transaction : The transaction context.
+            session : The logical session.
 
         Returns:
             A cursor for iterating over the aggregation results.
@@ -464,19 +464,19 @@ class Collection:
             query=command,
             collection=self,
             decoder=raw_decoder,
-            transaction=transaction,
+            session=session,
         )
 
     # https://www.mongodb.com/docs/manual/reference/command/distinct/
     async def distinct(
         self,
         key: str,
-        query: JsonT | None = None,
+        query: DictT | None = None,
         collation: Collation | None = None,
         comment: str | None = None,
         read_concern: ReadConcern | None = None,
         hint: str | None = None,
-        transaction: Transaction | None = None,
+        session: Session | None = None,
     ) -> list[object]:
         """Return a list of distinct values for the specified key.
 
@@ -488,7 +488,7 @@ class Collection:
             comment : A comment to attach to the operation.
             read_concern : The read concern for the operation.
             hint : Index to use.
-            transaction : The transaction context for the operation.
+            session : The logical session for the operation.
 
         Returns:
             The list of distinct values for the specified key.
@@ -505,14 +505,14 @@ class Collection:
 
         request = await self.database.command(
             command,
-            transaction=transaction,
+            session=session,
         )
         return request["values"]
 
     # https://www.mongodb.com/docs/manual/reference/command/count
     async def count(
         self,
-        query: JsonT | None = None,
+        query: DictT | None = None,
         limit: int = 0,
         skip: int = 0,
         hint: str | None = None,
@@ -520,7 +520,7 @@ class Collection:
         comment: str | None = None,
         max_time_ms: int = 0,
         read_concern: ReadConcern | None = None,
-        transaction: Transaction | None = None,
+        session: Session | None = None,
     ) -> int:
         """Count the number of documents in the collection matching the query.
 
@@ -533,7 +533,7 @@ class Collection:
             comment : A comment to attach to the operation.
             max_time_ms : The maximum time in milliseconds for the operation.
             read_concern : The read concern for the operation.
-            transaction : The transaction context for the operation.
+            session : The logical session for the operation.
 
         Returns:
             The number of documents matching the query.
@@ -549,7 +549,7 @@ class Collection:
             "collation": maybe_to_dict(collation),
             "comment": comment,
         })
-        request = await self.database.command(command, transaction=transaction)
+        request = await self.database.command(command, session=session)
         return request["n"]
 
     # https://www.mongodb.com/docs/manual/reference/command/convertToCapped/
@@ -614,7 +614,7 @@ class Collection:
         Returns:
             Index objects representing the collection's indexes.
         """
-        cursor: Cursor[JsonT] = Cursor({
+        cursor: Cursor[DictT] = Cursor({
             "listIndexes": self.name,
         }, collection=self, decoder=raw_decoder)
 

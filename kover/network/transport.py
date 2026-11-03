@@ -1,27 +1,17 @@
-"""The transport layer for MongoDB connections."""
+"""Low-level asynchronous byte transport."""
 
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
 import ssl
-from typing import TYPE_CHECKING, Literal
+from typing import Final
 
-from ..enums import TxnState
-from ..helpers import classrepr
-from ..models import HelloResult
-from .auth import Auth
-from .wirehelper import WireHelper
-
-if TYPE_CHECKING:
-    from ..session import Transaction
-    from ..typings import COMPRESSION_T, DocumentT, JsonT
-    from .auth import AuthCredentials
+MIN_MESSAGE_LENGTH: Final[int] = 16
 
 
-@classrepr("_addr")
-class MongoTransport:
-    """A MongoDB transport for client reads/writes."""
+class Transport:
+    """TCP/TLS byte exchange; it knows nothing about MongoDB commands."""
+
     def __init__(
         self,
         host: str,
@@ -29,165 +19,129 @@ class MongoTransport:
         *,
         loop: asyncio.AbstractEventLoop | None = None,
         tls: bool = False,
+        max_message_size: int = 48 * 1024 * 1024,
     ) -> None:
-        self._compressor: Literal["zlib", "zstd", "snappy"] | None = None
-        self._addr = (None, None)
-        self._host = host
-        self._port = port
+        self.host = host
+        self.port = port
         self._loop = loop
         self._tls = tls
-        self._connected: bool = False
-        self._helper = WireHelper()
-        self._reader: asyncio.StreamReader = None  # type: ignore[assignment]
-        self._writer: asyncio.StreamWriter = None  # type: ignore[assignment]
-
-    async def connect(self) -> None:
-        """Establish a connection to the MongoDB server."""
-        if not self._connected:
-            loop = self._loop or asyncio.get_running_loop()
-            reader = asyncio.StreamReader(limit=2 ** 16, loop=loop)
-            protocol = asyncio.StreamReaderProtocol(reader, loop=loop)
-
-            ssl_ctx = ssl.create_default_context() if self._tls else None
-            transport, _ = await loop.create_connection(
-                lambda: protocol, self._host, self._port, ssl=ssl_ctx,
-            )
-            writer = asyncio.StreamWriter(transport, protocol, reader, loop)
-            self._connected = True
-            self._reader = reader
-            self._writer = writer
-            self._addr = self._writer.get_extra_info("peername", (None, None))
+        self._max_message_size = max_message_size
+        self._reader: asyncio.StreamReader | None = None
+        self._writer: asyncio.StreamWriter | None = None
+        self._closed = False
 
     @property
-    def is_connected(self) -> bool:
-        """True if we are conected False otherwise."""
-        return self._connected
+    def connected(self) -> bool:
+        """Whether the socket is locally connected."""
+        return self._writer is not None and not self._writer.is_closing()
 
-    def set_compressor(
-        self,
-        compressor: Literal["zlib", "zstd", "snappy"],
-    ) -> None:
-        """Sets the needed compressor type."""
-        self._compressor = compressor
-
-    def __del__(self) -> None:
-        if self._connected:
-            with suppress(RuntimeError):
-                if not self._writer.is_closing():
-                    self._writer.close()
-
-    async def _send(self, msg: bytes) -> None:
-        """Send a message to the MongoDB server.
-
-        Raises:
-            ConnectionError: If not connected to the server.
-        """
-        if not self._connected:
-            raise ConnectionError("Not connected to the MongoDB server.")
-        self._writer.write(msg)
-        await self._writer.drain()
-
-    async def _recv(self, size: int) -> bytes:
-        """Receive a message from the MongoDB server.
-
-        Returns:
-            The received bytes from the server.
-
-        Raises:
-            ConnectionError: If not connected to the server.
-        """
-        # ... 13.05.2024 # https://stackoverflow.com/a/29068174
-        if not self._connected:
-            raise ConnectionError("Not connected to the MongoDB server.")
-
-        return await self._reader.readexactly(size)
-
-    async def request(
-        self,
-        doc: DocumentT,
-        *,
-        db_name: str = "admin",
-        transaction: Transaction | None = None,
-        wait_response: bool = True,
-    ) -> JsonT:
-        """Send a request to the MongoDB server.
-
-        Returns:
-            The server's response as a dictionary.
-        """
-        doc = {**doc, "$db": db_name}  # order important
-        if transaction is not None and transaction.is_active:
-            transaction.apply_to(doc)
-
-        rid, msg = self._helper.get_message(doc, compressor=self._compressor)
-        await self._send(msg)
-
-        if wait_response:
-            header = await self._recv(16)
-            length, op_code = self._helper.verify_rid(header, rid)
-            data = await self._recv(length - 16)  # exclude header
-            reply = self._helper.get_reply(data, op_code)
-        else:  # cases like kover.shutdown()
-            return {}
-
-        if reply.get("ok") != 1 or reply.get("writeErrors") is not None:
-            exc_value = await self._helper.get_exception(reply=reply)
-            if transaction is not None:
-                transaction.end(TxnState.ABORTED, exc_value=exc_value)
-
-            exc_value.transaction = transaction
-            raise exc_value
-
-        if transaction is not None:
-            transaction.action_count += 1
-
-        return reply
-
-    async def hello(
-        self,
-        compression: COMPRESSION_T | None = None,
-        credentials: AuthCredentials | None = None,
-        application: JsonT | None = None,
-    ) -> HelloResult:
-        """Send a hello request to the MongoDB server and return the result.
-
-        Returns:
-            An instance of HelloResult containing the server's response.
-        """
-        payload = self._helper.get_hello_payload(compression, application)
-
-        if credentials is not None:
-            credentials.apply_to(payload)
-
-        document = await self.request(payload)
-        hello = HelloResult.model_validate(document)
-
-        if hello.compression:
-            self.set_compressor(hello.compression[0])
-
-        return hello
-
-    async def authorize(
-        self,
-        mechanism: Literal["SCRAM-SHA-256", "SCRAM-SHA-1"] | None,
-        credentials: AuthCredentials | None,
-    ) -> bytes | None:
-        """Perform authorization request and return a signature.
-
-        Returns:
-            The server signature after successful authentication,
-            or None if no mechanism or credentials are provided.
-        """
-        if mechanism is not None and credentials is not None:
-            return await Auth(self).create(
-                mechanism=mechanism, credentials=credentials)
-        return None
-
-    async def close(self) -> None:
-        """Close the connection to the MongoDB server."""
-        if not self._connected:
+    async def connect(self) -> None:
+        """Open the socket once."""
+        if self.connected:
             return
 
-        self._connected = False
-        self._writer.close()
-        await self._writer.wait_closed()
+        loop = self._loop or asyncio.get_running_loop()
+        reader = asyncio.StreamReader(limit=self._max_message_size, loop=loop)
+        protocol = asyncio.StreamReaderProtocol(reader, loop=loop)
+        ssl_context = ssl.create_default_context() if self._tls else None
+
+        transport, _ = await loop.create_connection(
+            lambda: protocol, self.host, self.port, ssl=ssl_context,
+        )
+        self._reader = reader
+        self._writer = asyncio.StreamWriter(transport, protocol, reader, loop)
+        self._closed = False
+
+    async def exchange(
+        self,
+        request: bytes,
+        *,
+        deadline: float | None = None,
+    ) -> bytes:
+        """Send one request and read one complete response.
+
+        Returns:
+            message itself in bytes.
+
+        Raises:
+            ConnectionError: if transport is not connected.
+        """
+        if not self.connected or self._reader is None or self._writer is None:
+            raise ConnectionError("transport is not connected")
+
+        async def operation() -> bytes:
+            if self._writer is None or self._reader is None:
+                raise ConnectionError("transport is not connected")
+
+            self._writer.write(request)
+            await self._writer.drain()
+            header = await self._reader.readexactly(4)
+            length = int.from_bytes(header, "little", signed=True)
+
+            if length < MIN_MESSAGE_LENGTH or length > self._max_message_size:
+                raise ValueError(f"invalid MongoDB message length: {length}")
+
+            return header + await self._reader.readexactly(length - 4)
+
+        completed = False
+        try:
+            if deadline is None:
+                response = await operation()
+            else:
+                timeout = max(
+                    0.0, deadline - asyncio.get_running_loop().time(),
+                )
+                response = await asyncio.wait_for(operation(), timeout)
+            completed = True
+            return response
+        finally:
+            if not completed:
+                self.abort()
+
+    async def exchange_without_reply(
+        self,
+        request: bytes,
+        *,
+        deadline: float | None = None,
+    ) -> None:
+        """Send bytes without reading a response.
+
+        Raises:
+            ConnectionError: if transport is not connected.
+        """
+        if self._writer is None or not self.connected:
+            raise ConnectionError("transport is not connected")
+
+        async def operation(writer: asyncio.StreamWriter) -> None:
+            writer.write(request)
+            await writer.drain()
+
+        sent = False
+        try:
+            if deadline is None:
+                await operation(self._writer)
+            else:
+                timeout = max(
+                    0.0,
+                    deadline - asyncio.get_running_loop().time(),
+                )
+                await asyncio.wait_for(operation(self._writer), timeout)
+            sent = True
+        finally:
+            if not sent:
+                self.abort()
+
+    def abort(self) -> None:
+        """Synchronously close the socket after an uncertain exchange."""
+        if self._closed:
+            return
+        self._closed = True
+        if self._writer is not None and not self._writer.is_closing():
+            self._writer.close()
+
+    async def close(self) -> None:
+        """Close the socket idempotently."""
+        writer = self._writer
+        self.abort()
+        if writer is not None:
+            await writer.wait_closed()

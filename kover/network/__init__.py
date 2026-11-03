@@ -1,14 +1,35 @@
+from ..exceptions import (
+    ConnectionClosedError,
+    DriverError,
+    InvalidOperationError,
+    NetworkError,
+    PoolClosedError,
+    PoolPausedError,
+    PoolTimeoutError,
+    ProtocolError,
+)
 from .auth import Auth, AuthCredentials
 from .compressors import get_context_by_id
-from .pool import ConnectionPool
-from .transport import MongoTransport
-from .wirehelper import WireHelper
+from .connection import Connection
+from .error_mapper import ErrorMapper
+from .pool import ConnectionLease, ConnectionPool
+from .transport import Transport
 
 __all__ = (
     "Auth",
     "AuthCredentials",
+    "Connection",
+    "ConnectionClosedError",
+    "ConnectionLease",
     "ConnectionPool",
-    "MongoTransport",
-    "WireHelper",
+    "DriverError",
+    "ErrorMapper",
+    "InvalidOperationError",
+    "NetworkError",
+    "PoolClosedError",
+    "PoolPausedError",
+    "PoolTimeoutError",
+    "ProtocolError",
+    "Transport",
     "get_context_by_id",
 )

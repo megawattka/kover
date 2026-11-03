@@ -7,7 +7,7 @@ from pymongo.asynchronous.uri_parser import parse_uri as _parse_uri
 
 from .mixins import ModelMixin as _ModelMixin
 from .network import AuthCredentials
-from .typings import JsonT  # ruff: ignore[typing-only-first-party-import]
+from .typings import DictT  # ruff: ignore[typing-only-first-party-import]
 
 
 class ParsedUri(_ModelMixin):
@@ -18,7 +18,7 @@ class ParsedUri(_ModelMixin):
     password: str | None
     database: str | None
     collection: str | None
-    options: JsonT
+    options: DictT
     fqdn: str | None
 
     @property

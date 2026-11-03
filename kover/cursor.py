@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from asyncio import CancelledError
 from collections import deque
 from typing import TYPE_CHECKING, NoReturn, Self, cast
 
 from bson import Int64
-
-from kover.exceptions import OperationFailure
 
 from .helpers import maybe_to_dict
 
@@ -18,8 +15,8 @@ if TYPE_CHECKING:
 
     from .collection import Collection
     from .models import Collation
-    from .session import Transaction
-    from .typings import JsonT
+    from .session import Session
+    from .typings import DictT
 
 
 class Cursor[T]:
@@ -30,15 +27,15 @@ class Cursor[T]:
 
     def __init__(
         self,
-        query: JsonT,
+        query: DictT,
         collection: Collection,
-        decoder: Callable[[JsonT], T],
-        transaction: Transaction | None = None,
+        decoder: Callable[[DictT], T],
+        session: Session | None = None,
     ) -> None:
         self._decoder = decoder
         self._query = query.copy()
         self._collection = collection
-        self._transaction = transaction
+        self._session = session
 
         self._id: Int64 | None = None
         self._server_collection = collection.name
@@ -50,8 +47,8 @@ class Cursor[T]:
         self._first: T | None = None
         self._first_cached = False
 
-        self._options: JsonT = {}
-        self._command_response: JsonT | None = None
+        self._options: DictT = {}
+        self._command_response: DictT | None = None
         self._get_more_batch_size = 101
 
     async def __aenter__(self) -> Self:
@@ -85,7 +82,7 @@ class Cursor[T]:
         self._options[name] = value
         return self
 
-    def sort(self, mapping: JsonT) -> Self:  # ruff: ignore[undocumented-public-method]
+    def sort(self, mapping: DictT) -> Self:  # ruff: ignore[undocumented-public-method]
         return self._set_option("sort", mapping.copy())
 
     def skip(self, value: int) -> Self:  # ruff: ignore[undocumented-public-method]
@@ -97,13 +94,13 @@ class Cursor[T]:
     def batch_size(self, value: int) -> Self:  # ruff: ignore[undocumented-public-method]
         return self._set_option("batchSize", value)
 
-    def projection(self, mapping: JsonT) -> Self:  # ruff: ignore[undocumented-public-method]
+    def projection(self, mapping: DictT) -> Self:  # ruff: ignore[undocumented-public-method]
         return self._set_option("projection", mapping.copy())
 
     def comment(self, comment: str) -> Self:  # ruff: ignore[undocumented-public-method]
         return self._set_option("comment", comment)
 
-    def hint(self, hint: str | JsonT) -> Self:  # ruff: ignore[undocumented-public-method]
+    def hint(self, hint: str | DictT) -> Self:  # ruff: ignore[undocumented-public-method]
         value = hint.copy() if isinstance(hint, dict) else hint
         return self._set_option("hint", value)
 
@@ -113,7 +110,7 @@ class Cursor[T]:
             maybe_to_dict(collation),
         )
 
-    def _get_query(self) -> JsonT:
+    def _get_query(self) -> DictT:
         query = self._query.copy()
         options = self._options.copy()
 
@@ -156,12 +153,12 @@ class Cursor[T]:
         query.update(options)
         return query
 
-    def _map_docs(self, documents: list[JsonT]) -> list[T]:
+    def _map_docs(self, documents: list[DictT]) -> list[T]:
         return [self._decoder(document) for document in documents]
 
     def _accept_batch(
         self,
-        response: JsonT,
+        response: DictT,
         batch_key: str,
     ) -> None:
         cursor = response["cursor"]
@@ -171,7 +168,7 @@ class Cursor[T]:
         self._id = Int64(cursor["id"])
 
         namespace = cursor.get("ns")
-        if namespace:
+        if namespace is not None:
             _, separator, collection = namespace.partition(".")
             if not separator or not collection:
                 raise ValueError(f"Invalid cursor namespace: {namespace!r}")
@@ -184,7 +181,7 @@ class Cursor[T]:
 
         response = await self._collection.database.command(
             self._get_query(),
-            transaction=self._transaction,
+            session=self._session,
         )
 
         if "cursor" in response:
@@ -199,7 +196,7 @@ class Cursor[T]:
         if self._id is None or self._id == 0:
             raise RuntimeError("Cursor has no active server ID")
 
-        command: JsonT = {
+        command: DictT = {
             "getMore": self._id,
             "collection": self._server_collection,
         }
@@ -211,7 +208,7 @@ class Cursor[T]:
 
         response = await self._collection.database.command(
             command,
-            transaction=self._transaction,
+            session=self._session,
         )
         self._accept_batch(response, "nextBatch")
 
@@ -244,14 +241,15 @@ class Cursor[T]:
         except StopAsyncIteration:
             raise
 
-        except (Exception, CancelledError) as error:
+        # Decoder failures and cancellation both require cursor cleanup.
+        except BaseException as error:
             await self._close_after_error(error)
             raise
 
         finally:
             self._reading = False
 
-    async def command_result(self) -> JsonT:
+    async def command_result(self) -> DictT:
         """Execute a command and return its non-cursor response.
 
         Returns:
@@ -260,7 +258,6 @@ class Cursor[T]:
         Raises:
             RuntimeError: If the cursor has already started or closed, or if
                 the command returns a cursor instead of a direct response.
-            CancelledError: If the command is cancelled.
         """
         self._ensure_single_thread()
 
@@ -279,8 +276,8 @@ class Cursor[T]:
             self._docs.clear()
             return self._command_response  # ruff: ignore[try-consider-else]
 
-        except (Exception, CancelledError) as e:
-            await self._close_after_error(e)
+        except BaseException as error:
+            await self._close_after_error(error)
             raise
 
         finally:
@@ -300,7 +297,7 @@ class Cursor[T]:
         await self._collection.database.command({
             "killCursors": self._server_collection,
             "cursors": [cursor_id],
-        }, transaction=self._transaction)
+        }, session=self._session)
 
     async def _close_after_error(
         self,
@@ -308,8 +305,10 @@ class Cursor[T]:
     ) -> None:
         try:
             await self._close()
-        except (OperationFailure, Exception, CancelledError) as e:  # ruff: ignore[blind-except]
-            error.add_note(f"Cursor cleanup also failed: {e!r}")
+        except BaseException as cleanup_error:
+            # Preserve the original failure, including task cancellation.
+            error.add_note(f"Cursor cleanup also failed: {cleanup_error!r}")
+            raise error from cleanup_error
 
     async def close(self) -> None:
         """Close locally and attempt to kill the server cursor."""

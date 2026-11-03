@@ -14,8 +14,8 @@ if TYPE_CHECKING:
 
     from .client import Kover
     from .models import WriteConcern
-    from .session import Transaction
-    from .typings import JsonT
+    from .session import Session
+    from .typings import DictT
 
 
 @classrepr("name", "client")
@@ -47,7 +47,7 @@ class Database:
 
     async def list_collections(
         self,
-        filter_: JsonT | None = None,
+        filter_: DictT | None = None,
         *,
         name_only: bool = False,
         authorized_collections: bool = False,
@@ -73,7 +73,7 @@ class Database:
             "authorizedCollections": authorized_collections,
             "comment": comment,
         })
-        cursor: Cursor[JsonT] = Cursor(
+        cursor: Cursor[DictT] = Cursor(
             command,
             self.get_collection("$cmd.listCollections"),
             decoder=raw_decoder,
@@ -94,7 +94,7 @@ class Database:
     async def create_collection(
         self,
         name: str,
-        params: JsonT | None = None,
+        params: DictT | None = None,
     ) -> Collection:
         """Creates a new collection in the database.
 
@@ -130,8 +130,8 @@ class Database:
         name: str,
         password: str,
         *,
-        roles: Sequence[JsonT | str] | None = None,
-        custom_data: JsonT | None = None,
+        roles: Sequence[DictT | str] | None = None,
+        custom_data: DictT | None = None,
         mechanisms: list[str] | None = None,
         comment: str | None = None,
         root: bool = False,
@@ -174,13 +174,13 @@ class Database:
 
     async def users_info(
         self,
-        query: str | JsonT | list[JsonT] | float | None = None,
+        query: str | DictT | list[DictT] | float | None = None,
         *,
         show_credentials: bool = False,
         show_custom_data: bool = False,
         show_privileges: bool = False,
         show_auth_restrictions: bool = False,
-        filter_: JsonT | None = None,
+        filter_: DictT | None = None,
         comment: str | None = None,
     ) -> list[User]:
         """Retrieves information about users in the database.
@@ -258,7 +258,7 @@ class Database:
     async def grant_roles_to_user(
         self,
         username: str,
-        roles: list[str | JsonT],
+        roles: list[str | DictT],
     ) -> None:
         """Grants roles to a user in the database.
 
@@ -273,17 +273,17 @@ class Database:
 
     async def command(
         self,
-        doc: JsonT,
+        doc: DictT,
         /,
         *,
-        transaction: Transaction | None = None,
+        session: Session | None = None,
         write_concern: WriteConcern | None = None,
-    ) -> JsonT:
+    ) -> DictT:
         """Sends a command to the database.
 
         Parameters:
             doc : The command document to send.
-            transaction : An optional transaction context.
+            session : An optional logical session.
             write_concern : Optional write concern override for the operation.
 
         Returns:
@@ -292,12 +292,12 @@ class Database:
         Raises:
             ValueError: if clients are different
         """
-        if transaction is not None and transaction.client is not self.client:
-            raise ValueError("Transaction belongs to a different client")
+        if session is not None and session.client is not self.client:
+            raise ValueError("Session belongs to a different client")
 
         return await self.client.request(
             doc=doc,
-            transaction=transaction,
+            session=session,
             db_name=self.name,
             write_concern=write_concern,
         )

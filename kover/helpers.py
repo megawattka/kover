@@ -3,19 +3,66 @@
 from __future__ import annotations
 
 import itertools
+import os
+import platform
+import sys
 from typing import (
     TYPE_CHECKING,
-    get_origin,
     overload,
 )
+
+from . import __version__
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    from .typings import HasToDict, JsonT
+    from .typings import HasToDict, DictT
 
 
-def raw_decoder(payload: JsonT) -> JsonT:
+def resolve_auth_db_from_env(
+    key: str = "MONGO_AUTH_DB",
+    default: str = "admin",
+) -> str:
+    """Fn to get auth db from env.
+
+    Returns:
+        db name used for authentication.
+    """
+    return os.getenv(key, default)
+
+
+def get_hello_payload(
+    compression: list[str] | None = None,
+    application: DictT | None = None,
+) -> DictT:
+    """Build the initial hello command document.
+
+    Returns:
+        hello payload used for discovery and connecting.
+    """
+    uname = platform.uname()
+    implementation = sys.implementation
+    version = ".".join(map(str, implementation.version))
+    payload: DictT = {
+        "hello": 1.0,
+        "client": {
+            "driver": {"name": "Kover", "version": __version__},
+            "os": {
+                "type": os.name,
+                "name": uname.system,
+                "architecture": uname.machine,
+                "version": uname.release,
+            },
+            "platform": implementation.name + " " + version,
+        },
+        "compression": compression or [],
+    }
+    if application is not None:
+        payload["application"] = application
+    return payload
+
+
+def raw_decoder(payload: DictT) -> DictT:
     """Return the payload unchanged.
 
     Args:
@@ -36,7 +83,7 @@ def chain[T](iterable: Iterable[Iterable[T]]) -> list[T]:
     return [*itertools.chain.from_iterable(iterable)]
 
 
-def filter_non_null(doc: JsonT) -> JsonT:
+def filter_non_null(doc: DictT) -> DictT:
     """Filter out None values from a dictionary.
 
     Returns:
@@ -45,27 +92,8 @@ def filter_non_null(doc: JsonT) -> JsonT:
     return {k: v for k, v in doc.items() if v is not None}
 
 
-def isinstance_ex(attr_t: object, argument: type[object]) -> bool:
-    """Check if `attr_t` is an instance of `argument` or a subclass thereof.
-
-    Returns:
-        True if `attr_t` is an instance of `argument` or a subclass thereof,
-        False otherwise.
-    """
-    return isinstance(attr_t, type) and issubclass(attr_t, argument)
-
-
-def is_origin_ex(attr_t: object, argument: object) -> bool:
-    """Check if `attr_t` is an origin type of `argument`.
-
-    Returns:
-        True if `attr_t` is an origin type of `argument`, False otherwise.
-    """
-    return get_origin(attr_t) is argument
-
-
 @overload
-def maybe_to_dict(obj: HasToDict | JsonT) -> JsonT:
+def maybe_to_dict(obj: HasToDict | DictT) -> DictT:
     ...
 
 
@@ -74,7 +102,7 @@ def maybe_to_dict(obj: None) -> None:
     ...
 
 
-def maybe_to_dict(obj: HasToDict | JsonT | None) -> JsonT | None:
+def maybe_to_dict(obj: HasToDict | DictT | None) -> DictT | None:
     """Convert an object to a dictionary.
 
     Converts the object using its `to_dict` method if it has one,

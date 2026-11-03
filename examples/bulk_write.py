@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from kover import AuthCredentials, BulkWriteBuilder, Delete, Kover, Update
 
 if TYPE_CHECKING:
-    from kover.typings import JsonT
+    from kover.typings import DictT
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -32,11 +32,11 @@ async def main() -> None:
     # all operations being done step by step
 
     # see result output by bulk write
-    results: list[JsonT] = await client.bulk_write(builder.build()).to_list()
-    log.info(results)
+    results: list[DictT] = await client.bulk_write(builder.build()).to_list()
+    log.info("bulk write results: %s", results)
 
     docs = await client.test.foos.find().to_list()
-    log.info(docs)  # no docs found
+    log.info("docs found: %s", docs)  # []
 
 
 if __name__ == "__main__":
