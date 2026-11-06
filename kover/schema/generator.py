@@ -23,8 +23,6 @@ if TYPE_CHECKING:
         ModelField,
     )
 
-    from ..typings import DictT
-
 
 class MongoDBSchemaGenerator(GenerateJsonSchema):
     """Generate MongoDB-compatible JSON Schema validators from Pydantic models.
@@ -73,14 +71,14 @@ class MongoDBSchemaGenerator(GenerateJsonSchema):
             union_format=union_format,
         )
 
-        self._changed_refs: dict[str, DictT] = {}
+        self._changed_refs: dict[str, dict[str, Any]] = {}
 
-    def _get_cached_ref(self, ref: DictT) -> DictT | None:
+    def _get_cached_ref(self, ref: dict[str, Any]) -> dict[str, Any] | None:
         extracted = ref["$ref"]
         return self._changed_refs.get(extracted)
 
     @override
-    def bytes_schema(self, schema: BytesSchema) -> DictT:
+    def bytes_schema(self, schema: BytesSchema) -> dict[str, Any]:
         """Generates a JSON schema that matches a bytes value.
 
         Args:
@@ -95,7 +93,7 @@ class MongoDBSchemaGenerator(GenerateJsonSchema):
         self,
         schema: CoreSchema,
         mode: JsonSchemaMode = "validation",
-    ) -> DictT:
+    ) -> dict[str, Any]:
         """Generates a JSON schema for a specified schema in a specified mode.
 
         Args:
@@ -131,7 +129,7 @@ class MongoDBSchemaGenerator(GenerateJsonSchema):
 
         return {"$jsonSchema": result}
 
-    def _resolve_ref_and_cache(self, field: DictT) -> DictT:
+    def _resolve_ref_and_cache(self, field: dict[str, Any]) -> dict[str, Any]:
         ref = field["$ref"]
         cached = self._get_cached_ref(field)
         if cached is not None:
@@ -140,7 +138,10 @@ class MongoDBSchemaGenerator(GenerateJsonSchema):
         self._changed_refs[ref] = field
         return field
 
-    def get_flattened_anyof(self, schemas: list[DictT]) -> DictT:
+    def get_flattened_anyof(
+        self,
+        schemas: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         """Flatten unions and nullables into mongodb fields.
 
         Returns:
@@ -154,20 +155,23 @@ class MongoDBSchemaGenerator(GenerateJsonSchema):
         return arr
 
     @staticmethod
-    def _should_skip_field(field: DictT, schema: DictT | ModelField) -> bool:
+    def _should_skip_field(
+        field: dict[str, Any],
+        schema: dict[str, Any] | ModelField,
+    ) -> bool:
         return any([
             "anyOf" in field,
             "type" not in field and schema.get("schema", {}).get("type") == "any",  # ruff: ignore[line-too-long]
             "enum" in field,
         ])
 
-    def _parse_pattern_properties(self, field: DictT) -> None:
-        pprops = field.get("patternProperties", None)
+    def _parse_pattern_properties(self, field: dict[str, Any]) -> None:
+        pprops = field.get("patternProperties")
         if pprops is not None:
             for key in pprops:
                 pprops[key] = self._construct_field(pprops[key], {"a": 4})
 
-    def _apply_array_transform(self, field: DictT) -> None:
+    def _apply_array_transform(self, field: dict[str, Any]) -> None:
         if "items" not in field:
             prefix_items = field.pop("prefixItems")
             field["items"] = [
@@ -184,9 +188,9 @@ class MongoDBSchemaGenerator(GenerateJsonSchema):
 
     def _parse_additiona_properties(
         self,
-        field: DictT,
+        field: dict[str, Any],
     ) -> None:
-        additional = field.get("additionalProperties", None)
+        additional = field.get("additionalProperties")
         if additional is not None and not isinstance(additional, bool):
             if "$ref" in additional:
                 field["additionalProperties"] = self._resolve_ref_and_cache(
@@ -198,7 +202,7 @@ class MongoDBSchemaGenerator(GenerateJsonSchema):
                 )
 
     @staticmethod
-    def _apply_type_transform(field: DictT) -> None:
+    def _apply_type_transform(field: dict[str, Any]) -> None:
         if "bsonType" not in field:  # if already cached
             field["bsonType"] = field.pop("type")
 
@@ -212,7 +216,10 @@ class MongoDBSchemaGenerator(GenerateJsonSchema):
             field["bsonType"] = "double"
 
     @staticmethod
-    def _apply_title(field: DictT, schema: DictT | ModelField) -> None:
+    def _apply_title(
+        field: dict[str, Any],
+        schema: dict[str, Any] | ModelField,
+    ) -> None:
         metadata = schema.get("metadata", {}).get("pydantic_js_updates", {})
         if "title" in metadata:
             field["title"] = metadata["title"]
@@ -222,12 +229,11 @@ class MongoDBSchemaGenerator(GenerateJsonSchema):
 
     def _construct_field(
         self,
-        field: DictT,
-        schema: DictT | ModelField,
-    ) -> DictT:
+        field: dict[str, Any],
+        schema: dict[str, Any] | ModelField,
+    ) -> dict[str, Any]:
         for kw in ("transform", "format", "default"):
-            if kw in field:
-                del field[kw]
+            field.pop(kw, None)
 
         if self._should_skip_field(field, schema):
             return field
@@ -258,7 +264,7 @@ class MongoDBSchemaGenerator(GenerateJsonSchema):
         return field
 
     @override
-    def decimal_schema(self, schema: DecimalSchema) -> DictT:
+    def decimal_schema(self, schema: DecimalSchema) -> dict[str, Any]:
         """Generates a JSON schema that matches a decimal value.
 
         Args:
@@ -269,7 +275,7 @@ class MongoDBSchemaGenerator(GenerateJsonSchema):
         """
         return {"bsonType": "decimal"}
 
-    def model_field_schema(self, schema: ModelField) -> DictT:
+    def model_field_schema(self, schema: ModelField) -> dict[str, Any]:
         """Generates a JSON schema.
 
         Args:

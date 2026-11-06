@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .typings import DictT
+from typing import Any
 
 
 class DriverError(Exception):
@@ -83,13 +80,27 @@ class OperationFailure(DriverError):
         self.code = code
         self.message = message
         self.code_name: str | None = None
-        self.details: DictT = {}
+        self.details: dict[str, Any] = {}
         self.err_info = None
 
     @property
     def is_transient_transaction_error(self) -> bool:
         """Whether the error permits retrying the whole transaction."""
         return self.has_label("TransientTransactionError")
+
+    @property
+    def is_server_selection_error(self) -> bool:
+        """Whether a response indicates that the server role may have changed."""  # ruff: ignore[line-too-long]
+        code: int = self.code
+        return code in {
+            91,  # ShutdownInProgress
+            189,  # PrimarySteppedDown
+            10107,  # NotWritablePrimary
+            11600,  # InterruptedAtShutdown
+            11602,  # InterruptedDueToReplStateChange
+            13435,  # NotPrimaryNoSecondaryOk
+            13436,  # NotPrimaryOrSecondary
+        }
 
     @property
     def is_unknown_commit_result(self) -> bool:

@@ -2,23 +2,25 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypeVar, overload
+from typing import TYPE_CHECKING, Any, TypeVar, overload
 
 from bson import ObjectId
 
+from ._utils import classrepr, filter_non_null, maybe_to_dict, raw_decoder
 from .cursor import Cursor
-from .enums import IndexDirection, IndexType, ValidationLevel
-from .helpers import classrepr, filter_non_null, maybe_to_dict, raw_decoder
-from .models import Delete, Index
+from .models.collection import ValidationLevel
+from .models.indexes import Index, IndexDirection, IndexType
+from .models.operations import Delete
 from .schema.document import Document
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from .database import Database
-    from .models import Collation, ReadConcern, Update, WriteConcern
+    from .models.collation import Collation
+    from .models.concerns import ReadConcern, WriteConcern
+    from .models.operations import Update
     from .session import Session
-    from .typings import DictT
 
 T_co = TypeVar("T_co", bound=Document, covariant=True)
 
@@ -41,8 +43,8 @@ class Collection:
         self,
         name: str,
         database: Database,
-        options: DictT | None = None,
-        info: DictT | None = None,
+        options: dict[str, Any] | None = None,
+        info: dict[str, Any] | None = None,
     ) -> None:
         self.name = name
         self.database = database
@@ -81,7 +83,7 @@ class Collection:
         return infos[0]
 
     # https://www.mongodb.com/docs/manual/reference/command/collMod/
-    async def coll_mod(self, params: DictT) -> None:
+    async def coll_mod(self, params: dict[str, Any]) -> None:
         """Modify collection settings using the collMod command.
 
         Parameters:
@@ -94,7 +96,7 @@ class Collection:
 
     async def set_validator(
         self,
-        validator: DictT,
+        validator: dict[str, Any],
         *,
         level: ValidationLevel = ValidationLevel.MODERATE,
     ) -> None:
@@ -113,7 +115,7 @@ class Collection:
     # https://www.mongodb.com/docs/manual/reference/command/insert/
     async def insert_one(
         self,
-        document: DictT | Document,
+        document: dict[str, Any] | Document,
         /,
         *,
         ordered: bool = True,
@@ -141,7 +143,7 @@ class Collection:
         insertable = dict(maybe_to_dict(document))
         document_id = insertable.setdefault("_id", ObjectId())
 
-        command: DictT = filter_non_null({
+        command: dict[str, Any] = filter_non_null({
             "insert": self.name,
             "ordered": ordered,
             "documents": [insertable],
@@ -155,7 +157,7 @@ class Collection:
     # https://www.mongodb.com/docs/manual/reference/command/insert/
     async def insert_many(
         self,
-        documents: Sequence[DictT | Document],
+        documents: Sequence[dict[str, Any] | Document],
         /,
         *,
         ordered: bool = True,
@@ -186,7 +188,7 @@ class Collection:
             document_id = document.setdefault("_id", ObjectId())
             document_ids.append(document_id)
 
-        command: DictT = filter_non_null({
+        command: dict[str, Any] = filter_non_null({
             "insert": self.name,
             "ordered": ordered,
             "documents": insertable,
@@ -205,7 +207,7 @@ class Collection:
         max_time_ms: int = 0,
         bypass_document_validation: bool = False,
         comment: str | None = None,
-        let: DictT | None = None,
+        let: dict[str, Any] | None = None,
         session: Session | None = None,
     ) -> int:
         """Update documents in the collection.
@@ -247,7 +249,7 @@ class Collection:
         self,
         *deletes: Delete,
         comment: str | None = None,
-        let: DictT | None = None,
+        let: dict[str, Any] | None = None,
         ordered: bool = True,
         write_concern: WriteConcern | None = None,
         max_time_ms: int = 0,
@@ -299,16 +301,16 @@ class Collection:
     @overload
     async def find_one(
         self,
-        filter_: DictT | None,
+        filter_: dict[str, Any] | None,
         cls: None = None,
         session: Session | None = None,
-    ) -> DictT | None:
+    ) -> dict[str, Any] | None:
         ...
 
     @overload
     async def find_one(
         self,
-        filter_: DictT | None = None,
+        filter_: dict[str, Any] | None = None,
         cls: type[T_co] = Document,
         session: Session | None = None,
     ) -> T_co | None:
@@ -317,10 +319,10 @@ class Collection:
     # same as .find but has explicit .to_list and limit 1
     async def find_one(
         self,
-        filter_: DictT | None = None,
+        filter_: dict[str, Any] | None = None,
         cls: type[T_co] | None = None,
         session: Session | None = None,
-    ) -> T_co | DictT | None:
+    ) -> T_co | dict[str, Any] | None:
         """Find a single document in the collection matching the filter.
 
         Parameters:
@@ -343,16 +345,16 @@ class Collection:
     @overload
     def find(
         self,
-        filter_: DictT | None = None,
+        filter_: dict[str, Any] | None = None,
         cls: None = None,
         session: Session | None = None,
-    ) -> Cursor[DictT]:
+    ) -> Cursor[dict[str, Any]]:
         ...
 
     @overload
     def find(
         self,
-        filter_: DictT | None,
+        filter_: dict[str, Any] | None,
         cls: type[T_co],
         session: Session | None = None,
     ) -> Cursor[T_co]:
@@ -361,7 +363,7 @@ class Collection:
     @overload
     def find(
         self,
-        filter_: DictT | None = None,
+        filter_: dict[str, Any] | None = None,
         *,
         cls: type[T_co],
         session: Session | None = None,
@@ -370,10 +372,10 @@ class Collection:
 
     def find(
         self,
-        filter_: DictT | None = None,
+        filter_: dict[str, Any] | None = None,
         cls: type[T_co] | None = None,
         session: Session | None = None,
-    ) -> Cursor[T_co] | Cursor[DictT]:
+    ) -> Cursor[T_co] | Cursor[dict[str, Any]]:
         """Find documents in the collection matching the filter.
 
         Parameters:
@@ -408,11 +410,11 @@ class Collection:
     # https://www.mongodb.com/docs/manual/reference/command/aggregate/
     def aggregate(
         self,
-        pipeline: list[DictT],
+        pipeline: list[dict[str, Any]],
         *,
         explain: bool = False,
         allow_disk_use: bool = True,
-        cursor: DictT | None = None,
+        cursor: dict[str, Any] | None = None,
         max_time_ms: int = 0,
         bypass_document_validation: bool = False,
         read_concern: ReadConcern | None = None,
@@ -420,9 +422,9 @@ class Collection:
         hint: str | None = None,
         comment: str | None = None,
         write_concern: WriteConcern | None = None,
-        let: DictT | None = None,
+        let: dict[str, Any] | None = None,
         session: Session | None = None,
-    ) -> Cursor[DictT]:
+    ) -> Cursor[dict[str, Any]]:
         """Create a cursor for an aggregation pipeline on the collection.
 
         Parameters:
@@ -471,7 +473,7 @@ class Collection:
     async def distinct(
         self,
         key: str,
-        query: DictT | None = None,
+        query: dict[str, Any] | None = None,
         collation: Collation | None = None,
         comment: str | None = None,
         read_concern: ReadConcern | None = None,
@@ -512,7 +514,7 @@ class Collection:
     # https://www.mongodb.com/docs/manual/reference/command/count
     async def count(
         self,
-        query: DictT | None = None,
+        query: dict[str, Any] | None = None,
         limit: int = 0,
         skip: int = 0,
         hint: str | None = None,
@@ -614,7 +616,7 @@ class Collection:
         Returns:
             Index objects representing the collection's indexes.
         """
-        cursor: Cursor[DictT] = Cursor({
+        cursor: Cursor[dict[str, Any]] = Cursor({
             "listIndexes": self.name,
         }, collection=self, decoder=raw_decoder)
 

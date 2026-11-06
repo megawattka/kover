@@ -1,37 +1,31 @@
-from ..exceptions import (
-    ConnectionClosedError,
-    DriverError,
-    InvalidOperationError,
-    NetworkError,
-    PoolClosedError,
-    PoolPausedError,
-    PoolTimeoutError,
-    ProtocolError,
-    ServerSelectionError,
-)
-from .auth import Auth, AuthCredentials
-from .compressors import get_context_by_id
+from .auth import Authenticator
 from .connection import Connection
-from .error_mapper import ErrorMapper
-from .pool import ConnectionLease, ConnectionPool
+from .factory import ConnectionFactory
+from .lease import ConnectionLease
+from .pool import ConnectionPool
+from .probe import ServerProbe
+from .registry import PoolRegistry
 from .transport import Transport
+from .wire import (
+    CommandCodec,
+    ErrorMapper,
+    Handshake,
+    get_context_by_id,
+    get_exception_type,
+)
 
 __all__ = (
-    "Auth",
-    "AuthCredentials",
+    "Authenticator",
+    "CommandCodec",
     "Connection",
-    "ConnectionClosedError",
+    "ConnectionFactory",
     "ConnectionLease",
     "ConnectionPool",
-    "DriverError",
     "ErrorMapper",
-    "InvalidOperationError",
-    "NetworkError",
-    "PoolClosedError",
-    "PoolPausedError",
-    "PoolTimeoutError",
-    "ProtocolError",
-    "ServerSelectionError",
+    "Handshake",
+    "PoolRegistry",
+    "ServerProbe",
     "Transport",
     "get_context_by_id",
+    "get_exception_type",
 )

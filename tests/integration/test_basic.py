@@ -37,7 +37,10 @@ class BasicTests(MongoTestCase):
 
     @staticmethod
     async def test_credentials_md5() -> None:
-        credentials = AuthCredentials(username="user", password="password")
+        credentials = AuthCredentials(
+            username="user",
+            password="password",  # ruff: ignore[hardcoded-password-func-arg]
+        )
         assert credentials.md5_hash() == b"3bcfc22a1cd6be41bc7814c13d3ce94c"
 
     async def test_cursor(self) -> None:

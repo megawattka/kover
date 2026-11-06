@@ -33,6 +33,7 @@ Built directly over `asyncio` streams and the MongoDB Wire Protocol (`OP_MSG` an
 - [Error Handling](#error-handling)
 - [Examples](#examples)
 - [Testing & Development](#testing--development)
+- [Documentation](#documentation)
 - [Contributing & Feedback](#contributing--feedback)
 - [License](#license)
 
@@ -710,6 +711,7 @@ Runnable scripts demonstrating core features are located in [`examples/`](https:
 - [`examples/update_delete.py`](examples/update_delete.py) — Inserting `Document` models and using `Update` (`$set`) and `Delete`.
 - [`examples/bulk_write.py`](examples/bulk_write.py) — Multi-operation `BulkWriteBuilder` pipelines.
 - [`examples/transactions.py`](examples/transactions.py) — Sessions, explicit transaction start/commit, and an explicit abort after a duplicate key error.
+- [`examples/read_preferences.py`](examples/read_preferences.py) — Read-only client/cursor/command policies, all five modes, ordered tags, and max staleness.
 - [`examples/gridfs.py`](examples/gridfs.py) — Uploading, reading, listing, and deleting files in `GridFS`.
 
 Most examples connect to `127.0.0.1:27017` and read optional credentials via `AuthCredentials.from_environ()` (`MONGO_USER` and `MONGO_PASSWORD`).
@@ -767,6 +769,16 @@ ruff check kover
 python -m compileall -q kover tests
 git diff --check
 ```
+
+---
+
+## Documentation
+
+- [Architecture](docs/architecture.md) — Layers, command flow, snapshots, and resource ownership.
+- [Connections](docs/connections.md) — Client factories, URIs, authentication, TLS, pools, and deadlines.
+- [Read Preferences](docs/read_preferences.md) — Modes, tags, staleness, overrides, and routing limits.
+- [Transactions](docs/transactions.md) — Session lifecycle, server pinning, commit errors, and limitations.
+- [Development](docs/development.md) — Setup, test groups, integration configuration, and quality checks.
 
 ---
 

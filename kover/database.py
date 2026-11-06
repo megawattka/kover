@@ -2,22 +2,21 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from ._utils import classrepr, filter_non_null, maybe_to_dict, raw_decoder
 from .collection import Collection
 from .cursor import Cursor
-from .helpers import classrepr, filter_non_null, maybe_to_dict, raw_decoder
-from .models import User
+from .models.user import User
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from .client import Kover
     from .models import WriteConcern
-    from .models.network import Address
-    from .read_preferences import ReadPreference
+    from .models.address import Address
+    from .models.read_preference import ReadPreference
     from .session import Session
-    from .typings import DictT
 
 
 @classrepr("name", "client")
@@ -49,7 +48,7 @@ class Database:
 
     async def list_collections(
         self,
-        filter_: DictT | None = None,
+        filter_: dict[str, Any] | None = None,
         *,
         name_only: bool = False,
         authorized_collections: bool = False,
@@ -68,14 +67,16 @@ class Database:
             A list of Collection objects or collection names
                 if name_only is True.
         """
-        command = filter_non_null({
-            "listCollections": 1.0,
-            "filter": filter_ or {},
-            "nameOnly": name_only,
-            "authorizedCollections": authorized_collections,
-            "comment": comment,
-        })
-        cursor: Cursor[DictT] = Cursor(
+        command = filter_non_null(
+            {
+                "listCollections": 1.0,
+                "filter": filter_ or {},
+                "nameOnly": name_only,
+                "authorizedCollections": authorized_collections,
+                "comment": comment,
+            },
+        )
+        cursor: Cursor[dict[str, Any]] = Cursor(
             command,
             self.get_collection("$cmd.listCollections"),
             decoder=raw_decoder,
@@ -96,7 +97,7 @@ class Database:
     async def create_collection(
         self,
         name: str,
-        params: DictT | None = None,
+        params: dict[str, Any] | None = None,
     ) -> Collection:
         """Creates a new collection in the database.
 
@@ -107,9 +108,12 @@ class Database:
         Returns:
             The created collection object.
         """
-        await self.command({
-            "create": name, **(params or {}),
-        })
+        await self.command(
+            {
+                "create": name,
+                **(params or {}),
+            },
+        )
         return self.get_collection(name)
 
     async def drop_collection(
@@ -132,8 +136,8 @@ class Database:
         name: str,
         password: str,
         *,
-        roles: Sequence[DictT | str] | None = None,
-        custom_data: DictT | None = None,
+        roles: Sequence[dict[str, Any] | str] | None = None,
+        custom_data: dict[str, Any] | None = None,
         mechanisms: list[str] | None = None,
         comment: str | None = None,
         root: bool = False,
@@ -164,25 +168,27 @@ class Database:
         if roles is None:
             raise ValueError("You need to specify user roles.")
 
-        command = filter_non_null({
-            "createUser": name,
-            "pwd": password,
-            "mechanisms": mechanisms,
-            "roles": roles,
-            "customData": custom_data,
-            "comment": comment,
-        })
+        command = filter_non_null(
+            {
+                "createUser": name,
+                "pwd": password,
+                "mechanisms": mechanisms,
+                "roles": roles,
+                "customData": custom_data,
+                "comment": comment,
+            },
+        )
         await self.command(command)
 
     async def users_info(
         self,
-        query: str | DictT | list[DictT] | float | None = None,
+        query: str | dict[str, Any] | list[dict[str, Any]] | float | None = None,  # ruff: ignore[line-too-long]
         *,
         show_credentials: bool = False,
         show_custom_data: bool = False,
         show_privileges: bool = False,
         show_auth_restrictions: bool = False,
-        filter_: DictT | None = None,
+        filter_: dict[str, Any] | None = None,
         comment: str | None = None,
     ) -> list[User]:
         """Retrieves information about users in the database.
@@ -206,15 +212,17 @@ class Database:
         if query is None:
             query = 1.0
 
-        command = filter_non_null({
-            "usersInfo": query,
-            "showCredentials": show_credentials,
-            "showCustomData": show_custom_data,
-            "showPrivileges": show_privileges,
-            "showAuthenticationRestrictions": show_auth_restrictions,
-            "filter": filter_,
-            "comment": comment,
-        })
+        command = filter_non_null(
+            {
+                "usersInfo": query,
+                "showCredentials": show_credentials,
+                "showCustomData": show_custom_data,
+                "showPrivileges": show_privileges,
+                "showAuthenticationRestrictions": show_auth_restrictions,
+                "filter": filter_,
+                "comment": comment,
+            },
+        )
         request = await self.command(command)
         return [User(**x) for x in request["users"]]
 
@@ -229,10 +237,12 @@ class Database:
             name : The name of the user to drop.
             comment : Optional comment for the operation.
         """
-        command = filter_non_null({
-            "dropUser": name,
-            "comment": comment,
-        })
+        command = filter_non_null(
+            {
+                "dropUser": name,
+                "comment": comment,
+            },
+        )
         await self.command(command)
 
     async def drop_all_users_from_database(
@@ -249,18 +259,20 @@ class Database:
         Returns:
             The number of users dropped.
         """
-        command = filter_non_null({
-            "dropAllUsersFromDatabase": 1.0,
-            "writeConcern": maybe_to_dict(write_concern),
-            "comment": comment,
-        })
+        command = filter_non_null(
+            {
+                "dropAllUsersFromDatabase": 1.0,
+                "writeConcern": maybe_to_dict(write_concern),
+                "comment": comment,
+            },
+        )
         resp = await self.command(command)
         return resp["n"]
 
     async def grant_roles_to_user(
         self,
         username: str,
-        roles: list[str | DictT],
+        roles: list[str | dict[str, Any]],
     ) -> None:
         """Grants roles to a user in the database.
 
@@ -268,21 +280,24 @@ class Database:
             username : The name of the user to grant roles to.
             roles : A list of roles or role documents to assign to the user.
         """
-        await self.command({
-            "grantRolesToUser": username,
-            "roles": roles,
-        })
+        await self.command(
+            {
+                "grantRolesToUser": username,
+                "roles": roles,
+            },
+        )
 
     async def command(
         self,
-        doc: DictT,
+        doc: dict[str, Any],
         /,
         *,
         session: Session | None = None,
         write_concern: WriteConcern | None = None,
         read_preference: ReadPreference | None = None,
         server_address: Address | None = None,
-    ) -> DictT:
+        deadline: float | None = None,
+    ) -> dict[str, Any]:
         """Sends a command to the database.
 
         Parameters:
@@ -291,6 +306,7 @@ class Database:
             write_concern : Optional write concern override for the operation.
             read_preference : Optional read routing override.
             server_address : Source address for cursor continuation commands.
+            deadline : Absolute deadline measured by the event-loop clock.
 
         Returns:
             The response from the database.
@@ -301,17 +317,14 @@ class Database:
         if session is not None and session.client is not self.client:
             raise ValueError("Session belongs to a different client")
 
-        routing: DictT = {}
-        if read_preference is not None:
-            routing["read_preference"] = read_preference
-        if server_address is not None:
-            routing["server_address"] = server_address
-        return await self.client.request(
+        return await self.client.command(
             doc=doc,
             session=session,
             db_name=self.name,
             write_concern=write_concern,
-            **routing,
+            read_preference=read_preference,
+            server_address=server_address,
+            deadline=deadline,
         )
 
     # https://www.mongodb.com/docs/manual/reference/command/ping/

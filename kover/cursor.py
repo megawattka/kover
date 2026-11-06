@@ -3,23 +3,22 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import TYPE_CHECKING, NoReturn, Self, cast
+from typing import TYPE_CHECKING, Any, NoReturn, Self, cast
 
 from bson import Int64
 
-from .helpers import maybe_to_dict
-from .network.pool import CommandReply
+from ._utils.mappings import maybe_to_dict
+from .execution.context import CommandReply
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from types import TracebackType
 
     from .collection import Collection
-    from .models import Collation
-    from .models.network import Address
-    from .read_preferences import ReadPreference
+    from .models.address import Address
+    from .models.collation import Collation
+    from .models.read_preference import ReadPreference
     from .session import Session
-    from .typings import DictT
 
 
 class Cursor[T]:
@@ -30,9 +29,9 @@ class Cursor[T]:
 
     def __init__(
         self,
-        query: DictT,
+        query: dict[str, Any],
         collection: Collection,
-        decoder: Callable[[DictT], T],
+        decoder: Callable[[dict[str, Any]], T],
         session: Session | None = None,
     ) -> None:
         self._decoder = decoder
@@ -43,6 +42,7 @@ class Cursor[T]:
         self._read_preference: ReadPreference | None = None
 
         self._id: Int64 | None = None
+        self._server_database = collection.database.name
         self._server_collection = collection.name
         self._docs: deque[T] = deque()
 
@@ -52,8 +52,8 @@ class Cursor[T]:
         self._first: T | None = None
         self._first_cached = False
 
-        self._options: DictT = {}
-        self._command_response: DictT | None = None
+        self._options: dict[str, Any] = {}
+        self._command_response: dict[str, Any] | None = None
         self._get_more_batch_size = 101
 
     async def __aenter__(self) -> Self:
@@ -87,7 +87,7 @@ class Cursor[T]:
         self._options[name] = value
         return self
 
-    def sort(self, mapping: DictT) -> Self:  # ruff: ignore[undocumented-public-method]
+    def sort(self, mapping: dict[str, Any]) -> Self:  # ruff: ignore[undocumented-public-method]
         return self._set_option("sort", mapping.copy())
 
     def skip(self, value: int) -> Self:  # ruff: ignore[undocumented-public-method]
@@ -99,13 +99,13 @@ class Cursor[T]:
     def batch_size(self, value: int) -> Self:  # ruff: ignore[undocumented-public-method]
         return self._set_option("batchSize", value)
 
-    def projection(self, mapping: DictT) -> Self:  # ruff: ignore[undocumented-public-method]
+    def projection(self, mapping: dict[str, Any]) -> Self:  # ruff: ignore[undocumented-public-method]
         return self._set_option("projection", mapping.copy())
 
     def comment(self, comment: str) -> Self:  # ruff: ignore[undocumented-public-method]
         return self._set_option("comment", comment)
 
-    def hint(self, hint: str | DictT) -> Self:  # ruff: ignore[undocumented-public-method]
+    def hint(self, hint: str | dict[str, Any]) -> Self:  # ruff: ignore[undocumented-public-method]
         value = hint.copy() if isinstance(hint, dict) else hint
         return self._set_option("hint", value)
 
@@ -125,20 +125,20 @@ class Cursor[T]:
         self._read_preference = preference
         return self
 
-    async def _command(self, command: DictT) -> DictT:
-        routing: DictT = {}
-        if self._server_address is not None:
-            routing["server_address"] = self._server_address
-        if self._read_preference is not None:
-            routing["read_preference"] = self._read_preference
-        response = await self._collection.database.command(
-            command, session=self._session, **routing,
+    async def _command(self, command: dict[str, Any]) -> dict[str, Any]:
+        response = await self._collection.database.client.command(
+            command,
+            db_name=self._server_database,
+            session=self._session,
+            server_address=self._server_address,
+            read_preference=self._read_preference,
         )
-        if isinstance(response, CommandReply):
+        if self._server_address is None and isinstance(response, CommandReply):
             self._server_address = response.server_address
+
         return response
 
-    def _get_query(self) -> DictT:
+    def _get_query(self) -> dict[str, Any]:
         query = self._query.copy()
         options = self._options.copy()
 
@@ -158,7 +158,9 @@ class Cursor[T]:
             "cursor" in query
             or any(
                 name in query
-                for name in ("aggregate", "listIndexes", "listCollections")
+                for name in (
+                    "aggregate", "listIndexes", "listCollections", "bulkWrite",
+                )
             )
         )
 
@@ -181,12 +183,12 @@ class Cursor[T]:
         query.update(options)
         return query
 
-    def _map_docs(self, documents: list[DictT]) -> list[T]:
+    def _map_docs(self, documents: list[dict[str, Any]]) -> list[T]:
         return [self._decoder(document) for document in documents]
 
     def _accept_batch(
         self,
-        response: DictT,
+        response: dict[str, Any],
         batch_key: str,
     ) -> None:
         cursor = response["cursor"]
@@ -197,9 +199,10 @@ class Cursor[T]:
 
         namespace = cursor.get("ns")
         if namespace is not None:
-            _, separator, collection = namespace.partition(".")
-            if not separator or not collection:
+            database, separator, collection = namespace.partition(".")
+            if not database or not separator or not collection:
                 raise ValueError(f"Invalid cursor namespace: {namespace!r}")
+            self._server_database = database
             self._server_collection = collection
 
         self._docs.extend(self._map_docs(cursor[batch_key]))
@@ -221,7 +224,7 @@ class Cursor[T]:
         if self._id is None or self._id == 0:
             raise RuntimeError("Cursor has no active server ID")
 
-        command: DictT = {
+        command: dict[str, Any] = {
             "getMore": self._id,
             "collection": self._server_collection,
         }
@@ -264,14 +267,14 @@ class Cursor[T]:
             raise
 
         # Decoder failures and cancellation both require cursor cleanup.
-        except BaseException as error:
-            await self._close_after_error(error)
+        except BaseException as e:
+            await self._close_after_error(e)
             raise
 
         finally:
             self._reading = False
 
-    async def command_result(self) -> DictT:
+    async def command_result(self) -> dict[str, Any]:
         """Execute a command and return its non-cursor response.
 
         Returns:
@@ -298,8 +301,8 @@ class Cursor[T]:
             self._docs.clear()
             return self._command_response  # ruff: ignore[try-consider-else]
 
-        except BaseException as error:
-            await self._close_after_error(error)
+        except BaseException as e:
+            await self._close_after_error(e)
             raise
 
         finally:
@@ -327,10 +330,10 @@ class Cursor[T]:
     ) -> None:
         try:
             await self._close()
-        except BaseException as cleanup_error:
+        except BaseException as e:
             # Preserve the original failure, including task cancellation.
-            error.add_note(f"Cursor cleanup also failed: {cleanup_error!r}")
-            raise error from cleanup_error
+            error.add_note(f"Cursor cleanup also failed: {e!r}")
+            raise error from e
 
     async def close(self) -> None:
         """Close locally and attempt to kill the server cursor."""

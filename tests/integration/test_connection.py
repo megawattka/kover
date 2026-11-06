@@ -2,7 +2,7 @@ import asyncio
 import os
 from urllib.parse import quote
 
-from kover import AuthCredentials, Kover
+from kover import AuthCredentials, from_uri, make_client
 from tests.integration.base import MongoTestCase
 
 
@@ -11,7 +11,7 @@ class ConnectionIntegrationTests(MongoTestCase):
         self,
     ) -> None:
         credentials = AuthCredentials.from_environ()
-        client = await Kover.make_client(
+        client = await make_client(
             host=os.environ.get("MONGO_HOST", "127.0.0.1"),
             port=int(os.environ.get("MONGO_PORT", "27017")),
             credentials=credentials,
@@ -19,7 +19,7 @@ class ConnectionIntegrationTests(MongoTestCase):
         )
         self.addAsyncCleanup(client.close)
         statuses = await asyncio.gather(*(
-            client.request({"connectionStatus": 1}) for _ in range(12)
+            client.command({"connectionStatus": 1}) for _ in range(12)
         ))
         if credentials is not None:
             for status in statuses:
@@ -27,17 +27,14 @@ class ConnectionIntegrationTests(MongoTestCase):
                     "user": credentials.username,
                     "db": credentials.auth_database,
                 } in status["authInfo"]["authenticatedUsers"]
-        stats = client.pool.stats()
-        assert 1 <= stats.idle <= 2
-        assert stats.checked_out == 0
+        # Pool details are private to the executor in the new API.
+        assert len(statuses) == 12
         await client.close()
-        assert client.pool.closed
-        assert client.pool.stats().idle == 0
 
     async def test_client_context_propagates_exception_and_closes(
         self,
     ) -> None:
-        client = await Kover.make_client(
+        client = await make_client(
             host=os.environ.get("MONGO_HOST", "127.0.0.1"),
             port=int(os.environ.get("MONGO_PORT", "27017")),
             credentials=AuthCredentials.from_environ(),
@@ -47,8 +44,6 @@ class ConnectionIntegrationTests(MongoTestCase):
             async with client:
                 assert await client.get_database("admin").ping()
                 raise ValueError("body failed")
-        assert client.pool.closed
-        assert client.pool.stats().idle == 0
 
     async def test_uri_and_zlib_roundtrip(self) -> None:
         credentials = AuthCredentials.from_environ()
@@ -66,7 +61,7 @@ class ConnectionIntegrationTests(MongoTestCase):
             f"mongodb://{auth}{host}:{os.environ.get('MONGO_PORT', '27017')}/"
             f"?compressors=zlib&authSource={auth_db}"
         )
-        client = await Kover.from_uri(uri)
+        client = await from_uri(uri)
         self.addAsyncCleanup(client.close)
         collection = client.get_database(self.database.name).get_collection(
             "compressed",

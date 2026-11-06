@@ -1,5 +1,5 @@
-from kover.enums import TxnState
 from kover.exceptions import OperationFailure
+from kover.models.tx_state import TxnState
 from tests.integration.base import MongoTestCase
 
 
@@ -14,7 +14,6 @@ class CursorIntegrationTests(MongoTestCase):
     async def test_multiple_batches_and_early_close(self) -> None:
         cursor = self.collection.find().sort({"value": 1}).batch_size(2)
         assert (await anext(cursor))["value"] == 0
-        assert self.client.pool.stats().checked_out == 0
         assert [doc["value"] for doc in await cursor.to_list()] == list(
             range(1, 37),
         )
@@ -36,7 +35,7 @@ class CursorIntegrationTests(MongoTestCase):
 class SessionIntegrationTests(MongoTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
-        hello = await self.client.request({"hello": 1})
+        hello = await self.client.command({"hello": 1})
         if not hello.get("setName"):
             self.skipTest("Transactions require a replica set")
 
@@ -50,14 +49,12 @@ class SessionIntegrationTests(MongoTestCase):
         await self.collection.insert_many([
             {"value": value} for value in range(9)
         ], session=self.session)
-        assert self.client.pool.stats().checked_out == 0
         async with self.collection.find(
             session=self.session,
         ).sort({"value": 1}).batch_size(2) as cursor:
             assert [doc["value"] for doc in await cursor.to_list()] == list(
                 range(9),
             )
-        assert self.client.pool.stats().checked_out == 0
         await self.session.commit_transaction()
         assert self.session.state is TxnState.COMMITTED
         assert await self.collection.count() == 9
@@ -83,4 +80,3 @@ class SessionIntegrationTests(MongoTestCase):
         await self.session.abort_transaction()
         assert self.session.state is TxnState.ABORTED
         assert await self.collection.count() == 0
-        assert self.client.pool.stats().checked_out == 0

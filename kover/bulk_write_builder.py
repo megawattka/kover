@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from .helpers import filter_non_null
+from ._utils.mappings import filter_non_null
 
 if TYPE_CHECKING:
-    from .models import Delete, Update
-    from .typings import DictT
+    from .models.operations import Delete, Update
 
 
 # https://www.mongodb.com/docs/manual/reference/command/bulkWrite
@@ -21,7 +20,7 @@ class BulkWriteBuilder:
         ordered: bool = True,
         bypass_document_validation: bool = False,
         comment: str | None = None,
-        let: DictT | None = None,
+        let: dict[str, Any] | None = None,
         errors_only: bool = False,
         cursor_batch_size: int | None = None,
         write_concern: str | int = "majority",
@@ -33,10 +32,10 @@ class BulkWriteBuilder:
         self.errors_only = errors_only
         self.cursor = {"batchSize": cursor_batch_size or 101}
         self.write_concern = write_concern
-        self._operations: list[DictT] = []
+        self._operations: list[dict[str, Any]] = []
         self._namespaces: list[str] = []
 
-    def _prepair_additional_params(self) -> DictT:
+    def _prepair_additional_params(self) -> dict[str, Any]:
         return filter_non_null({
             "ordered": self.ordered,
             "bypassDocumentValidation": self.bypass_document_validation,
@@ -54,7 +53,7 @@ class BulkWriteBuilder:
 
     def add_insert(
         self,
-        documents: list[DictT],
+        documents: list[dict[str, Any]],
         /,
         *,
         ns: str,
@@ -88,7 +87,7 @@ class BulkWriteBuilder:
             **delete.as_bulk_write_op(),
         })
 
-    def build(self) -> DictT:
+    def build(self) -> dict[str, Any]:
         """Build the command.
 
         Returns:

@@ -62,7 +62,6 @@ indent-style = "space"
 docstring-code-line-length = "dynamic"
 
 [tool.ruff.lint]
-exclude = ["benchmarks"]
 preview = true
 ignore = [
     "implicit-namespace-package",  # __init__.py in public namespaces
@@ -97,22 +96,11 @@ strict-checking = true
     "undocumented-public-class",  # undocumented public class/method
     "undocumented-public-method",  # undocumented public method
     "undocumented-public-function",
-    "hardcoded-password-func-arg",  # hardcoded password
     "typing-only-standard-library-import",  # type checking blocks
     "pytest-unittest-raises-assertion",  # unittest style
     "undocumented-public-module",  # module docstring
     "magic-value-comparison",  # constant comparisons
 ]
-"test.py" = [  # this file only for testing so...
-    "commented-out-code",  # commented out code
-    "hardcoded-password-func-arg",  # hardcoded password
-    "print",  # print statements
-    "undocumented-public-module",  # public module docstring
-    "unused-import",  # unused variables
-]
-"kover/network/compressors.py" = ["no-self-use"]  # Could be staticmethod no self
-"kover/typings.py" = ["undocumented-public-method"]  # public method docstring
-"kover/schema/serializers.py" = ["undocumented-public-function"]
 
 [tool.ruff.lint.flake8-type-checking]
 exempt-modules = ["typing", "typing_extensions"]
@@ -141,9 +129,9 @@ dev = [
 [tool.hatch.build]
 include = [
     "README.md",
-    "requirements.txt",
     "CODE_OF_CONDUCT.md",
     "kover",
+    "docs",
     # "Cargo.toml",
     # "rust/*.rs"
 ]

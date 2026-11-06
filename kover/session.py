@@ -2,31 +2,32 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from bson import Int64
 
-from .enums import TxnState
 from .exceptions import OperationFailure
-from .helpers import classrepr
+from .models.tx_state import TxnState
 
 if TYPE_CHECKING:
     from .client import Kover
-    from .models.network import Address
-    from .typings import DictT
+    from .models.address import Address
 
 
-@classrepr("document", "tx_id")
 class Session:
     """A logical MongoDB session that owns no socket."""
 
-    def __init__(self, document: DictT, client: Kover) -> None:
+    def __init__(self, document: dict[str, Any], client: Kover) -> None:
         self.document = document
         self.client = client
         self._transaction_number = Int64(-1)
         self._state = TxnState.NONE
-        self._transaction_options: DictT | None = None
+        self._transaction_options: dict[str, Any] | None = None
         self._pinned_server: Address | None = None
+
+    def __repr__(self) -> str:
+        session_id = self.document["id"]
+        return f"Session(id={session_id.hex()}, tx_id={self.tx_id})"
 
     @property
     def tx_id(self) -> Int64:
@@ -56,13 +57,14 @@ class Session:
         """
         if self._pinned_server is not None and self._pinned_server != address:
             raise ValueError("session is already pinned to another server")
+
         self._pinned_server = address
 
     def unpin_server(self) -> None:
         """Remove the server pin."""
         self._pinned_server = None
 
-    def start_transaction(self, options: DictT | None = None) -> None:
+    def start_transaction(self, options: dict[str, Any] | None = None) -> None:
         """Start locally, without checking out a connection.
 
         A session supports one active transaction at a time, but can start
@@ -102,11 +104,9 @@ class Session:
 
         self._state = TxnState.COMMITTING
         try:
-            await self.client.request(
-                {"commitTransaction": 1.0},
-                session=self,
-                deadline=deadline,
-            )
+            await self.client.command({
+                "commitTransaction": 1.0,
+            }, session=self, deadline=deadline)
         except OperationFailure as e:
             if not e.is_unknown_commit_result:
                 self._state = TxnState.ABORTED
@@ -135,7 +135,7 @@ class Session:
             raise ValueError("session has no active transaction")
 
         try:
-            await self.client.request(
+            await self.client.command(
                 {"abortTransaction": 1.0},
                 session=self,
                 deadline=deadline,
@@ -150,24 +150,39 @@ class Session:
             self._state = TxnState.ABORTED
             self.unpin_server()
 
-    def apply_to(self, document: DictT) -> None:
-        """Add session and transaction metadata to a command."""
+    def apply_to(self, document: dict[str, Any]) -> bool:
+        """Add session and transaction metadata to a command.
+
+        Returns:
+            Whether this command starts the transaction.
+        """
         document["lsid"] = self.document
         if self._state not in {
             TxnState.STARTING,
             TxnState.IN_PROGRESS,
             TxnState.COMMITTING,
         }:
-            return
+            return False
 
-        if self._state is TxnState.STARTING:
+        starts_transaction = self._state is TxnState.STARTING
+        if starts_transaction:
             document["startTransaction"] = True
-            self._state = TxnState.IN_PROGRESS
+            document.update({
+                "txnNumber": self._transaction_number,
+                "autocommit": False,
+            })
+            return True
 
         document.update({
             "txnNumber": self._transaction_number,
             "autocommit": False,
         })
+        return False
+
+    def mark_transaction_started(self) -> None:
+        """Record that the server accepted the first transaction command."""
+        if self._state is TxnState.STARTING:
+            self._state = TxnState.IN_PROGRESS
 
     async def close(self) -> None:
         """Close the session and clear transaction metadata."""

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Self
+from typing import Any, Self
 
 from bson import ObjectId  # ruff: ignore[typing-only-third-party-import]
 from pydantic import (
@@ -12,9 +12,6 @@ from pydantic import (
 )
 
 from .generator import MongoDBSchemaGenerator
-
-if TYPE_CHECKING:
-    from kover.typings import DictT
 
 
 class Document(BaseModel):
@@ -30,7 +27,7 @@ class Document(BaseModel):
     _id: ObjectId | None = PrivateAttr(default=None)
 
     @classmethod
-    def from_document(cls, payload: DictT) -> Self:
+    def from_document(cls, payload: dict[str, Any]) -> Self:
         """Create a Document instance from a dictionary.
 
         Returns:
@@ -46,7 +43,7 @@ class Document(BaseModel):
 
         return document
 
-    def to_dict(self, *, exclude_id: bool = False) -> DictT:
+    def to_dict(self, *, exclude_id: bool = False) -> dict[str, Any]:
         """Convert the document to a dictionary.
 
         Returns:
@@ -81,7 +78,7 @@ class Document(BaseModel):
         return self.__repr__()
 
     @classmethod
-    def model_mongodb_schema(cls) -> DictT:
+    def model_mongodb_schema(cls) -> dict[str, Any]:
         """Generate the MongoDB JSON Schema validator for this document model.
 
         Returns:

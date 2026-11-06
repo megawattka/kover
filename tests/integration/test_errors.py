@@ -7,7 +7,6 @@ class ErrorIntegrationTests(MongoTestCase):
     async def test_duplicate_key_preserves_connection(self) -> None:
         collection = await self.database.create_collection("items")
         await collection.insert_one({"_id": "duplicate"})
-        before = self.client.pool.stats()
         with self.assertRaises(OperationFailure) as caught:
             await collection.insert_one({"_id": "duplicate"})
 
@@ -15,8 +14,6 @@ class ErrorIntegrationTests(MongoTestCase):
         assert error.code == 11000
         assert error.details["ok"] == 1
         assert error.details["writeErrors"][0]["code"] == 11000
-        assert self.client.pool.stats().checked_out == 0
-        assert self.client.pool.stats().idle == before.idle
         assert await self.database.ping()
 
         assert await collection.count() == 1
@@ -63,19 +60,16 @@ class ErrorIntegrationTests(MongoTestCase):
 
     async def test_command_error_preserves_connection(self) -> None:
         assert await self.database.ping()
-        before = self.client.pool.stats()
         with self.assertRaises(OperationFailure) as caught:
             await self.database.command({"koverUnknownCommand": 1})
 
         assert caught.exception.code == 59
         assert caught.exception.code_name == "CommandNotFound"
         assert caught.exception.details["ok"] == 0
-        assert self.client.pool.stats().checked_out == 0
-        assert self.client.pool.stats().idle == before.idle
         assert await self.database.ping()
 
     async def test_write_concern_error_is_not_silenced(self) -> None:
-        hello = await self.client.request({"hello": 1})
+        hello = await self.client.command({"hello": 1})
         if not hello.get("setName"):
             self.skipTest("This write concern test requires a replica set")
         collection = await self.database.create_collection("items")
@@ -95,5 +89,4 @@ class ErrorIntegrationTests(MongoTestCase):
         concern_error = error.details["writeConcernError"]
         assert error.code == concern_error["code"]
         assert error.err_info == concern_error.get("errInfo")
-        assert self.client.pool.stats().checked_out == 0
         assert await collection.find_one({"_id": "written"}) is not None

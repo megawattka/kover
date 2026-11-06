@@ -7,18 +7,17 @@ from hashlib import sha1
 from io import BytesIO, IOBase
 import math
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Self
+from typing import TYPE_CHECKING, Any, Final, Self
 
 from bson import Binary, ObjectId
 
-from .. import Delete, Index
-from ..enums import IndexDirection
+from ..models import Delete, Index, IndexDirection
 from .exceptions import GridFSFileNotFound, IncorrectGridFSData
 from .models import Chunk, File
 
 if TYPE_CHECKING:
     from ..database import Database
-    from ..typings import DictT, GridFSPayloadT
+    from .annotations import GridFSPayloadT
 
 # pre-created index models
 FS_IDX: Final[Index] = Index("_fs_idx", {
@@ -102,7 +101,7 @@ class GridFS:
         encoding: str = "utf-8",
         chunk_size: int | None = None,
         add_sha1: bool = True,
-        metadata: DictT | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> ObjectId:
         """Store a file in GridFS, splitting it into chunks.
 

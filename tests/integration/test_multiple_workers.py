@@ -8,7 +8,7 @@ import asyncio
 from collections.abc import Coroutine
 import os
 
-from kover import AuthCredentials, Delete, Kover, Update
+from kover import AuthCredentials, Delete, Update, make_client
 from tests.integration.base import MongoTestCase
 
 
@@ -16,7 +16,7 @@ class MultipleWorkersIntegrationTests(MongoTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
         # Many more tasks than connections exercise pool waiting and reuse.
-        client = await Kover.make_client(
+        client = await make_client(
             host=os.environ.get("MONGO_HOST", "127.0.0.1"),
             port=int(os.environ.get("MONGO_PORT", "27017")),
             credentials=AuthCredentials.from_environ(),

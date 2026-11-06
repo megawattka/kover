@@ -3,7 +3,7 @@
 import asyncio
 import logging
 
-from kover import AuthCredentials, Delete, Document, Kover, Update
+from kover import AuthCredentials, Delete, Document, Update, make_client
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -19,7 +19,7 @@ class User(Document):
 async def main() -> None:
     """Entrypoint."""
     credentials = AuthCredentials.from_environ()
-    kover = await Kover.make_client(credentials=credentials)
+    kover = await make_client(credentials=credentials)
 
     collection = kover.db.get_collection("test")
     user = User(name="John", age=23)

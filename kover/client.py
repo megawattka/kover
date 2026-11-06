@@ -1,69 +1,45 @@
-"""Kover Client Module."""
+"""High-level MongoDB API backed by an injected command executor."""
 
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Literal, Self
+from typing import TYPE_CHECKING, Any, Literal, Self
 
-from kover.cursor import Cursor
-
-from .database import Database
-from .helpers import (
+from ._utils import (
     classrepr,
     filter_non_null,
     maybe_to_dict,
     raw_decoder,
 )
+from .cursor import Cursor
 from .models import BuildInfo, ReadConcern, WriteConcern
-from .models.network import Address
-from .network import ConnectionPool
-from .network.discovery import DiscoveryOptions
-from .read_preferences import ReadPreference
 from .session import Session
-from .typings import DEFAULT_MONGODB_PORT
-from .uri_parser import parse_uri
 
 if TYPE_CHECKING:
-    import asyncio
-
-    from .models import ReplicaSetConfig
-    from .network import AuthCredentials
-    from .typings import CompressionT, DictT, DocumentT
-
-
-_WRITE_CONCERN_COMMANDS = frozenset({
-    "bulkWrite",
-    "collMod",
-    "create",
-    "createIndexes",
-    "delete",
-    "drop",
-    "dropAllUsersFromDatabase",
-    "dropDatabase",
-    "dropIndexes",
-    "dropUser",
-    "findAndModify",
-    "insert",
-    "renameCollection",
-    "update",
-})
+    from .database import Database
+    from .execution.protocols import ICommandExecutor
+    from .models.address import Address
+    from .models.read_preference import ReadPreference
+    from .models.replica_set import ReplicaSetConfig
 
 
-@classrepr("_write_concern", "_pool")
+@classrepr("_write_concern", "_executor")
 class Kover:
-    """Kover client for interacting with a MongoDB server."""
+    """Expose database and administrative helpers through an executor.
+
+    Connection setup and resource composition belong to the caller. Routing,
+    command preparation, sessions metadata, and I/O belong to the executor.
+    Closing the client closes its injected executor.
+    """
 
     def __init__(
         self,
+        executor: ICommandExecutor,
         *,
         write_concern: WriteConcern | None = None,
-        pool: ConnectionPool,
     ) -> None:
-        if write_concern is None:
-            self._write_concern = WriteConcern()
-        else:
-            self._write_concern = write_concern
-        self._pool = pool
+        self._write_concern = write_concern or WriteConcern()
+        self._executor = executor
 
     async def __aenter__(self) -> Self:
         return self
@@ -72,14 +48,9 @@ class Kover:
         await self.close()
         return False
 
-    @property
-    def pool(self) -> ConnectionPool:
-        """Acquire raw connection pool obj."""
-        return self._pool
-
     async def close(self) -> None:
         """Release the resources owned by the client."""
-        await self._pool.close()
+        await self._executor.close()
 
     def get_database(self, name: str) -> Database:
         """Get a Database instance for the specified database name.
@@ -90,9 +61,14 @@ class Kover:
         Returns:
             An instance of the Database class for the given name.
         """
+        from .database import Database  # ruff: ignore[import-outside-top-level]
+
         return Database(name=name, client=self)
 
     def __getattr__(self, name: str) -> Database:
+        if name.startswith("_"):
+            raise AttributeError(name)
+
         return self.get_database(name=name)
 
     def set_write_concern(
@@ -115,105 +91,17 @@ class Kover:
         )
         return self
 
-    @classmethod
-    async def from_uri(
-        cls,
-        uri: str,
-        loop: asyncio.AbstractEventLoop | None = None,
-    ) -> Kover:
-        """Create an instance of Kover client by passing a uri.
-
-        Parameters:
-            uri : The uri itself.
-            loop : Optional asyncio loop
-
-        Returns:
-            An instance of newly created Kover client.
-        """
-        parsed = await parse_uri(uri)
-        pool = await ConnectionPool.from_parsed_uri(parsed, loop=loop)
-        write_concern = WriteConcern(
-            w=parsed.options.get("w", "majority"),
-            j=parsed.options.get("journal"),
-            wtimeout=parsed.options.get("wTimeoutMS", 0),
-        )
-        return cls(write_concern=write_concern, pool=pool)
-
-    @classmethod
-    async def make_client(
-        cls,
-        host: str = "127.0.0.1",
-        port: int = DEFAULT_MONGODB_PORT,
-        *,
-        credentials: AuthCredentials | None = None,
-        loop: asyncio.AbstractEventLoop | None = None,
-        compression: CompressionT | None = None,
-        tls: bool = False,
-        application: DictT | None = None,
-        w: str | int = "majority",
-        max_pool_size: int = 100,
-        replica_set: str | None = None,
-        direct_connection: bool = False,
-        server_selection_timeout: float = 30.0,
-        connect_timeout: float | None = 10.0,
-        read_preference: ReadPreference | None = None,
-        local_threshold: float = 0.015,
-    ) -> Kover:
-        """Create and return a new Kover client instance.
-
-        Parameters:
-            host : The hostname of the MongoDB server, by default "127.0.0.1".
-            port : The port number of the MongoDB server, by default 27017.
-            credentials : Authentication credentials, if required.
-            loop : The event loop to use for asynchronous operations.
-            compression : List of compression options.
-            tls : the boolean value that indicated whether to use tls or no.
-            application : document that will be included in hello payload
-                under the "application" field.
-            w : the value of default write concern used.
-            max_pool_size : The maximum connections per server pool.
-            replica_set : Expected replica set name, if specified.
-            direct_connection : Use the given server regardless of its role.
-            server_selection_timeout : Initial selection deadline in seconds.
-            connect_timeout : Per-probe timeout in seconds, or None.
-            read_preference : Read routing policy, defaulting to primary.
-            local_threshold : Latency window in seconds.
-
-        Returns:
-            An instance of the Kover client.
-        """
-        pool = await ConnectionPool.discover(
-            [Address(host=host, port=port)],
-            options=DiscoveryOptions(
-                replica_set=replica_set,
-                direct_connection=direct_connection,
-                server_selection_timeout=server_selection_timeout,
-                connect_timeout=connect_timeout,
-                read_preference=read_preference or ReadPreference(),
-                local_threshold=local_threshold,
-            ),
-            credentials=credentials,
-            loop=loop,
-            compression=list(compression) if compression is not None else None,
-            tls=tls,
-            application=application,
-            max_pool_size=max_pool_size,
-        )
-        write_concern = WriteConcern(w=w)
-        return cls(write_concern=write_concern, pool=pool)
-
-    async def request(
+    async def command(
         self,
-        doc: DocumentT,
+        doc: dict[str, Any],
         *,
         db_name: str = "admin",
         session: Session | None = None,
-        wait_response: bool = True,
         write_concern: WriteConcern | None = None,
         deadline: float | None = None,
         read_preference: ReadPreference | None = None,
         server_address: Address | None = None,
-    ) -> DictT:
+    ) -> dict[str, Any]:
         """Send a request to MongoDB Server.
 
         Read preference overrides apply only to eligible reads; writes and
@@ -227,38 +115,27 @@ class Kover:
             ValueError: If the session belongs to another client or a
                 transaction read requests a non-primary preference.
         """
-        doc = doc.copy()
-        wc_allowed = next(iter(doc.keys()), None) in _WRITE_CONCERN_COMMANDS
-        in_transaction = session is not None and session.in_transaction
-
-        if write_concern is None:
-            write_concern = self._write_concern
-
-        if not in_transaction and wc_allowed and "writeConcern" not in doc:
-            doc["writeConcern"] = maybe_to_dict(write_concern)
-
         if session is not None and session.client is not self:
             raise ValueError("Session belongs to a different client")
 
-        routing: DictT = {}
-        if read_preference is not None:
-            routing["read_preference"] = read_preference
-        if server_address is not None:
-            routing["server_address"] = server_address
-        return await self._pool.request(
+        return await self._executor.execute(
             doc,
-            db_name=db_name,
+            database=db_name,
             session=session,
-            wait_response=wait_response,
             deadline=deadline,
-            **routing,
+            read_preference=read_preference,
+            server_address=server_address,
+            write_concern=(
+                write_concern if write_concern is not None
+                else self._write_concern
+            ),
         )
 
     def bulk_write(
         self,
-        document: DictT,
+        document: dict[str, Any],
         session: Session | None = None,
-    ) -> Cursor[DictT]:
+    ) -> Cursor[dict[str, Any]]:
         """Execute a bulkWrite operation and return info about it.
 
         Returns:
@@ -286,8 +163,8 @@ class Kover:
             if session.client is not self:
                 raise ValueError("Cannot refresh foreign session")
 
-        documents: list[DictT] = [x.document for x in sessions]
-        await self.request({"refreshSessions": documents})
+        documents: list[dict[str, Any]] = [x.document for x in sessions]
+        await self.command({"refreshSessions": documents})
 
     async def end_sessions(self, sessions: list[Session]) -> None:
         """End the provided list of sessions.
@@ -302,8 +179,8 @@ class Kover:
             if session.client is not self:
                 raise ValueError("Cannot end foreign session")
 
-        documents: list[DictT] = [x.document for x in sessions]
-        await self.request({"endSessions": documents})
+        documents: list[dict[str, Any]] = [x.document for x in sessions]
+        await self.command({"endSessions": documents})
 
     async def start_session(self) -> Session:
         """Start a new session.
@@ -311,7 +188,7 @@ class Kover:
         Returns:
             An instance of the Session class representing the started session.
         """
-        req = await self.request({"startSession": 1.0})
+        req = await self.command({"startSession": 1.0})
         return Session(document=req["id"], client=self)
 
     async def build_info(self) -> BuildInfo:
@@ -320,7 +197,7 @@ class Kover:
         Returns:
             An instance of BuildInfo containing server build details.
         """
-        request = await self.request({"buildInfo": 1.0})
+        request = await self.command({"buildInfo": 1.0})
         return BuildInfo.model_validate(request)
 
     async def logout(self) -> None:
@@ -329,7 +206,7 @@ class Kover:
         This method sends a logout request to the server
         to terminate the current authenticated session.
         """
-        await self.request({"logout": 1.0})
+        await self.command({"logout": 1.0})
 
     async def list_database_names(self) -> list[str]:
         """Retrieve the names of all databases on the MongoDB server.
@@ -337,11 +214,11 @@ class Kover:
         Returns:
             A list containing the names of all databases.
         """
-        command: DictT = {
+        command: dict[str, Any] = {
             "listDatabases": 1.0,
             "nameOnly": True,
         }
-        request = await self.request(command)
+        request = await self.command(command)
         return [x["name"] for x in request["databases"]]
 
     async def drop_database(self, name: str) -> None:
@@ -350,7 +227,7 @@ class Kover:
         Parameters:
             name : The name of the database to drop.
         """
-        await self.request({"dropDatabase": 1.0}, db_name=name)
+        await self.command({"dropDatabase": 1.0}, db_name=name)
 
     # https://www.mongodb.com/docs/manual/reference/command/dropConnections
     async def drop_connections(
@@ -364,12 +241,12 @@ class Kover:
             hosts : A list of hostnames whose connections should be dropped.
             comment : Optional comment for the operation.
         """
-        document: DictT = filter_non_null({
+        document: dict[str, Any] = filter_non_null({
             "dropConnections": 1.0,
             "hostAndPort": hosts,
             "comment": comment,
         })
-        await self.request(document)
+        await self.command(document)
 
     # https://www.mongodb.com/docs/manual/reference/command/replSetInitiate/
     async def replica_set_initiate(
@@ -383,7 +260,7 @@ class Kover:
                 default configuration is used.
         """
         document = maybe_to_dict(config) or {}
-        await self.request({"replSetInitiate": document})
+        await self.command({"replSetInitiate": document})
 
     # https://www.mongodb.com/docs/manual/reference/command/replSetReconfig/
     async def replica_set_reconfig(
@@ -398,21 +275,21 @@ class Kover:
         Parameters:
             config : The configuration document for the replica set.
         """
-        document: DictT = filter_non_null({
+        document: dict[str, Any] = filter_non_null({
             "replSetReconfig": maybe_to_dict(config) or {},
             "force": force,
             "maxTimeMS": max_time_ms,
         })
-        await self.request(document)
+        await self.command(document)
 
     # https://www.mongodb.com/docs/manual/reference/command/replSetGetStatus/
-    async def get_replica_set_status(self) -> DictT:
+    async def get_replica_set_status(self) -> dict[str, Any]:
         """Retrieve the status of the replica set.
 
         Returns:
             A JSON document containing the replica set status information.
         """
-        return await self.request({"replSetGetStatus": 1.0})
+        return await self.command({"replSetGetStatus": 1.0})
 
     # https://www.mongodb.com/docs/manual/reference/command/shutdown/
     async def shutdown(
@@ -435,7 +312,7 @@ class Kover:
             "timeoutSecs": timeout,
             "comment": comment,
         })
-        await self.request(command, wait_response=False)
+        await self.command(command)
 
     # https://www.mongodb.com/docs/manual/reference/command/getCmdLineOpts/
     async def get_commandline(self) -> list[str]:
@@ -444,14 +321,14 @@ class Kover:
         Returns:
             A list of command line arguments.
         """
-        r = await self.request({"getCmdLineOpts": 1.0})
+        r = await self.command({"getCmdLineOpts": 1.0})
         return r["argv"]
 
     # https://www.mongodb.com/docs/manual/reference/command/getLog/#getlog
     async def get_log(
         self,
         parameter: Literal["global", "startupWarnings"] = "startupWarnings",
-    ) -> list[DictT]:
+    ) -> list[dict[str, Any]]:
         """Retrieve log entries from the MongoDB server.
 
         Parameters:
@@ -461,7 +338,7 @@ class Kover:
         Returns:
             A list of log entries as JSON objects.
         """
-        r = await self.request({"getLog": parameter})
+        r = await self.command({"getLog": parameter})
         return [
             json.loads(info) for info in r["log"]
         ]
@@ -490,7 +367,7 @@ class Kover:
             "dropTarget": drop_target,
             "comment": comment,
         })
-        await self.request(command)
+        await self.command(command)
 
     # https://www.mongodb.com/docs/manual/reference/command/setUserWriteBlockMode/
     async def set_user_write_block_mode(self, *, param: bool) -> None:
@@ -500,7 +377,7 @@ class Kover:
             param : Blocks writes on a cluster when set to true.
                 To enable writes on a cluster, set global: false.
         """
-        await self.request({
+        await self.command({
             "setUserWriteBlockMode": 1.0,
             "global": param,
         })
@@ -528,7 +405,7 @@ class Kover:
             "lock": lock,
             "comment": comment,
         })
-        await self.request(command)
+        await self.command(command)
 
     # https://www.mongodb.com/docs/manual/reference/command/fsyncUnlock/
     async def fsync_unlock(self, comment: str | None = None) -> None:
@@ -541,7 +418,7 @@ class Kover:
             "fsyncUnlock": 1.0,
             "comment": comment,
         })
-        await self.request(command)
+        await self.command(command)
 
     # https://www.mongodb.com/docs/manual/reference/command/getDefaultRWConcern
     async def get_default_rw_concern(
@@ -569,7 +446,7 @@ class Kover:
             "inMemory": in_memory,
             "comment": comment,
         })
-        resp = await self.request(command)
+        resp = await self.command(command)
         read_concern = ReadConcern(level=resp["defaultReadConcern"]["level"])
         write_concern = WriteConcern(w=resp["defaultWriteConcern"]["w"])
 
@@ -585,7 +462,7 @@ class Kover:
         Returns:
             A Parameter itself.
         """
-        resp = await self.request({"getParameter": 1.0, name: 1.0})
+        resp = await self.command({"getParameter": 1.0, name: 1.0})
         return resp[name]
 
     # https://www.mongodb.com/docs/manual/reference/command/setParameter
@@ -596,4 +473,4 @@ class Kover:
             name : The name of the server parameter to set.
             value : The value of that parameter.
         """
-        await self.request({"setParameter": 1.0, name: value})
+        await self.command({"setParameter": 1.0, name: value})

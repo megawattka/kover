@@ -1,4 +1,4 @@
-from .bson_types import __pydantic_core_schema_gen__
+from ._schema_hooks import __pydantic_core_schema_gen__
 from .document import Document
 from .generator import MongoDBSchemaGenerator
 

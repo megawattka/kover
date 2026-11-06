@@ -1,176 +1,177 @@
-"""Command-level connection above byte transport and wire codec."""
+"""Command-level MongoDB connection used for discovery probes."""
 
 from __future__ import annotations
 
+import asyncio
 from itertools import count
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any
 
-from ..exceptions import ConnectionClosedError, NetworkError, ProtocolError
-from ..helpers import get_hello_payload
-from ..models import HelloResult
-from .auth import Auth
+from .._utils.mappings import get_hello_payload
+from ..exceptions import NetworkError
+from .auth import Authenticator
+from .wire.codec import CommandCodec
+from .wire.error_mapper import ErrorMapper
+from .wire.handshake import Handshake
 
 if TYPE_CHECKING:
-    from ..models.network import Address
-    from ..typings import DictT
-    from .auth import AuthCredentials
-    from .codec import CommandCodec
-    from .error_mapper import ErrorMapper
+    from ..models.address import Address
+    from ..models.credentials import AuthCredentials
+    from ..models.hello import HelloResult
     from .transport import Transport
 
 
+_MAX_MESSAGE_SIZE = 48 * 1024 * 1024
+
+
 class Connection:
-    """Execute one exclusive request/response at a time."""
+    """Perform MongoDB commands over a transport and wire codec."""
 
     def __init__(
         self,
         address: Address,
         transport: Transport,
-        codec: CommandCodec,
-        err_mapper: ErrorMapper,
+        *,
+        codec: CommandCodec | None = None,
+        error_mapper: ErrorMapper | None = None,
     ) -> None:
-        self._address = address
+        self.address = address
         self._transport = transport
-        self._codec = codec
-        self._err_mapper = err_mapper
+        self._codec = codec or CommandCodec()
+        self._error_mapper = error_mapper or ErrorMapper()
+        self._handshake = Handshake(self.command)
+        self._authenticator = Authenticator(self.command)
         self._request_ids = count(1)
         self._closed = False
+        self._hello_result: HelloResult | None = None
+        self._hello_round_trip_time = 0.0
 
     @property
-    def address(self) -> Address:
-        """Server address."""
-        return self._address
+    def hello_result(self) -> HelloResult | None:
+        """Capabilities returned by the initial hello, if completed."""
+        return self._hello_result
+
+    @property
+    def hello_round_trip_time(self) -> float:
+        """Elapsed seconds spent waiting for the initial hello response."""
+        return self._hello_round_trip_time
 
     @property
     def usable(self) -> bool:
-        """Local usability, not a server health check."""
+        """Whether the transport is open for commands."""
         return not self._closed and self._transport.connected
 
     async def connect(self) -> None:
-        """Connect the underlying transport."""
+        """Open the underlying transport."""
         await self._transport.connect()
 
-    def abort(self) -> None:
-        """Synchronously invalidate this connection."""
+    async def close(self) -> None:
+        """Invalidate the connection and abort its transport."""
         if self._closed:
             return
-        self._closed = True
-        self._transport.abort()
 
-    async def close(self) -> None:
-        """Close this connection idempotently."""
-        self.abort()
+        self._closed = True
         await self._transport.close()
 
     async def command(
         self,
-        document: DictT,
+        document: dict[str, Any],
         database: str = "admin",
         *,
         deadline: float | None = None,
-    ) -> DictT:
-        """Encode, exchange and validate one command.
+    ) -> dict[str, Any]:
+        """Exchange a command and validate its MongoDB response.
 
         Returns:
-            The decoded server response after checking command and write
-            errors.
+            Response from server.
 
         Raises:
-            ConnectionClosedError: If this connection has been closed.
-            NetworkError: If the transport exchange fails with an I/O error.
-            ProtocolError: If the response framing or payload is invalid.
+            NetworkError: if connection is closed.
         """
         if self._closed:
-            raise ConnectionClosedError("connection is closed")
+            raise NetworkError("connection is closed")
 
         request_id = next(self._request_ids) % (2**31)
-        request = self._codec.encode(document, database, request_id=request_id)
+        request = self._codec.encode(
+            document,
+            database,
+            request_id=request_id,
+        )
         exchanged = False
         try:
-            message = await self._transport.exchange(
-                request, deadline=deadline,
-            )
+            message = await self._exchange(request, deadline)
             reply = self._codec.decode(
-                message, expected_response_to=request_id,
+                message,
+                request_id=request_id,
             )
             exchanged = True
-        except ValueError as error:
-            raise ProtocolError(str(error)) from error
-
-        except OSError as error:
-            raise NetworkError(str(error)) from error
         finally:
-            # Cancellation and unexpected failures leave framing uncertain.
             if not exchanged:
-                self.abort()
+                await self.close()
 
-        await self._err_mapper.check_writes(reply)
-        await self._err_mapper.check(reply)
+        await self._error_mapper.check_reply(reply, with_writes=True)
         return reply
 
-    async def fire_and_forget(
+    async def _exchange(
         self,
-        document: DictT,
-        database: str = "admin",
-        *,
-        deadline: float | None = None,
-    ) -> None:
-        """Send a command without waiting for a reply.
+        request: bytes,
+        deadline: float | None,
+    ) -> bytes:
+        """Send a request and read one complete MongoDB wire message.
+
+        Returns:
+            Reply from mongodb server.
+        """
+        async with asyncio.timeout_at(deadline):
+            return await self._send_and_receive(request)
+
+    async def _send_and_receive(self, request: bytes) -> bytes:
+        """Send one encoded request and receive one encoded response.
+
+        Returns:
+            Reply from mongodb server.
+        """
+        await self._transport.send(request)
+        return await self._receive_message()
+
+    async def _receive_message(self) -> bytes:
+        """Read and validate a complete MongoDB wire message.
+
+        Returns:
+            Reply from mongodb server.
 
         Raises:
-            ConnectionClosedError: If this connection has been closed.
+            ValueError: if protocol error occur.
         """
-        if self._closed:
-            raise ConnectionClosedError("connection is closed")
+        prefix = await self._transport.receive(4)
+        length = self._codec.frame_length(prefix)
+        if length > _MAX_MESSAGE_SIZE:
+            raise ValueError(f"invalid MongoDB message length: {length}")
 
-        request_id = next(self._request_ids) % (2**31)
-        request = self._codec.encode(document, database, request_id=request_id)
-        sent = False
-        try:
-            await self._transport.exchange_without_reply(
-                request,
-                deadline=deadline,
-            )
-            sent = True
-        finally:
-            if not sent:
-                self.abort()
+        return prefix + await self._transport.receive(length - 4)
 
     async def hello(
         self,
-        compression: list[str] | None,
-        credentials: AuthCredentials | None,
-        application: DictT | None,
+        compression: list[str] | None = None,
+        credentials: AuthCredentials | None = None,
+        application: dict[str, Any] | None = None,
     ) -> HelloResult:
-        """Perform hello and negotiate compression.
+        """Send hello with client metadata and optional compression list.
 
         Returns:
-            The validated server hello response.
+            HelloResult model with server hello reply.
         """
         payload = get_hello_payload(compression, application)
-        if credentials is not None:
-            credentials.apply_to(payload)
+        started = asyncio.get_running_loop().time()
+        result = await self._handshake.hello(payload, credentials)
+        self._hello_round_trip_time = (
+            asyncio.get_running_loop().time() - started
+        )
 
-        reply = await self.command(payload)
-        hello = HelloResult.model_validate(reply)
+        if result.compression:
+            compressor = result.compression[0]
+            if compressor in {"zlib", "snappy", "zstd"}:
+                self._codec.set_compressor(compressor)
 
-        if hello.compression:
-            self._codec.set_compressor(hello.compression[0])
-
-        return hello
-
-    async def authorize(
-        self,
-        mechanism: Literal["SCRAM-SHA-256", "SCRAM-SHA-1"] | None,
-        credentials: AuthCredentials | None,
-    ) -> bytes | None:
-        """Authenticate through this connection.
-
-        Returns:
-            The verified SCRAM server signature, or None if the mechanism
-            or credentials are absent.
-        """
-        if mechanism is None or credentials is None:
-            return None
-
-        return await Auth(self).create(mechanism, credentials)
+        await self._authenticator.authenticate(result, credentials)
+        self._hello_result = result
+        return result

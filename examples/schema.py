@@ -14,8 +14,8 @@ from pydantic import Field, ValidationError
 from kover import (
     AuthCredentials,
     Document,
-    Kover,
     OperationFailure,
+    make_client,
 )
 
 log = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ async def main() -> None:
         OperationFailure: If insertion fails for an unexpected reason.
     """
     credentials = AuthCredentials.from_environ()
-    client = await Kover.make_client(credentials=credentials)
+    client = await make_client(credentials=credentials)
 
     schema = User.model_mongodb_schema()
 

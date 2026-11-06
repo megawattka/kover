@@ -2,15 +2,11 @@
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import Any
 
 from bson import ObjectId
 
-from kover import AuthCredentials, Kover
-from kover.exceptions import OperationFailure
-
-if TYPE_CHECKING:
-    from kover import DictT
+from kover import AuthCredentials, OperationFailure, make_client
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -19,11 +15,11 @@ logging.basicConfig(level=logging.INFO)
 async def main() -> None:
     """Entrypoint."""
     credentials = AuthCredentials.from_environ()
-    client = await Kover.make_client(credentials=credentials)
+    client = await make_client(credentials=credentials)
     session = await client.start_session()
 
     # specify _id directly
-    doc: DictT = {"_id": ObjectId(), "name": "John", "age": 30}
+    doc: dict[str, Any] = {"_id": ObjectId(), "name": "John", "age": 30}
     collection = await client.db.test.create_if_not_exists()
     try:
         session.start_transaction()

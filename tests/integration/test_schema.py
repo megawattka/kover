@@ -12,7 +12,7 @@ from bson import Binary, Decimal128, ObjectId
 from pydantic import ConfigDict, Field
 import pytest
 
-from kover import AuthCredentials, Kover
+from kover import AuthCredentials, make_client
 from kover.exceptions import OperationFailure
 from kover.schema import Document
 
@@ -77,7 +77,7 @@ class User(Document):
 async def database() -> AsyncGenerator[Database, Any]:
     if os.environ.get("KOVER_RUN_INTEGRATION") != "1":
         pytest.skip("Set KOVER_RUN_INTEGRATION=1 to use a real MongoDB")
-    client = await Kover.make_client(
+    client = await make_client(
         host=os.environ.get("MONGO_HOST", "127.0.0.1"),
         port=int(os.environ.get("MONGO_PORT", "27017")),
         credentials=AuthCredentials.from_environ(),

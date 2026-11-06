@@ -7,7 +7,7 @@ files using Kover's GridFS implementation.
 import asyncio
 import logging
 
-from kover import AuthCredentials, Kover
+from kover import AuthCredentials, make_client
 from kover.gridfs import GridFS
 
 log = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 async def main() -> None:
     """Entrypoint."""
     credentials = AuthCredentials.from_environ()
-    kover = await Kover.make_client(credentials=credentials)
+    kover = await make_client(credentials=credentials)
 
     database = kover.get_database("files")
     fs = await GridFS(database).indexed()

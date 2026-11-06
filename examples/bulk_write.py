@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import Any
 
-from kover import AuthCredentials, BulkWriteBuilder, Delete, Kover, Update
-
-if TYPE_CHECKING:
-    from kover.typings import DictT
+from kover import (
+    AuthCredentials,
+    BulkWriteBuilder,
+    Delete,
+    Update,
+    make_client,
+)
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -17,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 async def main() -> None:
     """Entrypoint."""
     credentials = AuthCredentials.from_environ()
-    client = await Kover.make_client(credentials=credentials)
+    client = await make_client(credentials=credentials)
 
     builder = BulkWriteBuilder()
     builder.add_insert([{"foo": "bar"}], ns="test.foos")
@@ -32,7 +35,8 @@ async def main() -> None:
     # all operations being done step by step
 
     # see result output by bulk write
-    results: list[DictT] = await client.bulk_write(builder.build()).to_list()
+    command = builder.build()
+    results: list[dict[str, Any]] = await client.bulk_write(command).to_list()
     log.info("bulk write results: %s", results)
 
     docs = await client.test.foos.find().to_list()

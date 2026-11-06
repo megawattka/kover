@@ -5,13 +5,12 @@ from kover import (
     AuthCredentials,
     BulkWriteBuilder,
     Delete,
-    Kover,
     OperationFailure,
     Update,
+    from_uri,
 )
-from kover.gridfs import GridFS
-from kover.gridfs.exceptions import GridFSFileNotFound
-from kover.network.error_mapper import ErrorMapper
+from kover.gridfs import GridFS, GridFSFileNotFound
+from kover.network import ErrorMapper
 from tests.integration.base import MongoTestCase
 
 
@@ -48,7 +47,7 @@ class UpstreamFeatureTests(MongoTestCase):
             f"{self.database.name}?compressors=zlib&appName=kover-test&"
             f"authSource={quote(os.environ.get('MONGO_AUTH_DB', 'admin'))}"
         )
-        client = await Kover.from_uri(uri)
+        client = await from_uri(uri)
         self.addAsyncCleanup(client.close)
         collection = client.get_database(self.database.name).compressed
         text = "compressible" * 10000

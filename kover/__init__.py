@@ -20,25 +20,23 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-__version__ = "3.0.0"
-__author__ = "megawattka"
-__license__ = "MIT"
-__copyright__ = "Copyright (C) 2024-present megawattka"
-
+from ._utils import (
+    CompressionContext,
+    HasToDict,
+    chain,
+    classrepr,
+    filter_non_null,
+    maybe_to_dict,
+    raw_decoder,
+)
+from .bootstrap import from_uri, make_client
 from .bulk_write_builder import BulkWriteBuilder
 from .client import Kover
 from .collection import Collection
 from .cursor import Cursor
 from .database import Database
-from .enums import (
-    CollationStrength,
-    IndexDirection,
-    IndexType,
-    ValidationLevel,
-)
 from .exceptions import (
     ConnectionClosedError,
-    CredentialsException,
     DriverError,
     InvalidOperationError,
     NetworkError,
@@ -47,54 +45,86 @@ from .exceptions import (
     PoolPausedError,
     PoolTimeoutError,
     ProtocolError,
-    SchemaGenerationException,
     ServerSelectionError,
 )
-from .helpers import chain, filter_non_null, maybe_to_dict
+from .execution import CommandExecutor
+from .gridfs import (
+    Chunk,
+    File,
+    GridFS,
+    GridFSFileNotFound,
+    IncorrectGridFSData,
+)
 from .models import (
+    Address,
+    AuthCredentials,
     BuildInfo,
     Collation,
+    CollationStrength,
     Delete,
     HelloResult,
     Index,
+    IndexDirection,
+    IndexType,
     ReadConcern,
+    ReadPreference,
     ReplicaSetConfig,
     ReplicaSetConfigSettings,
     ReplicaSetMember,
+    ServerDescription,
+    ServerType,
+    TxnState,
     Update,
-    User,
+    ValidationLevel,
     WriteConcern,
 )
-from .network import AuthCredentials, Connection, Transport
-from .network.pool import ConnectionPool
-from .read_preferences import ReadPreference
-from .schema.document import Document
+from .network import (
+    Authenticator,
+    Connection,
+    ConnectionFactory,
+    ConnectionLease,
+    ConnectionPool,
+    Handshake,
+    Transport,
+)
+from .schema import Document, MongoDBSchemaGenerator
 from .session import Session
-from .typings import DictT
 
 __all__ = (
+    "Address",
     "AuthCredentials",
+    "Authenticator",
     "BuildInfo",
     "BulkWriteBuilder",
+    "Chunk",
     "Collation",
     "CollationStrength",
     "Collection",
+    "CommandExecutor",
+    "CompressionContext",
     "Connection",
     "ConnectionClosedError",
+    "ConnectionFactory",
+    "ConnectionLease",
     "ConnectionPool",
-    "CredentialsException",
     "Cursor",
     "Database",
     "Delete",
-    "DictT",
     "Document",
     "DriverError",
+    "File",
+    "GridFS",
+    "GridFSFileNotFound",
+    "Handshake",
+    "HasToDict",
     "HelloResult",
+    "IncorrectGridFSData",
     "Index",
     "IndexDirection",
     "IndexType",
     "InvalidOperationError",
     "Kover",
+    "MongoDBSchemaGenerator",
     "NetworkError",
     "OperationFailure",
     "PoolClosedError",
@@ -106,15 +136,20 @@ __all__ = (
     "ReplicaSetConfig",
     "ReplicaSetConfigSettings",
     "ReplicaSetMember",
-    "SchemaGenerationException",
+    "ServerDescription",
     "ServerSelectionError",
+    "ServerType",
     "Session",
     "Transport",
+    "TxnState",
     "Update",
-    "User",
     "ValidationLevel",
     "WriteConcern",
     "chain",
+    "classrepr",
     "filter_non_null",
+    "from_uri",
+    "make_client",
     "maybe_to_dict",
+    "raw_decoder",
 )

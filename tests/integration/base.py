@@ -2,7 +2,7 @@ import os
 import unittest
 from uuid import uuid4
 
-from kover import AuthCredentials, Kover
+from kover import AuthCredentials, make_client
 
 
 @unittest.skipUnless(
@@ -11,7 +11,7 @@ from kover import AuthCredentials, Kover
 )
 class MongoTestCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        self.client = await Kover.make_client(
+        self.client = await make_client(
             host=os.environ.get("MONGO_HOST", "127.0.0.1"),
             port=int(os.environ.get("MONGO_PORT", "27017")),
             credentials=AuthCredentials.from_environ(),
