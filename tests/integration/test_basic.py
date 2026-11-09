@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
-from bson import Binary
-
 from kover import (
     AuthCredentials,
     Delete,
@@ -117,7 +115,7 @@ class BasicTests(MongoTestCase):
         )
         deserialized = sbcls.to_dict()
         assert len(deserialized.keys()) == 4
-        assert isinstance(deserialized["uuid"], Binary)
+        assert isinstance(deserialized["uuid"], UUID)
         assert issubclass(Subclass, User)
         assert issubclass(Subclass, Document)
         serialized = Subclass.from_document(deserialized)

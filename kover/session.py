@@ -86,9 +86,13 @@ class Session:
         self._state = TxnState.STARTING
 
     async def commit_transaction(
-        self, *, deadline: float | None = None,
+        self,
+        *,
+        deadline: float | None = None,
     ) -> None:
         """Commit the active transaction without advancing its number.
+
+        A transaction still in STARTING finishes locally without a command.
 
         Raises:
             ValueError: If the session has no active transaction.
@@ -97,16 +101,26 @@ class Session:
         if self._state is TxnState.COMMITTED:
             return
 
+        if self._state is TxnState.STARTING:
+            self._state = TxnState.COMMITTED
+            self.unpin_server()
+            return
+
         if self._state not in {
-            TxnState.STARTING, TxnState.IN_PROGRESS, TxnState.COMMITTING,
+            TxnState.IN_PROGRESS,
+            TxnState.COMMITTING,
         }:
             raise ValueError("session has no active transaction")
 
         self._state = TxnState.COMMITTING
         try:
-            await self.client.command({
-                "commitTransaction": 1.0,
-            }, session=self, deadline=deadline)
+            await self.client.command(
+                {
+                    "commitTransaction": 1.0,
+                },
+                session=self,
+                deadline=deadline,
+            )
         except OperationFailure as e:
             if not e.is_unknown_commit_result:
                 self._state = TxnState.ABORTED
@@ -117,9 +131,13 @@ class Session:
             self.unpin_server()
 
     async def abort_transaction(
-        self, *, deadline: float | None = None,
+        self,
+        *,
+        deadline: float | None = None,
     ) -> None:
         """Abort the active transaction and release its server pin.
+
+        A transaction still in STARTING finishes locally without a command.
 
         Raises:
             ValueError: If the session has no active transaction.
@@ -129,8 +147,14 @@ class Session:
         if self._state is TxnState.ABORTED:
             return
 
+        if self._state is TxnState.STARTING:
+            self._state = TxnState.ABORTED
+            self.unpin_server()
+            return
+
         if self._state not in {
-            TxnState.STARTING, TxnState.IN_PROGRESS, TxnState.COMMITTING,
+            TxnState.IN_PROGRESS,
+            TxnState.COMMITTING,
         }:
             raise ValueError("session has no active transaction")
 
@@ -167,16 +191,20 @@ class Session:
         starts_transaction = self._state is TxnState.STARTING
         if starts_transaction:
             document["startTransaction"] = True
-            document.update({
-                "txnNumber": self._transaction_number,
-                "autocommit": False,
-            })
+            document.update(
+                {
+                    "txnNumber": self._transaction_number,
+                    "autocommit": False,
+                },
+            )
             return True
 
-        document.update({
-            "txnNumber": self._transaction_number,
-            "autocommit": False,
-        })
+        document.update(
+            {
+                "txnNumber": self._transaction_number,
+                "autocommit": False,
+            },
+        )
         return False
 
     def mark_transaction_started(self) -> None:

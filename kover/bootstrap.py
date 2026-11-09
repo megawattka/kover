@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .client import Kover
-from .configuration.uri import parse_uri
 from .execution.executor import CommandExecutor
 from .models.address import Address
 from .models.concerns import WriteConcern
@@ -14,12 +13,15 @@ from .models.read_preference import ReadPreference
 from .network.factory import ConnectionFactory
 from .network.probe import ServerProbe
 from .network.registry import PoolRegistry
+from .network.uri_parser import parse_uri
 from .topology.discovery import ServerDiscovery
 from .topology.selector import ServerSelector
 
 if TYPE_CHECKING:
     import asyncio
     from collections.abc import Sequence
+
+    from bson import CodecOptions
 
     from .models.credentials import AuthCredentials
 
@@ -32,16 +34,20 @@ async def _build_client(
     credentials: AuthCredentials | None,
     tls: bool,
     compression: Sequence[str] | None,
+    zlib_compression_level: int,
     application: dict[str, Any] | None,
     loop: asyncio.AbstractEventLoop | None,
     max_pool_size: int,
+    codec_options: CodecOptions | None = None,
 ) -> Kover:
     factory = ConnectionFactory(
         credentials=credentials,
         tls=tls,
         compression=list(compression) if compression is not None else None,
+        zlib_compression_level=zlib_compression_level,
         application=application,
         loop=loop,
+        codec_options=codec_options,
     )
     discovery = ServerDiscovery(
         seeds,
@@ -77,6 +83,7 @@ async def make_client(
     credentials: AuthCredentials | None = None,
     loop: asyncio.AbstractEventLoop | None = None,
     compression: Sequence[str] | None = None,
+    zlib_compression_level: int = -1,
     tls: bool = False,
     application: dict[str, Any] | None = None,
     w: str | int = "majority",
@@ -88,11 +95,13 @@ async def make_client(
     local_threshold: float = 0.015,
     max_pool_size: int = 100,
     write_concern: WriteConcern | None = None,
+    codec_options: CodecOptions | None = None,
 ) -> Kover:
     """Build a client and verify initial server selection.
 
     Timeout and latency values are seconds. An explicit ``write_concern``
     takes precedence over ``w``. The returned client owns its executor/pools.
+    ``zlib_compression_level`` ranges from -1 (zlib default) to 9.
 
     Returns:
         A client ready to execute commands against the selected deployment.
@@ -111,15 +120,18 @@ async def make_client(
         credentials=credentials,
         tls=tls,
         compression=compression,
+        zlib_compression_level=zlib_compression_level,
         application=application,
         loop=loop,
         max_pool_size=max_pool_size,
+        codec_options=codec_options,
     )
 
 
 async def from_uri(
     uri: str,
     loop: asyncio.AbstractEventLoop | None = None,
+    codec_options: CodecOptions | None = None,
 ) -> Kover:
     """Build a client from all URI seeds and verify initial server selection.
 
@@ -139,7 +151,7 @@ async def from_uri(
         options=DiscoveryOptions(
             replica_set=values.get("replicaSet"),
             direct_connection=values.get("directConnection", False),
-            # PyMongo normalizes these two URI timeouts to seconds.
+            # The URI parser normalizes these two timeouts to seconds.
             server_selection_timeout=values.get(
                 "serverSelectionTimeoutMS",
                 30.0,
@@ -164,9 +176,11 @@ async def from_uri(
         credentials=parsed.credentials,
         tls=values.get("tls", False),
         compression=values.get("compressors"),
+        zlib_compression_level=values.get("zlibCompressionLevel", -1),
         application=(
             {"name": values["appname"]} if "appname" in values else None
         ),
         loop=loop,
         max_pool_size=values.get("maxPoolSize", 100),
+        codec_options=codec_options,
     )

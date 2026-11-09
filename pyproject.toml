@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kover"
-version = "3.0.0"
+version = "3.1.0"
 description = "A fully asynchronous, strongly typed MongoDB driver for Python."
 readme = "README.md"
 authors = [{ name = "megawattka", email = "gunter56741@gmail.com" }]
@@ -36,10 +36,19 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "pydantic>=2.10.6",
-    "pymongo>=4.19",
+    "bson>=0.4.0",  # see below
+    "dnspython>=2.7.0",
+    "pydantic>=2.14.3",
     "typing-extensions>=4.16.0",
 ]
+
+[tool.uv.sources]
+bson = { index = "bson" }
+
+[[tool.uv.index]]
+url = "https://python.wattka.dev/"
+name = "bson"
+explicit = true
 
 [project.urls]
 Homepage = "https://github.com/megawattka/kover"

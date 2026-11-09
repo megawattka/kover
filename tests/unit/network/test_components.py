@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import struct
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
+import zlib
 
+from bson import CodecOptions, UuidRepresentation, decode
 import pytest
 
 from kover.exceptions import PoolClosedError
@@ -41,6 +45,47 @@ async def test_factory_connects_and_runs_authenticated_hello() -> None:
     assert created is connection
     connection.connect.assert_awaited_once()
     connection.hello.assert_awaited_once()
+
+
+@pytest.mark.parametrize("level", [-1, 0, 9])
+async def test_factory_passes_zlib_level_to_connection_codec(
+    level: int,
+) -> None:
+    connection = fake_connection()
+    constructor = MagicMock(return_value=connection)
+    factory = ConnectionFactory(
+        compression=["zlib"],
+        zlib_compression_level=level,
+    )
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr("kover.network.factory.Connection", constructor)
+        monkeypatch.setattr("kover.network.factory.Transport", MagicMock())
+        await factory.create(Address(host="db"))
+    codec = constructor.call_args.kwargs["codec"]
+    command = {"insert": "items", "data": "compressible" * 1000}
+    body = codec.encode(command, "shop", request_id=1)[16:]
+    codec.set_compressor("zlib")
+    wire = codec.encode(command, "shop", request_id=1)
+    assert struct.unpack_from("<iiB", wire, 16) == (2013, len(body), 2)
+    assert wire[25:] == zlib.compress(body, level=level)
+
+
+async def test_factory_passes_codec_options_to_connection_codec() -> None:
+    connection = fake_connection()
+    constructor = MagicMock(return_value=connection)
+    options = CodecOptions(uuid_representation=UuidRepresentation.STANDARD)
+    factory = ConnectionFactory(codec_options=options)
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr("kover.network.factory.Connection", constructor)
+        monkeypatch.setattr("kover.network.factory.Transport", MagicMock())
+        await factory.create(Address(host="db"))
+    codec = constructor.call_args.kwargs["codec"]
+    value = uuid4()
+    wire = codec.encode({
+        "insert": "items",
+        "uuid": value,
+    }, "shop", request_id=1)
+    assert decode(wire[21:], codec_options=options)["uuid"] == value
 
 
 async def test_factory_closes_connection_when_handshake_fails() -> None:

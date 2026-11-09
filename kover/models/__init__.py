@@ -1,3 +1,5 @@
+"""All exportable models for kover."""
+
 from .address import Address
 from .collation import Collation, CollationStrength
 from .collection import ValidationLevel
@@ -6,6 +8,7 @@ from .credentials import AuthCredentials
 from .hello import HelloResult
 from .indexes import Index, IndexDirection, IndexType
 from .operations import Delete, Update
+from .parsed_uri import ParsedUri
 from .read_preference import ReadPreference
 from .replica_set import (
     ReplicaSetConfig,
@@ -27,6 +30,7 @@ __all__ = (
     "Index",
     "IndexDirection",
     "IndexType",
+    "ParsedUri",
     "ReadConcern",
     "ReadPreference",
     "ReplicaSetConfig",

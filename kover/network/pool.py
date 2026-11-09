@@ -66,6 +66,9 @@ class ConnectionPool(IServerPool):
     ) -> ConnectionLease:
         """Acquire an exclusive connection lease.
 
+        Cancellation propagates after releasing any reserved capacity and
+        closing a newly created connection that has not been registered.
+
         Args:
             deadline: Absolute deadline measured by the event-loop clock.
 
@@ -73,8 +76,7 @@ class ConnectionPool(IServerPool):
             A lease returning the connection to this pool when released.
 
         Raises:
-            PoolClosedError: if pool is closed before checkout begins.
-            asyncio.CancelledError: if connection creation is cancelled.
+            PoolClosedError: if the pool closes before checkout completes.
         """
         connection = await self._take_idle_or_reserve(deadline)
         if connection is not None:
@@ -82,23 +84,26 @@ class ConnectionPool(IServerPool):
 
         try:
             connection = await self._create_connection(deadline)
-        except (Exception, asyncio.CancelledError):
+            async with self._condition:
+                if self._closed:
+                    raise PoolClosedError(  # ruff: ignore[raise-within-try]
+                        "pool closed during connection creation",
+                    )
+                self._checked_out.add(connection)
+        except (Exception, asyncio.CancelledError) as error:
+            # The reservation belongs to this checkout until registration,
+            # including while it waits for the condition after creation.
             async with self._condition:
                 self._total -= 1
                 self._condition.notify_all()
+            if connection is not None:
+                try:
+                    await connection.close()
+                except (Exception, asyncio.CancelledError) as cleanup_error:  # ruff: ignore[blind-except]
+                    error.add_note(
+                        f"Connection cleanup also failed: {cleanup_error!r}",
+                    )
             raise
-
-        async with self._condition:
-            closed_during_creation = self._closed
-            if closed_during_creation:
-                self._total -= 1
-                self._condition.notify(1)
-            else:
-                self._checked_out.add(connection)
-
-        if closed_during_creation:
-            await connection.close()
-            raise PoolClosedError("pool closed during connection creation")
 
         return ConnectionLease(self, connection)
 

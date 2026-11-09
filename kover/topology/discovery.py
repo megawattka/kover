@@ -5,14 +5,13 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from pymongo.uri_parser import parse_host
-
 from ..exceptions import OperationFailure, PoolTimeoutError, ProtocolError
 from ..models.address import Address
 from ..models.options import DiscoveryOptions
 from ..models.topology import ServerType
 from ..network.factory import ConnectionFactory
 from ..network.probe import ServerProbe
+from ..network.uri_parser import parse_host
 from .state import TopologyState
 
 if TYPE_CHECKING:
@@ -53,6 +52,8 @@ class ServerDiscovery:
             raise ValueError("at least one seed is required")
 
         self._seeds = {_key(seed): seed for seed in seeds}
+        # Addresses survive failed probes and empty published snapshots.
+        self._known_addresses = dict(self._seeds)
         if self.options.direct_connection and len(self._seeds) != 1:
             raise ValueError("directConnection requires exactly one seed")
 
@@ -214,7 +215,7 @@ class ServerDiscovery:
 
         self._errors.clear()
         accepted: dict[tuple[str, int], ServerDescription] = {}
-        known = dict(self._seeds)
+        known = dict(self._known_addresses)
         visited: set[tuple[str, int]] = set()
         pending: dict[asyncio.Task[ServerDescription | None], Address] = {}
         try:
@@ -277,4 +278,7 @@ class ServerDiscovery:
             suitable, members = self._accept(description)
             if suitable:
                 accepted[_key(address)] = description
-            known.update({_key(member): member for member in members})
+                self._known_addresses[_key(address)] = address
+            discovered = {_key(member): member for member in members}
+            self._known_addresses.update(discovered)
+            known.update(discovered)

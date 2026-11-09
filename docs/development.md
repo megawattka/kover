@@ -51,7 +51,7 @@ tests do not need individual asyncio markers.
 Run the complete suite with live integration explicitly disabled:
 
 ```bash
-KOVER_RUN_INTEGRATION=0 KOVER_RUN_SHARDED=0 uv run pytest tests -q
+KOVER_RUN_INTEGRATION=0 uv run pytest tests -q
 ```
 
 Integration tests should report skips, not silently connect to a developer's

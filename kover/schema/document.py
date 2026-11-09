@@ -81,6 +81,9 @@ class Document(BaseModel):
     def model_mongodb_schema(cls) -> dict[str, Any]:
         """Generate the MongoDB JSON Schema validator for this document model.
 
+        Unsupported constraints propagate ``SchemaGenerationException`` from
+        the generator. Defaults remain Pydantic-only.
+
         Returns:
             A MongoDB validator document containing the generated schema
             under the ``"$jsonSchema"`` key.

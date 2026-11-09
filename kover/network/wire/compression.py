@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 import importlib.util
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 import zlib
 
 from pydantic import BaseModel, Field
@@ -21,13 +21,14 @@ _HAVE_ZSTD = zstd is not None
 snappy = importlib.util.find_spec("snappy")
 _HAVE_SNAPPY = snappy is not None
 
+ZLIB_COMPRESSOR_ID: Final[int] = 2
+
 
 @lru_cache
 def _get_module(name: Literal["zstd", "snappy"]) -> ModuleType:
     return importlib.import_module(name)
 
 
-# TODO @megawattka: configurable level?
 class _ZlibContext(BaseModel):
     """Zlib compression context."""
 
@@ -66,7 +67,11 @@ class _SnappyContext(BaseModel):
 
 
 @lru_cache
-def get_context_by_id(compressor_id: int) -> CompressionContext:
+def get_context_by_id(
+    compressor_id: int,
+    *,
+    zlib_compression_level: int = -1,
+) -> CompressionContext:
     """Get the compression context by the compressor id.
 
     Returns:
@@ -76,9 +81,11 @@ def get_context_by_id(compressor_id: int) -> CompressionContext:
         ModuleNotFoundError: If the requested compression module
             is not available.
     """
+    if compressor_id == ZLIB_COMPRESSOR_ID:
+        return _ZlibContext(level=zlib_compression_level)
+
     compressors = {
         1: (_SnappyContext, _HAVE_SNAPPY, "Snappy"),
-        2: (_ZlibContext, True, ""),
         3: (_ZstdContext, _HAVE_ZSTD, "Zstd"),
     }
     ctx, available, module = compressors[compressor_id]

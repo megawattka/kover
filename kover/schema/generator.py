@@ -1,318 +1,250 @@
-"""kover schema generator module."""
+"""Pydantic entry point for MongoDB schema generation, without global hooks."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, override
+from collections.abc import Callable
+from functools import cached_property
+from typing import TYPE_CHECKING, Any, cast, override
 
-from pydantic.json_schema import (
-    DEFAULT_REF_TEMPLATE,
-    GenerateJsonSchema,
+from bson import (
+    Binary,
+    Code,
+    DatetimeMS,
+    DBRef,
+    Decimal128,
+    Int64,
+    MaxKey,
+    MinKey,
+    ObjectId,
+    Regex,
+    Timestamp,
 )
+from pydantic import TypeAdapter
+from pydantic.json_schema import GenerateJsonSchema
+
+from kover.exceptions import SchemaGenerationException
+
+from ._pipeline import mongodb_schema
 
 if TYPE_CHECKING:
     from pydantic.annotated_handlers import CoreSchemaOrField
-    from pydantic.json_schema import (
-        JsonSchemaMode,
-    )
+    from pydantic.json_schema import JsonSchemaMode
     from pydantic_core import CoreSchema
     from pydantic_core.core_schema import (
         BytesSchema,
         DateSchema,
         DatetimeSchema,
         DecimalSchema,
-        ModelField,
+        UuidSchema,
     )
 
 
-class MongoDBSchemaGenerator(GenerateJsonSchema):
-    """Generate MongoDB-compatible JSON Schema validators from Pydantic models.
+def _core_contract(value: Any) -> Any:  # ruff: ignore[any-type]
+    """Compare native BSON core contracts, not ambiguous JSON wire shapes.
 
-    The generator adapts Pydantic's JSON Schema output to MongoDB's
-    ``$jsonSchema`` dialect by converting JSON Schema types to BSON types,
-    translating numeric exclusivity constraints, preserving field metadata,
-    and adapting nested schemas, unions, enums, arrays, and mappings.
+    BSON 0.4 creates fresh Rust validator closures on every schema request.
+    Their names and the surrounding core schemas are stable; their identities
+    are not. Metadata and refs belong to the use site, not the type contract.
 
-    The generated schema is intended to be passed directly to MongoDB as a
-    collection validator.
-
-    Notes:
-        MongoDB's schema dialect is not identical to the JSON Schema dialect
-        emitted by Pydantic. Features unsupported by MongoDB, such as
-        ``$ref``, ``$defs``, and ``prefixItems``, must be resolved or
-        converted by the generator.
-
-        BSON subtypes, such as UUID ``binData`` subtype 4, cannot be enforced
-        using MongoDB's ``$jsonSchema`` validator and must be handled by the
-        application.
-
-    Example:
-        >>> schema = User.model_json_schema(
-        ...     by_alias=True,
-        ...     schema_generator=MongoDBSchemaGenerator,
-        ... )
-        >>> collection = database.create_collection(
-        ...     "users",
-        ...     validator=schema,
-        ... )
+    Returns:
+        A comparable structural fingerprint of a native core schema.
     """
-    def __init__(
-        self,
-        *,
-        by_alias: bool = True,
-        ref_template: str = DEFAULT_REF_TEMPLATE,
-        union_format: Literal[
-            "any_of",
-            "primitive_type_array",
-        ] = "any_of",
-    ) -> None:
-        super().__init__(
-            by_alias=by_alias,
-            ref_template=ref_template,
-            union_format=union_format,
+    if isinstance(value, dict):
+        return tuple(
+            sorted(
+                (key, _core_contract(child))
+                for key, child in cast("dict[str, Any]", value).items()
+                if key not in {"metadata", "ref"}
+            ),
         )
+    if isinstance(value, list):
+        return tuple(
+            _core_contract(child) for child in cast("list[Any]", value)
+        )
+    if isinstance(value, type):
+        return value
+    if isinstance(value, Callable):
+        function = cast("Callable[..., Any]", value)
+        return getattr(function, "__qualname__", repr(function))
+    return value
 
-        self._changed_refs: dict[str, dict[str, Any]] = {}
 
-    def _get_cached_ref(self, ref: dict[str, Any]) -> dict[str, Any] | None:
-        extracted = ref["$ref"]
-        return self._changed_refs.get(extracted)
+class MongoDBSchemaGenerator(GenerateJsonSchema):
+    """Generate strict MongoDB validators through copy-on-transform stages.
+
+    Native BSON core schemas are adapted locally, leaving BSON's Pydantic
+    validation and serialization untouched. References are expanded before
+    normalization, type mapping and compatibility checking. Unsupported
+    constraints raise ``SchemaGenerationException`` instead of disappearing.
+    Only validation mode is supported. BSON binary subtypes and constraints
+    inherent to BSON constructors are enforced by the application/codec.
+    """
+
+    @cached_property
+    def _bson_contracts(self) -> list[tuple[Any, dict[str, Any]]]:
+        return [
+            (_core_contract(TypeAdapter(cls).core_schema), target)
+            for cls, target in _BSON_SCHEMAS
+        ]
 
     @override
-    def bytes_schema(self, schema: BytesSchema) -> dict[str, Any]:
-        """Generates a JSON schema that matches a bytes value.
-
-        Args:
-            schema: The core schema.
-
-        Returns:
-            The generated JSON schema.
-        """
-        return {"bsonType": "binData"}
-
     def generate(
         self,
         schema: CoreSchema,
         mode: JsonSchemaMode = "validation",
     ) -> dict[str, Any]:
-        """Generates a JSON schema for a specified schema in a specified mode.
-
-        Args:
-            schema: A Pydantic model.
-            mode: The mode in which to generate the schema.
+        """Generate a collection validator.
 
         Returns:
-            A JSON schema representing the specified schema.
+            A MongoDB validator containing ``$jsonSchema``.
 
         Raises:
-            ValueError: If mode is serialization.
+            ValueError: If serialization mode is requested.
         """
         if mode != "validation":
-            raise ValueError(
-                "Unsupported mode. Only validation mode is supported.",
-            )
+            raise ValueError("Only validation mode is supported.")
 
-        result = super().generate(schema=schema, mode=mode)
-        if "$defs" in result:
-            del result["$defs"]
-
-        # result — схема корневой модели
-        result.setdefault("properties", {})["_id"] = {
-            "bsonType": "objectId",
-        }
-
-        required = result.setdefault("required", [])
-        if "_id" not in required:
-            required.append("_id")
-
-        del result["type"]
-        result["bsonType"] = "object"
-
-        return {"$jsonSchema": result}
-
-    def _resolve_ref_and_cache(self, field: dict[str, Any]) -> dict[str, Any]:
-        ref = field["$ref"]
-        cached = self._get_cached_ref(field)
-        if cached is not None:
-            return cached
-        field = self.resolve_ref_schema(field)
-        self._changed_refs[ref] = field
-        return field
-
-    def get_flattened_anyof(
-        self,
-        schemas: list[dict[str, Any]],
-    ) -> dict[str, Any]:
-        """Flatten unions and nullables into mongodb fields.
-
-        Returns:
-            Flattened object.
-        """
-        arr = super().get_flattened_anyof(schemas)
-
-        for idx in range(len(arr["anyOf"])):
-            arr["anyOf"][idx] = self._construct_field(arr["anyOf"][idx], {})
-
-        return arr
-
-    @staticmethod
-    def _should_skip_field(
-        field: dict[str, Any],
-        schema: dict[str, Any] | ModelField,
-    ) -> bool:
-        return any([
-            "anyOf" in field,
-            "type" not in field and schema.get("schema", {}).get("type") == "any",  # ruff: ignore[line-too-long]
-            "enum" in field,
-        ])
-
-    def _parse_pattern_properties(self, field: dict[str, Any]) -> None:
-        pprops = field.get("patternProperties")
-        if pprops is not None:
-            for key in pprops:
-                pprops[key] = self._construct_field(pprops[key], {"a": 4})
-
-    def _apply_array_transform(self, field: dict[str, Any]) -> None:
-        if "items" not in field:
-            prefix_items = field.pop("prefixItems")
-            field["items"] = [
-                self._construct_field(x, {}) for x in prefix_items
-            ]
-        else:
-            items = field["items"]
-            if "$ref" in items:
-                field["items"] = self._resolve_ref_and_cache(
-                    field["items"],
-                )
-            else:
-                field["items"] = self._construct_field(items, {})
-
-    def _parse_additiona_properties(
-        self,
-        field: dict[str, Any],
-    ) -> None:
-        additional = field.get("additionalProperties")
-        if additional is not None and not isinstance(additional, bool):
-            if "$ref" in additional:
-                field["additionalProperties"] = self._resolve_ref_and_cache(
-                    additional,
-                )
-            else:
-                field["additionalProperties"] = self._construct_field(
-                    additional, {},
-                )
-
-    @staticmethod
-    def _apply_type_transform(field: dict[str, Any]) -> None:
-        if "bsonType" not in field:  # if already cached
-            field["bsonType"] = field.pop("type")
-
-        if field["bsonType"] == "integer":
-            field["bsonType"] = ["int", "long"]
-
-        elif field["bsonType"] == "boolean":
-            field["bsonType"] = "bool"
-
-        elif field["bsonType"] == "number":
-            field["bsonType"] = "double"
-
-    @staticmethod
-    def _apply_title(
-        field: dict[str, Any],
-        schema: dict[str, Any] | ModelField,
-    ) -> None:
-        metadata = schema.get("metadata", {}).get("pydantic_js_updates", {})
-        if "title" in metadata:
-            field["title"] = metadata["title"]
-
-        elif "title" in field:
-            del field["title"]
-
-    def _construct_field(
-        self,
-        field: dict[str, Any],
-        schema: dict[str, Any] | ModelField,
-    ) -> dict[str, Any]:
-        for kw in ("transform", "format", "default"):
-            field.pop(kw, None)
-
-        if self._should_skip_field(field, schema):
-            return field
-
-        if "$ref" in field:
-            field = self._resolve_ref_and_cache(field)
-
-        if field.get("type") == "array":
-            self._apply_array_transform(field)
-
-        if "const" in field:
-            field["enum"] = [field.pop("const")]
-
-        self._parse_additiona_properties(field)
-        self._parse_pattern_properties(field)
-        self._apply_type_transform(field)
-
-        for ex, rm in [
-            ("exclusiveMinimum", "minimum"),
-            ("exclusiveMaximum", "maximum"),
-        ]:  # transform exclusive min/max to match older draft version
-            if ex in field:
-                field[rm] = field[ex]
-                field[ex] = True
-
-        self._apply_title(field, schema=schema)
-
-        return field
+        return mongodb_schema(super().generate(schema, mode=mode))
 
     @override
-    def decimal_schema(self, schema: DecimalSchema) -> dict[str, Any]:
-        """Generates a JSON schema that matches a decimal value.
-
-        Args:
-            schema: The core schema.
+    def generate_inner(self, schema: CoreSchemaOrField) -> dict[str, Any]:
+        """Adapt native BSON contracts while retaining use-site metadata.
 
         Returns:
-            The generated JSON schema.
+            A fresh schema for this core node.
         """
-        return {"bsonType": "decimal"}
-
-    def model_field_schema(self, schema: ModelField) -> dict[str, Any]:
-        """Generates a JSON schema.
-
-        Args:
-            schema: The core schema.
-
-        Returns:
-            The generated JSON schema.
-        """
-        result = super().model_field_schema(schema)
-        if "oneOf" in result:
-            return {"oneOf": [
-                self._construct_field(x, schema) for x in result["oneOf"]
-            ]}
-
-        return self._construct_field(result, schema)
+        if schema["type"] in {"json-or-python", "function-wrap"}:
+            contract = _core_contract(schema)
+            for native_contract, target in self._bson_contracts:
+                if contract == native_contract:
+                    metadata = schema.get("metadata", {})
+                    return super().generate_inner(
+                        {
+                            "type": "any",
+                            "metadata": {
+                                **metadata,
+                                "pydantic_js_updates": {
+                                    **target,
+                                    **metadata.get("pydantic_js_updates", {}),
+                                },
+                            },
+                        },
+                    )
+        return super().generate_inner(schema)
 
     @override
     def field_title_should_be_set(self, schema: CoreSchemaOrField) -> bool:
-        """Returns true if a title should be set.
-
-        Intuitively, we want this to return true for schemas
-        that wouldn't otherwise provide their own title
-        (e.g., int, float, str), and false for those that would
-        (e.g., BaseModel subclasses).
-
-        Args:
-            schema: The schema to check.
+        """Keep explicit titles, but do not synthesize field titles.
 
         Returns:
-            `True` if the field should have a title set, `False` otherwise.
+            False, disabling automatic field titles.
         """
         return False
 
     @override
+    def bytes_schema(self, schema: BytesSchema) -> dict[str, Any]:
+        """Represent bytes as BSON binary, rejecting unenforceable lengths.
+
+        Returns:
+            A BSON binary schema.
+        """
+        self._reject_constraints(schema, "min_length", "max_length")
+        return {"bsonType": "binData"}
+
+    @override
+    def uuid_schema(self, schema: UuidSchema) -> dict[str, Any]:
+        """Represent UUIDs as binary without changing UUID validation.
+
+        Returns:
+            A BSON binary schema.
+        """
+        self._reject_constraints(schema, "version")
+        return {"bsonType": "binData"}
+
+    @override
+    def decimal_schema(self, schema: DecimalSchema) -> dict[str, Any]:
+        """Retain numeric bounds, rejecting decimal digit/scale constraints.
+
+        Returns:
+            A decimal schema with all expressible numeric constraints.
+        """
+        self._reject_constraints(schema, "max_digits", "decimal_places")
+        keys = {
+            "ge": "minimum",
+            "le": "maximum",
+            "gt": "exclusiveMinimum",
+            "lt": "exclusiveMaximum",
+            "multiple_of": "multipleOf",
+        }
+        return {
+            "bsonType": "decimal",
+            **{
+                target: schema[key]
+                for key, target in keys.items()
+                if key in schema
+            },
+        }
+
+    @override
     def datetime_schema(self, schema: DatetimeSchema) -> dict[str, Any]:
+        """Map datetime to BSON date without discarding constraints.
+
+        Returns:
+            A BSON date schema.
+        """
+        self._reject_constraints(
+            schema,
+            "ge",
+            "le",
+            "gt",
+            "lt",
+            "now_op",
+            "tz_constraint",
+        )
         return {"bsonType": "date"}
 
     @override
     def date_schema(self, schema: DateSchema) -> dict[str, Any]:
-        raise TypeError("datetime.date cannot be used as annotation.")
+        """Reject dates, which BSON cannot encode without a conversion.
+
+        Raises:
+            SchemaGenerationException: Always; use datetime instead.
+        """
+        raise SchemaGenerationException(
+            "datetime.date cannot be used as annotation; use datetime.",
+        )
+
+    @staticmethod
+    def _reject_constraints(schema: Any, *keys: str) -> None:  # ruff: ignore[any-type]
+        for key in keys:
+            if key in schema:
+                raise SchemaGenerationException(
+                    f"MongoDB cannot enforce {key!r} for {schema['type']!r}.",
+                )
+
+
+_BSON_SCHEMAS: tuple[tuple[type, dict[str, Any]], ...] = (
+    (ObjectId, {"bsonType": "objectId"}),
+    (Int64, {"bsonType": "long"}),
+    (DatetimeMS, {"bsonType": "date"}),
+    (Decimal128, {"bsonType": "decimal"}),
+    (Binary, {"bsonType": "binData"}),
+    (Timestamp, {"bsonType": "timestamp"}),
+    (Regex, {"bsonType": "regex"}),
+    (Code, {"bsonType": ["javascript", "javascriptWithScope"]}),
+    (MinKey, {"bsonType": "minKey"}),
+    (MaxKey, {"bsonType": "maxKey"}),
+    # DBRef is encoded as a document, not the deprecated BSON DBPointer.
+    (
+        DBRef,
+        {
+            "type": "object",
+            "properties": {
+                "$ref": {"type": "string"},
+                "$id": {},
+                "$db": {"type": "string"},
+            },
+            "required": ["$ref", "$id"],
+        },
+    ),
+)

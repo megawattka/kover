@@ -44,6 +44,7 @@ asyncio.run(main())
 | `max_pool_size` | `100` | Maximum connections **per server**, including creation reservations |
 | `tls` | `False` | Use TLS with the default validating SSL context |
 | `compression` | `None` | Offered compressors, for example `("zlib",)` |
+| `zlib_compression_level` | `-1` | Zlib level: `-1` uses the default, `0` to `9` selects the level |
 | `application` | `None` | Client application metadata, for example `{"name": "worker"}` |
 | `w` | `"majority"` | Default write acknowledgement policy |
 | `write_concern` | `None` | Explicit `WriteConcern`, taking precedence over `w` |
@@ -80,10 +81,28 @@ mongodb://db1:27017,db2:27017/?replicaSet=rs0&serverSelectionTimeoutMS=5000
 The composition layer consumes seeds, credentials, `replicaSet`,
 `directConnection`, `readPreference`, repeated `readPreferenceTags`,
 `maxStalenessSeconds`, `serverSelectionTimeoutMS`, `connectTimeoutMS`,
-`localThresholdMS`, `maxPoolSize`, `tls`, `compressors`, `appName`, `w`,
+`localThresholdMS`, `maxPoolSize`, `tls`, `compressors`, `zlibCompressionLevel`, `appName`, `w`,
 `journal`, and `wTimeoutMS`. A parsed URI is **not** a promise that every
-PyMongo URI option is implemented by Kover; inspect `bootstrap.from_uri()` for
+recognized URI option is applied by Kover; inspect `bootstrap.from_uri()` for
 the supported mapping. `loadBalanced=true` is explicitly rejected.
+
+Kover parses URIs itself, without PyMongo. It supports multiple TCP seeds,
+bracketed IPv6, percent-encoded credentials, and `mongodb+srv://` discovery
+through asynchronous dnspython SRV/TXT queries. SRV targets must belong to the
+seed's parent domain; TXT can supply `authSource`, `replicaSet`, and
+`loadBalanced`, with explicit URI options taking precedence. SRV enables TLS
+by default unless `tls=false` (or `ssl=false`) is specified. `srvServiceName`
+selects the DNS service and `srvMaxHosts` limits the initial random seed set;
+there is no periodic DNS refresh.
+
+Option names are case-insensitive and `ssl` aliases `tls`. Unknown options,
+duplicate scalar options (including aliases), malformed values, conflicting
+settings, URI fragments, and Unix domain sockets raise `ValueError`.
+`readPreferenceTags` may repeat, preserving order. Options use either `&` or
+`;` separators, not both. Passwords and usernames must percent-encode reserved
+URI characters. A username without a password is treated as an empty password.
+Recognizing an `authMechanism` does not add support for that authentication
+protocol: Kover's authentication layer still implements only SCRAM.
 
 URI selection/connection timeouts are written in milliseconds and normalized
 internally to seconds. `connectTimeoutMS=0` maps to `None`. Write concern
@@ -118,6 +137,11 @@ and Zstandard need the `snappy` and `zstd` package extras respectively:
 ```bash
 python -m pip install 'kover[snappy,zstd]'
 ```
+
+Set `zlib_compression_level=9` with `compression=("zlib",)` in `make_client()`,
+or use `?compressors=zlib&zlibCompressionLevel=9` in a MongoDB URI.
+The default is `-1` (zlib's default); `0` disables compression within the zlib
+stream and `1` through `9` select increasing compression levels.
 
 ## Replica sets and direct connections
 

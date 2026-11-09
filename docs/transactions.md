@@ -67,7 +67,7 @@ not a substitute for closing its application sessions.
 | `STARTING` | Started locally; first command not yet acknowledged |
 | `IN_PROGRESS` | The server accepted the first transaction command |
 | `COMMITTING` | Commit is in progress or its outcome is unresolved |
-| `COMMITTED` | Commit returned successfully |
+| `COMMITTED` | Commit completed, including locally for an empty transaction |
 | `ABORTED` | Aborted or a non-unknown commit failure ended the transaction |
 
 The first transaction has `txnNumber=0`; every new transaction increments it.
@@ -75,6 +75,10 @@ The executor adds `lsid`, `txnNumber`, and `autocommit=false`. While state is
 `STARTING`, it also adds `startTransaction=true`. State changes to `IN_PROGRESS`
 only after the first command succeeds. The driver does not retry that command
 automatically if it fails.
+
+Commit, abort, and session close in `STARTING` finish the transaction locally
+without sending a command. They clear the server pin and do not advance the
+transaction number; starting another transaction advances it as usual.
 
 A transaction pins a **server address**, not a connection. Every command still
 checks out a pooled connection. Cursor continuations retain their server

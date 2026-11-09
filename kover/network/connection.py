@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import asyncio
 from itertools import count
+import struct
 from typing import TYPE_CHECKING, Any
+import zlib
+
+from bson.errors import InvalidBSON
 
 from .._utils.mappings import get_hello_payload
-from ..exceptions import NetworkError
+from ..exceptions import NetworkError, ProtocolError
 from .auth import Authenticator
 from .wire.codec import CommandCodec
 from .wire.error_mapper import ErrorMapper
@@ -85,7 +89,9 @@ class Connection:
             Response from server.
 
         Raises:
-            NetworkError: if connection is closed.
+            NetworkError: If the connection is closed or the reply
+                is truncated.
+            ProtocolError: If response framing or BSON is invalid.
         """
         if self._closed:
             raise NetworkError("connection is closed")
@@ -96,17 +102,25 @@ class Connection:
             database,
             request_id=request_id,
         )
-        exchanged = False
         try:
             message = await self._exchange(request, deadline)
-            reply = self._codec.decode(
-                message,
-                request_id=request_id,
-            )
-            exchanged = True
-        finally:
-            if not exchanged:
+            try:
+                reply = self._codec.decode(message, request_id=request_id)
+            except (
+                ValueError,
+                InvalidBSON,
+                struct.error,
+                zlib.error,
+            ) as error:
+                raise ProtocolError(str(error)) from error
+        except BaseException as error:
+            try:
                 await self.close()
+            except (Exception, asyncio.CancelledError) as cleanup_error:  # ruff: ignore[blind-except]
+                error.add_note(
+                    f"Connection cleanup also failed: {cleanup_error!r}",
+                )
+            raise
 
         await self._error_mapper.check_reply(reply, with_writes=True)
         return reply
@@ -120,9 +134,15 @@ class Connection:
 
         Returns:
             Reply from mongodb server.
+
+        Raises:
+            NetworkError: If the socket closes before the reply is complete.
         """
-        async with asyncio.timeout_at(deadline):
-            return await self._send_and_receive(request)
+        try:
+            async with asyncio.timeout_at(deadline):
+                return await self._send_and_receive(request)
+        except asyncio.IncompleteReadError as error:
+            raise NetworkError("MongoDB response was truncated") from error
 
     async def _send_and_receive(self, request: bytes) -> bytes:
         """Send one encoded request and receive one encoded response.
@@ -140,12 +160,15 @@ class Connection:
             Reply from mongodb server.
 
         Raises:
-            ValueError: if protocol error occur.
+            ProtocolError: If the response length is invalid.
         """
         prefix = await self._transport.receive(4)
-        length = self._codec.frame_length(prefix)
+        try:
+            length = self._codec.frame_length(prefix)
+        except ValueError as error:
+            raise ProtocolError(str(error)) from error
         if length > _MAX_MESSAGE_SIZE:
-            raise ValueError(f"invalid MongoDB message length: {length}")
+            raise ProtocolError(f"invalid MongoDB message length: {length}")
 
         return prefix + await self._transport.receive(length - 4)
 

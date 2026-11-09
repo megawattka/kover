@@ -7,9 +7,9 @@ class CursorIntegrationTests(MongoTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
         self.collection = await self.database.create_collection("items")
-        await self.collection.insert_many([
-            {"value": value} for value in range(37)
-        ])
+        await self.collection.insert_many(
+            [{"value": value} for value in range(37)],
+        )
 
     async def test_multiple_batches_and_early_close(self) -> None:
         cursor = self.collection.find().sort({"value": 1}).batch_size(2)
@@ -46,18 +46,40 @@ class SessionIntegrationTests(MongoTestCase):
 
     async def test_commit_with_session_cursor(self) -> None:
         self.session.start_transaction()
-        await self.collection.insert_many([
-            {"value": value} for value in range(9)
-        ], session=self.session)
-        async with self.collection.find(
+        await self.collection.insert_many(
+            [{"value": value} for value in range(9)],
             session=self.session,
-        ).sort({"value": 1}).batch_size(2) as cursor:
+        )
+        async with (
+            self.collection.find(
+                session=self.session,
+            )
+            .sort({"value": 1})
+            .batch_size(2) as cursor
+        ):
             assert [doc["value"] for doc in await cursor.to_list()] == list(
                 range(9),
             )
         await self.session.commit_transaction()
         assert self.session.state is TxnState.COMMITTED
         assert await self.collection.count() == 9
+
+    async def test_empty_transactions_finish_and_session_can_be_reused(
+        self,
+    ) -> None:
+        self.session.start_transaction()
+        await self.session.commit_transaction()
+        await self.session.commit_transaction()
+        assert self.session.state is TxnState.COMMITTED
+
+        self.session.start_transaction()
+        await self.session.abort_transaction()
+        assert self.session.state is TxnState.ABORTED
+
+        self.session.start_transaction()
+        await self.collection.insert_one({"value": 1}, session=self.session)
+        await self.session.commit_transaction()
+        assert await self.collection.count() == 1
 
     async def test_abort_and_reuse_session(self) -> None:
         self.session.start_transaction()

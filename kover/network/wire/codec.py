@@ -5,14 +5,16 @@ from __future__ import annotations
 import struct
 from typing import TYPE_CHECKING, Any, Final
 
-from bson import decode, encode  # pyright: ignore[reportUnknownVariableType]
-from bson.codec_options import CodecOptions, TypeRegistry
+from bson import decode, encode
+from bson.codec_options import DEFAULT_CODEC_OPTIONS
 
-from .bson_codecs import BytesToBinaryDecoder
-from .compression import get_context_by_id
+from .compression import ZLIB_COMPRESSOR_ID, get_context_by_id
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from bson.codec_options import CodecOptions
+
 
 OP_MSG: Final[int] = 2013
 OP_COMPRESSED: Final[int] = 2012
@@ -38,11 +40,16 @@ class CommandCodec:
     def __init__(
         self,
         compressor: str | None = None,
+        *,
+        zlib_compression_level: int = -1,
+        codec_options: CodecOptions | None = DEFAULT_CODEC_OPTIONS,
     ) -> None:
-        self._codec_options: CodecOptions[dict[str, Any]] = CodecOptions(
-            type_registry=TypeRegistry(type_codecs=[BytesToBinaryDecoder()]),
-        )
+        self._codec_options = codec_options or DEFAULT_CODEC_OPTIONS
         self._compressor = compressor
+        self._zlib_context = get_context_by_id(
+            ZLIB_COMPRESSOR_ID,
+            zlib_compression_level=zlib_compression_level,
+        )
 
     def set_compressor(
         self,
@@ -84,6 +91,7 @@ class CommandCodec:
             input command is not mutated.
         """
         document = {**command, "$db": database}  # order important
+
         # https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/#kind-0--body
         body_header = _MSG_BODY_HEADER.pack(
             0,  # flags
@@ -104,7 +112,12 @@ class CommandCodec:
                 "zlib": 2,
                 "zstd": 3,
             }[self._compressor]
-            compressed = get_context_by_id(compressor_id).compress(body)
+            context = (
+                self._zlib_context
+                if compressor_id == ZLIB_COMPRESSOR_ID
+                else get_context_by_id(compressor_id)
+            )
+            compressed = context.compress(body)
             compression_header = _COMPRESSION_HEADER.pack(
                 OP_MSG,  # originalOpcode
                 len(body),  # uncompressedSize, excluding the standard header

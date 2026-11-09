@@ -137,6 +137,7 @@ async def test_executor_invalidates_only_on_network_or_topology_failure(
 async def test_commit_success_advances_transaction_and_is_idempotent() -> None:
     session, executor = make_session()
     session.start_transaction()
+    session.mark_transaction_started()
     session.pin_server(Address(host="db"))
     await session.commit_transaction(deadline=12)
     assert session.state is TxnState.COMMITTED
@@ -167,6 +168,7 @@ async def test_commit_failure_changes_state_by_error_label(
 ) -> None:
     session, executor = make_session()
     session.start_transaction()
+    session.mark_transaction_started()
     session.pin_server(Address(host="db"))
     error = OperationFailure(91, "commit failed")
     if unknown:
@@ -189,6 +191,7 @@ async def test_abort_tolerates_missing_transaction_and_always_unpins() -> None:
     with pytest.raises(ValueError, match="no active transaction"):
         await session.abort_transaction()
     session.start_transaction()
+    session.mark_transaction_started()
     session.pin_server(Address(host="db"))
     executor.execute.side_effect = OperationFailure(251, "not active")
     await session.abort_transaction(deadline=5)
@@ -203,6 +206,7 @@ async def test_abort_tolerates_missing_transaction_and_always_unpins() -> None:
 async def test_abort_propagates_other_errors_but_clears_transaction() -> None:
     session, executor = make_session()
     session.start_transaction()
+    session.mark_transaction_started()
     session.pin_server(Address(host="db"))
     error = OperationFailure(8, "abort failed")
     executor.execute.side_effect = error
@@ -219,9 +223,41 @@ async def test_close_aborts_and_repr_uses_binary_session_id() -> None:
     session.document = {"id": b"\x01\x02"}
     assert "0102" in repr(session)
     session.start_transaction()
+    session.mark_transaction_started()
     await session.close()
     assert session.state is TxnState.ABORTED
     assert executor.execute.await_args.args[0] == {"abortTransaction": 1.0}
     await session.close()
     assert executor.execute.await_count == 1
+    await session.client.close()
+
+
+@pytest.mark.parametrize("action", ["commit", "abort", "close"])
+async def test_empty_transaction_finishes_without_sending_commands(
+    action: str,
+) -> None:
+    session, executor = make_session()
+    session.start_transaction()
+    session.pin_server(Address(host="db"))
+    if action == "commit":
+        await session.commit_transaction()
+        await session.commit_transaction()
+        assert session.state is TxnState.COMMITTED
+    elif action == "abort":
+        await session.abort_transaction()
+        await session.abort_transaction()
+        assert session.state is TxnState.ABORTED
+    else:
+        await session.close()
+        await session.close()
+        assert session.state is TxnState.ABORTED
+    assert session.pinned_server_address is None
+    executor.execute.assert_not_awaited()
+    assert session.tx_id == Int64(0)
+
+    session.start_transaction()
+    assert session.tx_id == Int64(1)
+    assert session.apply_to({})
+    await session.close()
+    executor.execute.assert_not_awaited()
     await session.client.close()

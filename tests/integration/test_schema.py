@@ -8,8 +8,20 @@ import os
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 from uuid import UUID, uuid4
 
-from bson import Binary, Decimal128, ObjectId
-from pydantic import ConfigDict, Field
+from bson import (
+    Binary,
+    Code,
+    DatetimeMS,
+    DBRef,
+    Decimal128,
+    Int64,
+    MaxKey,
+    MinKey,
+    ObjectId,
+    Regex,
+    Timestamp,
+)
+from pydantic import ConfigDict, Field, create_model
 import pytest
 
 from kover import AuthCredentials, make_client
@@ -453,7 +465,7 @@ async def test_bytes_are_stored_as_bindata(
     stored = await collection.find_one({"_id": object_id})
 
     assert stored is not None
-    assert isinstance(stored["data"], Binary)
+    assert isinstance(stored["data"], bytes)
 
 
 async def test_uuid_representation_as_bindata(
@@ -466,7 +478,7 @@ async def test_uuid_representation_as_bindata(
     stored = await collection.find_one({"_id": object_id})
 
     assert stored is not None
-    assert isinstance(stored["identifier"], Binary)
+    assert isinstance(stored["identifier"], bytes)
 
 
 async def test_decimal128_is_accepted(
@@ -513,5 +525,46 @@ async def test_generated_schema_is_used_directly(
     try:
         inserted_id = await insert_valid_document(collection)
         assert isinstance(inserted_id, ObjectId)
+    finally:
+        await collection.drop()
+
+
+@pytest.mark.parametrize(
+    ("annotation", "value"),
+    [
+        (ObjectId, ObjectId()),
+        (Int64, Int64(42)),
+        (DatetimeMS, DatetimeMS(0)),
+        (Decimal128, Decimal128("1.50")),
+        (Binary, Binary(b"data")),
+        (Timestamp, Timestamp(1, 2)),
+        (Regex, Regex("abc")),
+        (Code, Code("return 1")),
+        (Code, Code("return x", {"x": 1})),
+        (DBRef, DBRef("other", ObjectId(), "database")),
+        (MinKey, MinKey()),
+        (MaxKey, MaxKey()),
+        (tuple[()], ()),
+    ],
+)
+async def test_native_bson_validator_on_mongodb(
+    database: Database,
+    annotation: type,
+    value: Any,  # ruff: ignore[any-type]
+) -> None:
+    model = create_model(
+        "Native",
+        __base__=Document,
+        value=(annotation, ...),
+    )
+    collection = await database.create_collection(
+        f"native_{uuid4().hex}",
+        params={"validator": model.model_mongodb_schema()},
+    )
+    try:
+        await collection.insert_one({"value": value})
+        with pytest.raises(OperationFailure) as error:
+            await collection.insert_one({"value": "wrong BSON type"})
+        assert error.value.code == 121
     finally:
         await collection.drop()

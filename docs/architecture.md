@@ -1,8 +1,9 @@
 # Architecture
 
 Kover is a Python 3.12+ `asyncio` MongoDB driver. It uses asyncio streams for
-network I/O, Pydantic v2 for models, and PyMongo's BSON and URI utilities.
-Application commands are not delegated to a PyMongo client or a thread pool.
+network I/O, Pydantic v2 for models, the BSON package for serialization, and
+its own URI parser with asynchronous dnspython SRV/TXT discovery.
+Application commands are not delegated to a PyMongo client or a thread pool;
 
 See [connections](connections.md) for configuration,
 [read preferences](read_preferences.md) for routing,

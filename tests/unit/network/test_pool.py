@@ -74,7 +74,9 @@ async def test_creation_deadline_and_close_during_creation() -> None:
         await asyncio.Event().wait()
 
     pool = ConnectionPool(
-        Address(host="db"), blocked_factory, max_pool_size=1,
+        Address(host="db"),
+        blocked_factory,
+        max_pool_size=1,
     )
     deadline = asyncio.get_running_loop().time() + 0.03
     with pytest.raises(PoolTimeoutError, match="creation exceeded"):
@@ -110,6 +112,73 @@ async def test_cancelled_creation_propagates_and_frees_slot() -> None:
     lease = await asyncio.wait_for(pool.acquire(), timeout=1)
     assert lease.connection is replacement
     await lease.release()
+    await pool.close()
+
+
+@pytest.mark.parametrize("close_fails", [False, True])
+async def test_cancelled_checkout_after_creation_frees_slot(
+    *,
+    close_fails: bool,
+) -> None:
+    entered = asyncio.Event()
+    finish_creation = asyncio.Event()
+    created = asyncio.Event()
+    abandoned = connection()
+    replacement = connection()
+    if close_fails:
+        abandoned.close.side_effect = OSError("close failed")
+
+    async def factory() -> MagicMock:
+        entered.set()
+        await finish_creation.wait()
+        created.set()
+        return abandoned
+
+    create = AsyncMock(side_effect=factory)
+    pool = ConnectionPool(Address(host="db"), create, max_pool_size=1)
+    task = asyncio.create_task(pool.acquire())
+    try:
+        await asyncio.wait_for(entered.wait(), timeout=1)
+        # Prevent registration after the factory returns the connection.
+        async with pool._condition:  # pyright: ignore[reportPrivateUsage] # ruff: ignore[private-member-access]
+            finish_creation.set()
+            await asyncio.wait_for(created.wait(), timeout=1)
+            assert not task.done()
+            task.cancel()
+
+        with pytest.raises(asyncio.CancelledError) as caught:
+            await asyncio.wait_for(task, timeout=1)
+        abandoned.close.assert_awaited_once()
+        if close_fails:
+            assert any(
+                "close failed" in note for note in caught.value.__notes__
+            )
+
+        create.side_effect = None
+        create.return_value = replacement
+        lease = await asyncio.wait_for(pool.acquire(), timeout=1)
+        assert lease.connection is replacement
+        await lease.release()
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await pool.close()
+
+
+async def test_close_after_creation_closes_unregistered_connection() -> None:
+    pool_closed = asyncio.Event()
+    abandoned = connection()
+
+    async def factory() -> MagicMock:
+        await pool.close()
+        pool_closed.set()
+        return abandoned
+
+    pool = ConnectionPool(Address(host="db"), factory, max_pool_size=1)
+    with pytest.raises(PoolClosedError, match="during connection creation"):
+        await asyncio.wait_for(pool.acquire(), timeout=1)
+    assert pool_closed.is_set()
+    abandoned.close.assert_awaited_once()
     await pool.close()
 
 

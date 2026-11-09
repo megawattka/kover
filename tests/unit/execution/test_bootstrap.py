@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, patch
 
+from bson import CodecOptions, UuidRepresentation
 import pytest
 
 from kover.bootstrap import from_uri, make_client
@@ -18,6 +19,9 @@ async def test_make_client_composes_and_selects_server() -> None:
     credentials = AuthCredentials(username="user", password=password_value)
     preference = ReadPreference(mode="secondary")
     concern = WriteConcern(w=2, j=True)
+    codec_options = CodecOptions(
+        uuid_representation=UuidRepresentation.STANDARD,
+    )
     with (
         patch(
             "kover.bootstrap.ConnectionFactory",
@@ -37,6 +41,7 @@ async def test_make_client_composes_and_selects_server() -> None:
             27018,
             credentials=credentials,
             compression=("zlib",),
+            zlib_compression_level=9,
             tls=True,
             application={"name": "test"},
             replica_set="rs",
@@ -46,14 +51,17 @@ async def test_make_client_composes_and_selects_server() -> None:
             local_threshold=0.02,
             max_pool_size=5,
             write_concern=concern,
+            codec_options=codec_options,
         )
         assert isinstance(client, Kover)
         factory.assert_called_once_with(
             credentials=credentials,
             tls=True,
             compression=["zlib"],
+            zlib_compression_level=9,
             application={"name": "test"},
             loop=None,
+            codec_options=codec_options,
         )
         probe.assert_called_once_with(factory.return_value)
         settings = discovery.call_args.kwargs["options"]
@@ -88,6 +96,9 @@ async def test_make_client_composes_and_selects_server() -> None:
 
 
 async def test_from_uri_preserves_all_seeds_and_normalized_options() -> None:
+    codec_options = CodecOptions(
+        uuid_representation=UuidRepresentation.STANDARD,
+    )
     with patch(
         "kover.bootstrap._build_client",
         new_callable=AsyncMock,
@@ -98,10 +109,13 @@ async def test_from_uri_preserves_all_seeds_and_normalized_options() -> None:
             "&serverSelectionTimeoutMS=2500&connectTimeoutMS=0"
             "&localThresholdMS=20&maxPoolSize=7&w=2&journal=true"
             "&wTimeoutMS=125&readPreference=secondary"
-            "&readPreferenceTags=region:eu&maxStalenessSeconds=120",
+            "&readPreferenceTags=region:eu&maxStalenessSeconds=120"
+            "&zlibCompressionLevel=0",
+            codec_options=codec_options,
         )
     assert client is build.return_value
     args = build.call_args
+    assert args.kwargs["codec_options"] is codec_options
     assert args.args[0] == [
         Address(host="one", port=27018),
         Address(host="two", port=27019),
@@ -128,6 +142,7 @@ async def test_from_uri_preserves_all_seeds_and_normalized_options() -> None:
     )
     assert args.kwargs["max_pool_size"] == 7
     assert args.kwargs["compression"] == ["zlib"]
+    assert args.kwargs["zlib_compression_level"] == 0
     assert args.kwargs["application"] == {"name": "test"}
     assert args.kwargs["tls"] is True
 
@@ -143,6 +158,8 @@ async def test_from_uri_defaults_and_explicit_auth_source() -> None:
     assert settings.connect_timeout == 10
     assert settings.read_preference == ReadPreference()
     assert build.call_args.kwargs["credentials"].auth_database == "users"
+    assert build.call_args.kwargs["zlib_compression_level"] == -1
+    assert build.call_args.kwargs["codec_options"] is None
 
 
 async def test_from_uri_rejects_load_balancing_before_building() -> None:
@@ -194,4 +211,19 @@ async def test_invalid_pool_size_is_rejected_before_selection() -> None:
         pytest.raises(ValueError, match="max_pool_size"),
     ):
         await make_client(max_pool_size=0)
+    select.assert_not_awaited()
+
+
+@pytest.mark.parametrize("level", [-2, 10])
+async def test_invalid_zlib_level_is_rejected_before_selection(
+    level: int,
+) -> None:
+    with (
+        patch(
+            "kover.bootstrap.ServerSelector.select",
+            new_callable=AsyncMock,
+        ) as select,
+        pytest.raises(ValueError, match="level"),
+    ):
+        await make_client(zlib_compression_level=level)
     select.assert_not_awaited()

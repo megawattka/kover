@@ -7,8 +7,12 @@ from typing import TYPE_CHECKING, Any
 
 from .connection import Connection
 from .transport import Transport
+from .wire.codec import CommandCodec
+from .wire.compression import ZLIB_COMPRESSOR_ID, get_context_by_id
 
 if TYPE_CHECKING:
+    from bson import CodecOptions
+
     from ..models.address import Address
     from ..models.credentials import AuthCredentials
 
@@ -22,16 +26,24 @@ class ConnectionFactory:
         tls: bool = False,
         loop: asyncio.AbstractEventLoop | None = None,
         compression: list[str] | None = None,
+        zlib_compression_level: int = -1,
         application: dict[str, Any] | None = None,
         credentials: AuthCredentials | None = None,
+        codec_options: CodecOptions | None = None,
     ) -> None:
         self._tls = tls
         self._loop = loop
         self._compression = list(compression or ())
+        get_context_by_id(
+            ZLIB_COMPRESSOR_ID,
+            zlib_compression_level=zlib_compression_level,
+        )
+        self._zlib_compression_level = zlib_compression_level
         self._application = (
             dict(application) if application is not None else None
         )
         self._credentials = credentials
+        self._codec_options = codec_options
 
     async def create(
         self,
@@ -55,7 +67,14 @@ class ConnectionFactory:
             tls=self._tls,
             loop=self._loop,
         )
-        connection = Connection(address, transport)
+        connection = Connection(
+            address,
+            transport,
+            codec=CommandCodec(
+                zlib_compression_level=self._zlib_compression_level,
+                codec_options=self._codec_options,
+            ),
+        )
 
         try:
             async with asyncio.timeout_at(deadline):

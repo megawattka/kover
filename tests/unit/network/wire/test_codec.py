@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import struct
+from uuid import uuid4
 import zlib
 
 from bson import Binary, decode, encode  # pyright: ignore[reportUnknownVariableType]
+from bson.codec_options import CodecOptions
+from bson.binary import UuidRepresentation
 import pytest
 
 from kover.network.wire.codec import (
@@ -11,6 +14,7 @@ from kover.network.wire.codec import (
     OP_MSG,
     CommandCodec,
 )
+from kover.network.wire.compression import get_context_by_id
 
 
 def response(
@@ -68,6 +72,38 @@ def test_encode_op_msg_copies_input_and_overrides_database() -> None:
     assert command["$db"] == "wrong"
 
 
+@pytest.mark.parametrize("compressor", [None, "zlib"])
+def test_codec_applies_uuid_options_on_encode_and_decode(
+    compressor: str | None,
+) -> None:
+    options = CodecOptions(uuid_representation=UuidRepresentation.STANDARD)
+    codec = CommandCodec(compressor, codec_options=options)
+    value = uuid4()
+    wire = codec.encode(
+        {"insert": "items", "documents": [{"uuid": value}]},
+        "shop",
+        request_id=7,
+    )
+    body = wire[16:] if compressor is None else zlib.decompress(wire[25:])
+    document = decode(body[5:], codec_options=options)
+    assert document["documents"][0]["uuid"] == value
+
+    make_response = response if compressor is None else compressed_response
+    reply = make_response(
+        {"ok": 1, "uuid": Binary.from_uuid(value)},
+    )
+    assert codec.decode(reply, request_id=7)["uuid"] == value
+
+
+def test_default_codec_rejects_native_uuid() -> None:
+    with pytest.raises(ValueError, match="UNSPECIFIED"):
+        CommandCodec().encode(
+            {"insert": "items", "uuid": uuid4()},
+            "shop",
+            request_id=7,
+        )
+
+
 def test_encode_and_decode_compressed_op_msg() -> None:
     codec = CommandCodec("zlib")
     command = {"find": "items"}
@@ -76,11 +112,50 @@ def test_encode_and_decode_compressed_op_msg() -> None:
     assert codec.decode(compressed_response({"ok": 1}), request_id=7) == {
         "ok": 1,
     }
-    assert codec.decode(response({"data": Binary(b"\x00\xff")}), request_id=7)[
-        "data"
-    ] == Binary(b"\x00\xff")
+    assert (
+        codec.decode(response({"data": Binary(b"\x00\xff")}), request_id=7)[
+            "data"
+        ]
+        == b"\x00\xff"
+    )
     codec.set_compressor(None)
     assert codec.encode(command, "shop", request_id=5) != wire
+
+
+@pytest.mark.parametrize("level", [-1, 0, 1, 9])
+def test_codec_uses_configured_zlib_level_after_negotiation(
+    level: int,
+) -> None:
+    codec = CommandCodec(zlib_compression_level=level)
+    command = {"insert": "items", "data": "compressible" * 1000}
+    uncompressed = codec.encode(command, "shop", request_id=4)
+    codec.set_compressor("zlib")
+    wire = codec.encode(command, "shop", request_id=4)
+    assert struct.unpack_from("<i", wire, 12)[0] == OP_COMPRESSED
+    assert wire[25:] == zlib.compress(uncompressed[16:], level=level)
+    assert codec.decode(compressed_response({"ok": 1}), request_id=7) == {
+        "ok": 1,
+    }
+    codec.set_compressor(None)
+    codec.set_compressor("zlib")
+    assert codec.encode(command, "shop", request_id=4) == wire
+
+
+@pytest.mark.parametrize("level", [-2, 10])
+def test_codec_rejects_invalid_zlib_level(level: int) -> None:
+    with pytest.raises(ValueError, match="level"):
+        CommandCodec(zlib_compression_level=level)
+
+
+def test_zlib_context_cache_keeps_levels_separate() -> None:
+    payload = b"compressible" * 1000
+    uncompressed = get_context_by_id(2, zlib_compression_level=0)
+    compressed = get_context_by_id(2, zlib_compression_level=9)
+    assert uncompressed is get_context_by_id(2, zlib_compression_level=0)
+    assert uncompressed is not compressed
+    assert uncompressed.compress(payload) == zlib.compress(payload, level=0)
+    assert compressed.compress(payload) == zlib.compress(payload, level=9)
+    assert get_context_by_id(2).compress(payload) == zlib.compress(payload)
 
 
 def test_codec_rejects_invalid_compressor_and_frames() -> None:

@@ -109,8 +109,10 @@ class CommandExecutor(ICommandExecutor):
             if error.is_server_selection_error:
                 self._selector.invalidate(address)
             raise
+
         if prepared.starts_transaction and session is not None:
             session.mark_transaction_started()
+
         return CommandReply(reply, address)
 
     async def close(self) -> None:

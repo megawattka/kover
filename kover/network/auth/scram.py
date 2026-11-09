@@ -90,7 +90,7 @@ class ScramAuthenticator:
         server_first = bytes(start["payload"])
         fields = _parse_attributes(server_first)
         iterations = int(fields["i"])
-        if iterations <= MIN_ITERATIONS:
+        if iterations < MIN_ITERATIONS:
             raise ValueError("server sent an invalid iteration count")
 
         server_nonce = fields["r"]
