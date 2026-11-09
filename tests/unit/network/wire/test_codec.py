@@ -4,9 +4,8 @@ import struct
 from uuid import uuid4
 import zlib
 
-from bson import Binary, decode, encode  # pyright: ignore[reportUnknownVariableType]
+from bson import Binary, UuidRepresentation, decode, encode
 from bson.codec_options import CodecOptions
-from bson.binary import UuidRepresentation
 import pytest
 
 from kover.network.wire.codec import (
