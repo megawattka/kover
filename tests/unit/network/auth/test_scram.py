@@ -127,7 +127,7 @@ async def test_scram_rejects_invalid_mechanism_and_server_values() -> None:
     command, _, _, _ = make_exchange(
         "SCRAM-SHA-256",
         credentials,
-        iterations=MIN_ITERATIONS,
+        iterations=MIN_ITERATIONS - 1,
     )
     with (
         patch(
