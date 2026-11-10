@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kover"
-version = "3.1.0"
+version = "3.2.0"
 description = "A fully asynchronous, strongly typed MongoDB driver for Python."
 readme = "README.md"
 authors = [{ name = "megawattka", email = "gunter56741@gmail.com" }]
