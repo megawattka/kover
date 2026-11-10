@@ -10,9 +10,6 @@
 for Python 3.12+. Networking uses `asyncio` streams and MongoDB's `OP_MSG` /
 `OP_COMPRESSED` wire protocol directly, without thread-pool wrappers.
 
-**Project version:** `3.1.0`. Kover has its own API; it is not a drop-in
-replacement for PyMongo or Motor.
-
 ## Contents
 
 - [Capabilities and requirements](#capabilities-and-requirements)
