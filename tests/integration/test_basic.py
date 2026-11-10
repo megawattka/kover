@@ -77,7 +77,7 @@ class BasicTests(MongoTestCase):
         )
 
         user = User(name="dima", age=18)
-        document = user.to_dict()
+        document = user.model_dump()
         count = await collection.count()
         assert count == 0
 
@@ -97,10 +97,10 @@ class BasicTests(MongoTestCase):
     async def test_documents(self) -> None:  # ruff: ignore[no-self-use]
         assert issubclass(User, Document)
         user = User(name="john", age=16)
-        assert user.get_object_id() is None
-        document = user.to_dict()
+        assert user.object_id is None
+        document = user.model_dump()
         assert "_id" not in document
-        serialized = User.from_document(document)
+        serialized = User.model_validate(document)
         assert isinstance(serialized, User)
         assert serialized.name == "john"
         assert serialized.age == 16
@@ -113,12 +113,12 @@ class BasicTests(MongoTestCase):
             uuid=uuid4(),
             subdocument=subdocument,
         )
-        deserialized = sbcls.to_dict()
+        deserialized = sbcls.model_dump()
         assert len(deserialized.keys()) == 4
         assert isinstance(deserialized["uuid"], UUID)
         assert issubclass(Subclass, User)
         assert issubclass(Subclass, Document)
-        serialized = Subclass.from_document(deserialized)
+        serialized = Subclass.model_validate(deserialized)
         assert isinstance(serialized.uuid, UUID)
         assert isinstance(serialized.subdocument, SubDocument)
         assert serialized.subdocument.a == 1

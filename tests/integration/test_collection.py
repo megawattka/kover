@@ -23,10 +23,10 @@ class CollectionIntegrationTests(MongoTestCase):
         assert isinstance(document_id, ObjectId)
         found = await collection.find_one({"_id": document_id}, cls=Sample)
         assert found is not None
-        converted = found.to_dict()
+        converted = found.model_dump()
         del converted["_id"]
 
-        assert converted == sample.to_dict()
+        assert converted == sample.model_dump()
         assert isinstance(await collection.find_one(), dict)
         assert await collection.update(Update({"_id": document_id}, {
             "$set": {"age": 21},

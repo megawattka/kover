@@ -49,7 +49,7 @@ def prepare_command(
         and supports_write_concern(document)
         and "writeConcern" not in document
     ):
-        document["writeConcern"] = context.write_concern.to_dict()
+        document["writeConcern"] = context.write_concern.model_dump()
     starts_transaction = False
     if context.session is not None:
         starts_transaction = context.session.apply_to(document)

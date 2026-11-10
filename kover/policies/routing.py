@@ -71,7 +71,7 @@ def apply_rp_metadata(
         effective = ReadPreference(mode="primaryPreferred")
 
     if effective.mode != "primary":
-        result["$readPreference"] = effective.to_dict()
+        result["$readPreference"] = effective.model_dump()
     return result, effective
 
 

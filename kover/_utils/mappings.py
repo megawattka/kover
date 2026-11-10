@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import itertools
-from typing import TYPE_CHECKING, Any, overload
+from typing import TYPE_CHECKING, Annotated, Any, TypeVar, overload
+
+from pydantic import Field
 
 from ..__version__ import __version__
 from ..configuration.environment import get_runtime_environment
@@ -11,7 +13,7 @@ from ..configuration.environment import get_runtime_environment
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from .protocols import HasToDict
+    from pydantic import BaseModel
 
 
 def get_hello_payload(
@@ -67,7 +69,7 @@ def filter_non_null(doc: dict[str, Any]) -> dict[str, Any]:
 
 
 @overload
-def maybe_to_dict(obj: HasToDict | dict[str, Any]) -> dict[str, Any]: ...
+def maybe_to_dict(obj: BaseModel | dict[str, Any]) -> dict[str, Any]: ...
 
 
 @overload
@@ -75,16 +77,25 @@ def maybe_to_dict(obj: None) -> None: ...
 
 
 def maybe_to_dict(
-    obj: HasToDict | dict[str, Any] | None,
+    obj: BaseModel | dict[str, Any] | None,
 ) -> dict[str, Any] | None:
     """Convert an object to a dictionary.
 
-    Converts the object using its `to_dict` method if it has one,
-    otherwise returns the object as is if it is already a dictionary or None.
+    Converts a Pydantic model using its ``model_dump()`` method, otherwise
+    returns the object unchanged if it is already a dictionary or None.
 
     Returns:
         The object converted to a dictionary, or None if the input is None.
     """
     if obj is None or isinstance(obj, dict):
         return obj
-    return obj.to_dict()
+
+    return obj.model_dump()
+
+
+T = TypeVar("T")
+
+ExcludeIfNone = Annotated[
+    T | None,
+    Field(exclude_if=lambda v: v is None),
+]

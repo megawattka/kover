@@ -1,15 +1,6 @@
 """Internal protocols for kover."""
 
-from typing import Any, Protocol, runtime_checkable
-
-
-@runtime_checkable
-class HasToDict(Protocol):
-    """Protocol for objects that can be converted to a dictionary."""
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize object into dict."""
-        ...
+from typing import Protocol
 
 
 class CompressionContext(Protocol):

@@ -56,11 +56,40 @@ def test_native_bson_types(
 ) -> None:
     model = create_model("Native", value=(annotation, ...), __base__=Document)
     ordinary = deepcopy(model.model_json_schema())
-    core = deepcopy(model.__pydantic_core_schema__)
-    result = model.model_mongodb_schema()["$jsonSchema"]["properties"]["value"]
+
+    core = repr(model.__pydantic_core_schema__)
+    schema = model.model_mongodb_schema()
+    result = schema["$jsonSchema"]["properties"]["value"]
+
     assert result["bsonType"] == expected
     assert model.model_json_schema() == ordinary
-    assert model.__pydantic_core_schema__ == core
+    assert repr(model.__pydantic_core_schema__) == core
+
+
+def test_document_id_is_nullable_only_in_python() -> None:
+    class Native(Document):
+        value: ObjectId | None = None
+
+    ordinary = deepcopy(Native.model_json_schema())
+    core = repr(Native.__pydantic_core_schema__)
+    schema = Native.model_mongodb_schema()["$jsonSchema"]
+    assert schema["properties"]["_id"] == {"bsonType": "objectId"}
+    assert schema["required"] == ["_id"]
+    assert schema["properties"]["value"]["anyOf"] == [
+        {"bsonType": "objectId"},
+        {"bsonType": "null"},
+    ]
+
+    for document in (Native(), Native(_id=None)):
+        assert document.object_id is None
+        assert "_id" not in document.model_dump(by_alias=True)
+
+    identifier = ObjectId()
+    document = Native.model_validate({"_id": identifier})
+    assert document.object_id == identifier
+    assert document.model_dump(by_alias=True)["_id"] == identifier
+    assert Native.model_json_schema() == ordinary
+    assert repr(Native.__pydantic_core_schema__) == core
 
 
 def test_native_bson_values_retain_native_serialization() -> None:
@@ -95,7 +124,8 @@ def test_bson_in_nested_containers_and_unions() -> None:
         optional: Decimal128 | None = None
         pair: tuple[Binary, Int64]
 
-    props = Native.model_mongodb_schema()["$jsonSchema"]["properties"]
+    schema = Native.model_mongodb_schema()
+    props = schema["$jsonSchema"]["properties"]
     assert props["ids"]["items"] == {"bsonType": "objectId"}
     assert props["mapping"]["additionalProperties"] == {
         "bsonType": "timestamp",
@@ -114,7 +144,8 @@ def test_wire_shaped_string_is_not_an_object_id() -> None:
     class Native(Document):
         text: Annotated[str, Field(pattern="^[0-9a-fA-F]{24}$")]
 
-    prop = Native.model_mongodb_schema()["$jsonSchema"]["properties"]["text"]
+    schema = Native.model_mongodb_schema()
+    prop = schema["$jsonSchema"]["properties"]["text"]
     assert prop == {"bsonType": "string", "pattern": "^[0-9a-fA-F]{24}$"}
 
 
@@ -286,7 +317,8 @@ def test_metadata_and_default_handling() -> None:
             description="Description",
         )
 
-    props = Native.model_mongodb_schema()["$jsonSchema"]["properties"]
+    schema = Native.model_mongodb_schema()
+    props = schema["$jsonSchema"]["properties"]
     assert props["value"]["title"] == "Explicit"
     assert props["value"]["description"] == "Description"
     assert "default" not in props["value"]
@@ -297,7 +329,8 @@ def test_decimal_bounds_are_not_discarded() -> None:
     class Native(Document):
         amount: Annotated[Decimal, Field(gt=1, le=10, multiple_of=0.5)]
 
-    prop = Native.model_mongodb_schema()["$jsonSchema"]["properties"]["amount"]
+    schema = Native.model_mongodb_schema()
+    prop = schema["$jsonSchema"]["properties"]["amount"]
     assert prop == {
         "bsonType": "decimal",
         "minimum": 1,

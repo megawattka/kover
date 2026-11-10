@@ -58,7 +58,7 @@ async def test_update_delete_clear_serialize_requests_and_results() -> None:
     assert command.await_args is not None
     assert command.await_args.args[0] == {
         "update": "items",
-        "updates": [update.to_dict()],
+        "updates": [update.model_dump()],
         "ordered": True,
         "maxTimeMS": 0,
         "bypassDocumentValidation": False,
@@ -77,7 +77,7 @@ async def test_update_delete_clear_serialize_requests_and_results() -> None:
     )
     assert command.await_args.args[0] == {
         "delete": "items",
-        "deletes": [delete.to_dict()],
+        "deletes": [delete.model_dump()],
         "comment": "cleanup",
         "ordered": True,
         "writeConcern": {"w": 1, "j": True},
@@ -87,7 +87,7 @@ async def test_update_delete_clear_serialize_requests_and_results() -> None:
     command.return_value = {"n": 9}
     assert await collection.clear() == 9
     assert command.await_args.args[0]["deletes"] == [
-        Delete({}, limit=0).to_dict(),
+        Delete({}, limit=0).model_dump(),
     ]
 
 
@@ -114,10 +114,10 @@ async def test_query_commands_and_aggregation_options() -> None:
         "query": {"active": True},
         "limit": 10,
         "maxTimeMS": 0,
-        "readConcern": concern.to_dict(),
+        "readConcern": concern.model_dump(),
         "skip": 2,
         "hint": "active_1",
-        "collation": collation.to_dict(),
+        "collation": collation.model_dump(),
         "comment": "count",
     }
 
@@ -147,8 +147,8 @@ async def test_query_commands_and_aggregation_options() -> None:
         "allowDiskUse": True,
         "maxTimeMS": 0,
         "bypassDocumentValidation": False,
-        "readConcern": concern.to_dict(),
-        "collation": collation.to_dict(),
+        "readConcern": concern.model_dump(),
+        "collation": collation.model_dump(),
         "hint": "active_1",
         "writeConcern": {"w": 2},
         "let": {"x": 1},
@@ -162,7 +162,7 @@ async def test_collection_metadata_and_index_management() -> None:
     assert command.await_args is not None
     assert command.await_args.args[0] == {
         "createIndexes": "items",
-        "indexes": [index.to_dict()],
+        "indexes": [index.model_dump()],
         "comment": "create",
     }
     with pytest.raises(ValueError, match="Empty sequence"):
@@ -217,6 +217,7 @@ async def test_convert_to_capped_validator_and_drop() -> None:
     collection, command = make_collection()
     with pytest.raises(ValueError, match="size below zero"):
         await collection.convert_to_capped(0)
+
     await collection.convert_to_capped(
         4096,
         WriteConcern(w=1),

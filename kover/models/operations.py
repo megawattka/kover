@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any, NotRequired, TypedDict, Unpack
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
+from .._utils import ExcludeIfNone  # ruff: ignore[typing-only-first-party-import]
 from .collation import Collation  # ruff: ignore[typing-only-first-party-import]
 
 
@@ -23,6 +24,8 @@ class _UpdateKwargs(TypedDict):
 class Update(BaseModel):
     """Represents a MongoDB update document."""
 
+    model_config = ConfigDict(serialize_by_alias=True)
+
     def __init__(
         self,
         q: dict[str, Any],
@@ -35,20 +38,17 @@ class Update(BaseModel):
 
     q: dict[str, Any]
     u: dict[str, Any]
-    c: dict[str, Any] | None = None
+    c: ExcludeIfNone[dict[str, Any]] = None
     upsert: bool = False
     multi: bool = False
-    collation: Collation | None = None
+    collation: ExcludeIfNone[Collation] = None
     array_filters: dict[str, Any] | None = Field(
         default=None,
         serialization_alias="arrayFilters",
+        exclude_if=lambda v: v is None,
     )
-    hint: str | None = None
-    sort: dict[str, Any] | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        """Return the model as a dictionary using serialization aliases."""
-        return self.model_dump(by_alias=True, exclude_none=True)
+    hint: ExcludeIfNone[str] = None
+    sort: ExcludeIfNone[dict[str, Any]] = None
 
     def as_bulk_write_op(self) -> dict[str, Any]:
         """Serialize This model for BulkWriteBuilder.
@@ -91,12 +91,8 @@ class Delete(BaseModel):
 
     q: dict[str, Any]
     limit: int
-    collation: Collation | None = None
-    hint: dict[str, Any] | str | None = None
-
-    def to_dict(self) -> dict[str, Any]:
-        """Return the model as a dictionary."""
-        return self.model_dump(exclude_none=True)
+    collation: ExcludeIfNone[Collation] = None
+    hint: ExcludeIfNone[dict[str, Any] | str] = None
 
     def as_bulk_write_op(self) -> dict[str, Any]:
         """Serialize This model for BulkWriteBuilder.

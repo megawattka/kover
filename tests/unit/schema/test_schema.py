@@ -244,7 +244,7 @@ def test_root_id_is_required() -> None:
     assert "_id" in required
 
 
-def test_nested_documents_do_not_receive_id() -> None:
+def test_nested_document_id_is_optional() -> None:
     root = get_root_schema(User)
     properties: dict[str, Any] = root["properties"]
 
@@ -256,7 +256,7 @@ def test_nested_documents_do_not_receive_id() -> None:
     any_of: dict[str, Any] = friend["anyOf"]
     assert isinstance(any_of, list)
 
-    friend_object = next(
+    friend_object: dict[str, Any] = next(
         branch
         for branch in any_of
         if isinstance(branch, dict) and "properties" in branch
@@ -268,7 +268,7 @@ def test_nested_documents_do_not_receive_id() -> None:
     assert isinstance(friend_properties, dict)
     assert isinstance(friend_required, list)
 
-    assert "_id" not in friend_properties
+    assert friend_properties["_id"] == {"bsonType": "objectId"}  # pyright: ignore[reportArgumentType]
     assert "_id" not in friend_required
 
 

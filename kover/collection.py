@@ -230,7 +230,7 @@ class Collection:
         """
         command = filter_non_null({
             "update": self.name,
-            "updates": [update.to_dict() for update in updates],
+            "updates": [update.model_dump() for update in updates],
             "ordered": ordered,
             "maxTimeMS": max_time_ms,
             "bypassDocumentValidation": bypass_document_validation,
@@ -273,7 +273,7 @@ class Collection:
         """
         command = filter_non_null({
             "delete": self.name,
-            "deletes": [delete.to_dict() for delete in deletes],
+            "deletes": [delete.model_dump() for delete in deletes],
             "comment": comment,
             "let": let,
             "ordered": ordered,
@@ -402,7 +402,7 @@ class Collection:
         return Cursor(
             query=query,
             collection=self,
-            decoder=cls.from_document,
+            decoder=cls.model_validate,
             session=session,
         )
 
@@ -603,7 +603,7 @@ class Collection:
         command = filter_non_null({
             "createIndexes": self.name,
             "indexes": [
-                index.to_dict() for index in indexes
+                index.model_dump() for index in indexes
             ],
             "comment": comment,
         })

@@ -557,9 +557,10 @@ async def test_native_bson_validator_on_mongodb(
         __base__=Document,
         value=(annotation, ...),
     )
+    schema = model.model_mongodb_schema()
     collection = await database.create_collection(
         f"native_{uuid4().hex}",
-        params={"validator": model.model_mongodb_schema()},
+        params={"validator": schema},
     )
     try:
         await collection.insert_one({"value": value})

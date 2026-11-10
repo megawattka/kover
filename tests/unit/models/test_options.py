@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 
 from pydantic import ValidationError
@@ -11,14 +12,14 @@ from kover.models.read_preference import ReadPreference
 
 
 def test_concern_models_serialize_defaults_and_optional_fields() -> None:
-    assert WriteConcern().to_dict() == {"w": "majority"}
-    assert WriteConcern(w=2, j=True, wtimeout=400).to_dict() == {
+    assert WriteConcern().model_dump() == {"w": "majority"}
+    assert WriteConcern(w=2, j=True, wtimeout=400).model_dump() == {
         "w": 2,
         "j": True,
         "wtimeout": 400,
     }
-    assert ReadConcern().to_dict() == {"level": "local"}
-    assert ReadConcern(level="snapshot").to_dict() == {"level": "snapshot"}
+    assert ReadConcern().model_dump() == {"level": "local"}
+    assert ReadConcern(level="snapshot").model_dump() == {"level": "snapshot"}
     with pytest.raises(ValidationError):
         ReadConcern(level="invalid")  # pyright: ignore[reportArgumentType]
 
@@ -61,18 +62,64 @@ def test_read_preference_wire_data_is_fresh_and_validated() -> None:
         tag_sets=({"region": "west"}, {}),
         max_staleness_seconds=90,
     )
-    first = preference.to_dict()
+    first = preference.model_dump()
     assert first == {
         "mode": "nearest",
         "tags": [{"region": "west"}, {}],
         "maxStalenessSeconds": 90,
     }
     first["tags"][0]["region"] = "mutated"
-    assert preference.to_dict()["tags"][0] == {"region": "west"}
-    assert ReadPreference().to_dict() == {"mode": "primary"}
+    assert preference.model_dump()["tags"][0] == {"region": "west"}
+    assert ReadPreference().model_dump() == {"mode": "primary"}
     with pytest.raises(ValidationError):
         ReadPreference(mode="primary", tag_sets=({"dc": "east"},))
     with pytest.raises(ValidationError):
         ReadPreference(mode="secondary", max_staleness_seconds=89)
     with pytest.raises(ValidationError):
         ReadPreference(mode="nearest", max_staleness_seconds=0)
+
+
+@pytest.mark.parametrize(
+    ("tag_sets", "expected_tags"),
+    [
+        (None, None),
+        ((), []),
+        ((dict[str, str](),), [dict[str, str]()]),
+        (({"dc": "east"},), [{"dc": "east"}]),
+    ],
+)
+def test_read_preference_serialization_modes_and_nesting(
+    tag_sets: tuple[dict[str, str], ...] | None,
+    expected_tags: list[dict[str, str]] | None,
+) -> None:
+    preference = ReadPreference(mode="secondary", tag_sets=tag_sets)
+    expected: dict[str, object] = {"mode": "secondary"}
+    if expected_tags is not None:
+        expected["tags"] = expected_tags
+
+    assert preference.model_dump() == expected
+    assert preference.model_dump(mode="json") == expected
+    assert json.loads(preference.model_dump_json()) == expected
+    assert preference.to_dict() == expected
+    options = DiscoveryOptions(read_preference=preference)
+    assert options.model_dump()["read_preference"] == expected
+
+
+def test_read_preference_serialization_respects_dump_options() -> None:
+    preference = ReadPreference(
+        mode="nearest",
+        tag_sets=({"dc": "east"},),
+        max_staleness_seconds=90,
+    )
+    assert preference.model_dump(include={"tag_sets"}) == {
+        "tags": [{"dc": "east"}],
+    }
+    assert preference.model_dump(exclude={"tag_sets"}) == {
+        "mode": "nearest",
+        "maxStalenessSeconds": 90,
+    }
+    assert preference.model_dump(by_alias=False) == {
+        "mode": "nearest",
+        "tag_sets": [{"dc": "east"}],
+        "max_staleness_seconds": 90,
+    }

@@ -5,7 +5,13 @@ from __future__ import annotations
 from collections.abc import Mapping  # ruff: ignore[typing-only-standard-library-import]
 from typing import Any, Final, Literal, Self
 
-from pydantic import BaseModel, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    model_validator,
+)
 
 ReadPreferenceMode = Literal[
     "primary",
@@ -32,9 +38,26 @@ class ReadPreference(BaseModel):
     ``-1`` disables max staleness. Transactions require primary reads.
     """
 
+    model_config = ConfigDict(serialize_by_alias=True)
+
     mode: ReadPreferenceMode = "primary"
-    tag_sets: tuple[Mapping[str, str], ...] | None = None
-    max_staleness_seconds: int = -1
+    tag_sets: tuple[Mapping[str, str], ...] | None = Field(
+        default=None,
+        serialization_alias="tags",
+        exclude_if=lambda value: value is None,
+    )
+    max_staleness_seconds: int = Field(
+        default=-1,
+        serialization_alias="maxStalenessSeconds",
+        exclude_if=lambda value: value == -1,
+    )
+
+    @field_serializer("tag_sets")
+    @staticmethod
+    def _serialize_tag_sets(
+        value: tuple[Mapping[str, str], ...] | None,
+    ) -> list[dict[str, str]] | None:
+        return None if value is None else [dict(tags) for tags in value]
 
     @model_validator(mode="after")
     def _validate_read_preference(self) -> Self:
@@ -56,11 +79,4 @@ class ReadPreference(BaseModel):
 
     def to_dict(self) -> dict[str, Any]:
         """Return a fresh wire-protocol read preference document."""
-        result: dict[str, Any] = {"mode": self.mode}
-        if self.tag_sets is not None:
-            result["tags"] = [dict(tags) for tags in self.tag_sets]
-
-        if self.max_staleness_seconds != -1:
-            result["maxStalenessSeconds"] = self.max_staleness_seconds
-
-        return result
+        return self.model_dump()

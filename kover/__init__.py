@@ -22,7 +22,7 @@
 
 from ._utils import (
     CompressionContext,
-    HasToDict,
+    ExcludeIfNone,
     chain,
     classrepr,
     filter_non_null,
@@ -112,11 +112,11 @@ __all__ = (
     "Delete",
     "Document",
     "DriverError",
+    "ExcludeIfNone",
     "File",
     "GridFS",
     "GridFSFileNotFound",
     "Handshake",
-    "HasToDict",
     "HelloResult",
     "IncorrectGridFSData",
     "Index",

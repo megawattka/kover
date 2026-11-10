@@ -33,10 +33,8 @@ class Friend(Document):  # ruff: ignore[undocumented-public-class]
     age: Annotated[int, Field(ge=18)]  # minimum age is 18.
 
 
-# kover automatically generates aliases using camel case.
-# so user_type will be "userType" in db
-# if you still need to snake cased field_name
-# use explicit alias="<snake_cased_name>"
+# Field names are stored unchanged unless an explicit alias is declared.
+# For example, Field(alias="userType") would store user_type as "userType".
 class User(Document):  # ruff: ignore[undocumented-public-class]
     name: Annotated[str, Field(description="must be a string")]
     age: Annotated[
@@ -70,7 +68,7 @@ async def main() -> None:
         user_type=UserType.USER,
         friend=Friend(name="dima", age=18),
     )
-    # function accepts either valid_user or valid_user.to_dict()
+    # insert_one accepts either valid_user or valid_user.model_dump().
     object_id = await collection.insert_one(valid_user)
     log.info("%s, added!", object_id)
 

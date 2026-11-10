@@ -42,7 +42,7 @@ def test_bulk_write_build_preserves_namespace_order_and_options() -> None:
                 "constants": None,
                 "upsert": True,
                 "multi": False,
-                "collation": Collation(locale="en").to_dict(),
+                "collation": Collation(locale="en").model_dump(),
             },
             {
                 "delete": 1,

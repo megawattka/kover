@@ -117,7 +117,7 @@ class UpstreamFeatureTests(MongoTestCase):
         file, stream = await fs.get_by_filename("text.txt")
         assert stream.read() == "привет".encode()
         assert file.metadata == {"source": "test"}
-        assert file.get_object_id() == identifier
+        assert file.object_id == identifier
         checked = await fs.put(b"original", chunk_size=3)
         await self.database.fs.chunks.update(
             Update(

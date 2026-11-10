@@ -1,9 +1,11 @@
 """MongoDB collation model."""
 
 from enum import Enum
-from typing import Any, Literal
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from .._utils import ExcludeIfNone  # ruff: ignore[typing-only-first-party-import]
 
 
 class CollationStrength(Enum):
@@ -20,7 +22,9 @@ class CollationStrength(Enum):
 class Collation(BaseModel):
     """Represents a MongoDB collation document."""
 
-    locale: str | None = None
+    model_config = ConfigDict(serialize_by_alias=True)
+
+    locale: ExcludeIfNone[str] = None
     case_level: bool = Field(default=False, serialization_alias="caseLevel")
     case_first: Literal["lower", "upper", "off"] = Field(
         default="off",
@@ -35,10 +39,7 @@ class Collation(BaseModel):
     max_variable: Literal["punct", "space"] | None = Field(
         default=None,
         serialization_alias="maxVariable",
+        exclude_if=lambda v: v is None,
     )
     backwards: bool = False
     normalization: bool = False
-
-    def to_dict(self) -> dict[str, Any]:
-        """Return the model as a dictionary using serialization aliases."""
-        return self.model_dump(by_alias=True, exclude_none=True)

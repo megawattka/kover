@@ -58,9 +58,11 @@ async def main() -> None:
                 ) as cursor:
                     documents = await cursor.to_list()
             except ServerSelectionError:
-                log.warning("No eligible server for %s", preference.to_dict())
+                log.warning(
+                    "No eligible server for %s", preference.model_dump(),
+                )
             else:
-                log.info("%s: found: %s", preference.to_dict(), documents)
+                log.info("%s: found: %s", preference.model_dump(), documents)
 
         # command() accepts an explicit policy too. Keep the command name
         # first; only supported read commands use non-primary routing.

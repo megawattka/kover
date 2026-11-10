@@ -226,8 +226,10 @@ automatic retries and custom TLS certificate options are not implemented.
 
 ## Typed documents and BSON
 
-`Document` extends Pydantic's `BaseModel` with `extra="forbid"` and
-`use_enum_values=True`. MongoDB's `_id` is held in a private attribute.
+`Document` extends Pydantic's `BaseModel` with `extra="forbid"`,
+`use_enum_values=True`, and `serialize_by_alias=True`. MongoDB's `_id` is a
+regular model field named `object_id`, with alias `_id` and default `None`.
+`model_dump()` uses field aliases and omits `_id` when its value is `None`.
 
 ```python
 from uuid import UUID, uuid4
@@ -263,12 +265,32 @@ client = await from_uri(
 UUIDs as binary subtype 4 and decodes them back to `UUID`. The default
 `UNSPECIFIED` representation rejects native UUID encoding.
 
-| Method | Purpose |
+| API | Purpose |
 | --- | --- |
-| `doc.to_dict(*, exclude_id=False)` | Python-mode dump using field aliases, including `_id` when set |
-| `Model.from_document(payload)` | Validate a MongoDB document and attach its `_id` |
-| `doc.get_object_id()` / `doc.set_object_id(value)` | Access the document ID |
+| `doc.model_dump()` | Python-mode dump using field aliases, including `_id` when set |
+| `doc.model_dump(exclude={"object_id"})` | Dump without `_id`; exclusion uses the Python field name |
+| `Model.model_validate(payload)` | Validate a MongoDB document, including its `_id` |
+| `doc.object_id` / `doc.object_id = value` | Read or assign the document ID |
 | `Model.model_mongodb_schema()` | Generate a `{"$jsonSchema": ...}` validator |
+
+```python
+from bson import ObjectId
+
+user = User(username="alice", age=27)
+assert user.object_id is None
+assert "_id" not in user.model_dump()
+
+identifier = ObjectId()
+stored = User.model_validate({"_id": identifier, **user.model_dump()})
+assert stored.object_id == identifier
+assert stored.model_dump()["_id"] == identifier
+```
+
+Insert operations do not assign generated IDs back to the input model; assign
+`user.object_id = await users.insert_one(user)` if needed. Field names are not
+automatically converted to camelCase: declare aliases explicitly, as with
+`externalId` above.
+See [documents and serialization](docs/documents.md) for details.
 
 Use Python-mode dumps for BSON, not `model_dump(mode="json")`. BSON's native
 Pydantic integration preserves BSON instances in Python mode. Kover does not
@@ -277,7 +299,7 @@ globally patch BSON classes or `uuid.UUID`.
 ### Decimal values
 
 Schema generation is not value conversion. A `decimal.Decimal` annotation
-produces a `decimal` schema, but `to_dict()` retains the Python `Decimal`;
+produces a `decimal` schema, but `model_dump()` retains the Python `Decimal`;
 it needs a codec or explicit conversion for BSON encoding.
 
 For domain models using `Decimal`, prefer the `DecimalCodec` example in the
@@ -307,7 +329,7 @@ class Product(Document):
 
 
 product = Product(price=Decimal128(Decimal("19.99")))
-payload = product.to_dict()
+payload = product.model_dump()
 ```
 
 ## MongoDB schema validation
@@ -328,6 +350,11 @@ The generator resolves references, normalizes JSON Schema, maps BSON types,
 and checks MongoDB compatibility without mutating the input schemas.
 Unsupported constraints raise `SchemaGenerationException`; there is no
 permissive mode that silently removes validation rules.
+
+The root `_id` is required and has `bsonType: "objectId"`, without a `null`
+branch. `None` is only an application-side placeholder for an unset ID and is
+excluded from dumps. Nested `Document` models also declare `_id`, but it is
+optional in their schemas; plain Pydantic models do not inherit this field.
 
 Examples of unsupported constraints include recursive/external references,
 email/IP `format`, discriminators, constrained binary lengths, UUID versions,
@@ -356,7 +383,7 @@ cursor = (
 )
 async with cursor:
     async for item in cursor:
-        print(item.get_object_id(), item.username)
+        print(item.object_id, item.username)
 
 all_users: list[User] = await users.find({}, cls=User).to_list()
 await users.update(Update({"username": "charlie"}, {"$set": {"age": 32}}))
@@ -509,6 +536,7 @@ Sharded tests are separately enabled by `KOVER_RUN_SHARDED=1`.
 ## Documentation and examples
 
 - [Architecture](docs/architecture.md)
+- [Documents, IDs, serialization, and schema validation](docs/documents.md)
 - [Connections, authentication, pools, and deadlines](docs/connections.md)
 - [Read preferences and routing limits](docs/read_preferences.md)
 - [Transactions and session lifecycle](docs/transactions.md)

@@ -2,80 +2,38 @@
 
 from __future__ import annotations
 
-from typing import Any, Self
+from typing import Any
 
 from bson import ObjectId  # ruff: ignore[typing-only-third-party-import]
 from pydantic import (
     BaseModel,
     ConfigDict,
-    PrivateAttr,
+    Field,
 )
+from pydantic.json_schema import SkipJsonSchema  # ruff: ignore[typing-only-third-party-import]
 
-from .generator import MongoDBSchemaGenerator
+from kover.schema.generator import MongoDBSchemaGenerator
 
 
 class Document(BaseModel):
-    """Base class for Kover documents.
+    """Base class for any document.
 
-    This class provides serialization, validation, and utility methods for
-    working with MongoDB documents using Pydantic models.
+    Use ``model_validate()`` to load MongoDB documents and ``model_dump()``
+    to serialize with field aliases. The ``object_id`` field uses alias
+    ``_id`` and is omitted from dumps while its value is None.
     """
     model_config = ConfigDict(
         extra="forbid",
         use_enum_values=True,
+        serialize_by_alias=True,
     )
-    _id: ObjectId | None = PrivateAttr(default=None)
 
-    @classmethod
-    def from_document(cls, payload: dict[str, Any]) -> Self:
-        """Create a Document instance from a dictionary.
-
-        Returns:
-            An instance of the Document subclass with
-                the data from the dictionary.
-        """
-        payload = dict(payload)
-        object_id = payload.pop("_id", None)
-
-        document = cls.model_validate(payload)
-        if object_id is not None:
-            document.set_object_id(object_id)
-
-        return document
-
-    def to_dict(self, *, exclude_id: bool = False) -> dict[str, Any]:
-        """Convert the document to a dictionary.
-
-        Returns:
-            The document represented as a dictionary.
-                If `exclude_id` is True, the `_id` field is excluded.
-        """
-        dumped = self.model_dump(by_alias=True)
-
-        if not exclude_id and self._id is not None:
-            return {"_id": self._id, **dumped}
-
-        return dumped
-
-    def set_object_id(self, _id: ObjectId) -> Self:
-        """Set the document's ObjectId.
-
-        Returns:
-            self.
-        """
-        self._id = _id
-        return self
-
-    def get_object_id(self) -> ObjectId | None:
-        """Get the document's ObjectId.
-
-        Returns:
-            The document's _id if set, otherwise None.
-        """
-        return self._id
-
-    def __str__(self) -> str:
-        return self.__repr__()
+    # None means MongoDB has not assigned an ID yet, not a stored BSON null.
+    object_id: ObjectId | SkipJsonSchema[None] = Field(
+        default=None,
+        alias="_id",
+        exclude_if=lambda v: v is None,
+    )
 
     @classmethod
     def model_mongodb_schema(cls) -> dict[str, Any]:

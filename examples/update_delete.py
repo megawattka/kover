@@ -23,7 +23,7 @@ async def main() -> None:
 
     collection = kover.db.get_collection("test")
     user = User(name="John", age=23)
-    object_id = await collection.insert_one(user)  # or user.to_dict()
+    object_id = await collection.insert_one(user)  # or user.model_dump()
 
     # this concept requires using "$set" explicitly
     # if you dont specify it your entire doc will be

@@ -24,6 +24,13 @@ See [connections](connections.md) for configuration,
 | Wire and transport | codec, handshake, error mapper, `Transport` | BSON framing, compression, reply validation, TCP/TLS bytes |
 | Documents | `Document`, schema generator | Model serialization and MongoDB `$jsonSchema` generation |
 
+`Document` uses Pydantic's `model_validate()` and `model_dump()` directly.
+Its regular `object_id` field accepts MongoDB's `_id` alias; dumps use aliases
+by default and omit an unset ID. Collection reads with `cls=Model` validate
+results through `Model.model_validate()`. Inserts serialize a copy and do not
+assign generated IDs back to the model. See [documents](documents.md) for the
+serialization and schema contracts.
+
 ## Client construction
 
 ```text

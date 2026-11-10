@@ -45,4 +45,4 @@ class TestMethods(MongoTestCase):
             age=found.age,
             uuid=found.uuid,
         )
-        assert new.to_dict() == doc.to_dict(), (new, doc)
+        assert new.model_dump() == doc.model_dump(), (new, doc)
