@@ -43,31 +43,17 @@ Runtime dependencies:
 
 | Dependency | Minimum version |
 | --- | --- |
-| `bson` | `0.4.0` |
+| `elune` | `0.5.0` |
 | `dnspython` | `2.7.0` |
 | `pydantic` | `2.14.3` |
 | `typing-extensions` | `4.16.0` |
 
-Kover uses the BSON implementation from **https://python.wattka.dev/**,
-including its native Pydantic integration. Do not install PyMongo alongside
-it: both provide the `bson` import namespace.
+Kover uses [Elune](https://github.com/megawattka/elune) for BSON serialization,
+including its native Pydantic integration.
 
 ## Installation
 
-The repository configures BSON's source explicitly in `pyproject.toml`:
-
-```toml
-[tool.uv.sources]
-bson = { index = "bson" }
-
-[[tool.uv.index]]
-name = "bson"
-url = "https://python.wattka.dev/"
-explicit = true
-```
-
-For a separate application using uv, include the same BSON source/index mapping
-in its `pyproject.toml`, then add Kover:
+Install Kover using uv:
 
 ```bash
 uv add kover
@@ -75,8 +61,7 @@ uv add kover
 uv add "kover[snappy,zstd]"
 ```
 
-`zlib` compression needs no extra dependency. The explicit index is used only
-for packages mapped to it, rather than as a general package source.
+`zlib` compression needs no extra dependency.
 
 ## Quick start
 
@@ -246,7 +231,7 @@ Native UUIDs require an explicit BSON representation. Use this client for the
 `User` schema and CRUD examples below:
 
 ```python
-from bson import CodecOptions, UuidRepresentation
+from elune import CodecOptions, UuidRepresentation
 
 from kover import from_uri
 
@@ -271,7 +256,7 @@ UUIDs as binary subtype 4 and decodes them back to `UUID`. The default
 | `Model.model_mongodb_schema()` | Generate a `{"$jsonSchema": ...}` validator |
 
 ```python
-from bson import ObjectId
+from elune import ObjectId
 
 user = User(username="alice", age=27)
 assert user.object_id is None
@@ -289,9 +274,9 @@ automatically converted to camelCase: declare aliases explicitly, as with
 `externalId` above.
 See [documents and serialization](docs/documents.md) for details.
 
-Use Python-mode dumps for BSON, not `model_dump(mode="json")`. BSON's native
-Pydantic integration preserves BSON instances in Python mode. Kover does not
-globally patch BSON classes or `uuid.UUID`.
+Use Python-mode dumps for BSON, not `model_dump(mode="json")`. Elune's native
+Pydantic integration preserves BSON instances in Python mode.
+Kover does not globally patch Elune's classes or `uuid.UUID`.
 
 ### Decimal values
 
@@ -300,10 +285,10 @@ produces a `decimal` schema, but `model_dump()` retains the Python `Decimal`;
 it needs a codec or explicit conversion for BSON encoding.
 
 For domain models using `Decimal`, prefer the `DecimalCodec` example in the
-[BSON README](https://github.com/megawattka/bson#custom-codecs) over manual
+[Elune README](https://github.com/megawattka/elune#custom-codecs) over manual
 conversion or model serializers. Define that codec in your application and
 register it with `CodecOptions(type_registry=TypeRegistry([DecimalCodec()]))`
-(`CodecOptions` and `TypeRegistry` are imported from `bson.codec_options`).
+(`CodecOptions` and `TypeRegistry` are imported from `elune.codec_options`).
 Pass these options as `codec_options=` to `from_uri()` or `make_client()`;
 if you also use UUIDs, include their representation in the same options.
 The codec converts `Decimal` to BSON `Decimal128` on writes and back to
@@ -311,12 +296,12 @@ The codec converts `Decimal` to BSON `Decimal128` on writes and back to
 fit the precision and range of Decimal128. `DecimalCodec` is an example to
 define, not a built-in class to import.
 
-Alternatively, use `bson.Decimal128` directly for stored values:
+Alternatively, use `elune.Decimal128` directly for stored values:
 
 ```python
 from decimal import Decimal
 
-from bson import Decimal128
+from elune import Decimal128
 
 from kover import Document
 

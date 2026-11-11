@@ -8,7 +8,7 @@ import os
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 from uuid import UUID, uuid4
 
-from bson import (
+from elune import (
     Binary,
     Code,
     DatetimeMS,

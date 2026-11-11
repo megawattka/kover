@@ -5,7 +5,7 @@ from enum import IntEnum, StrEnum
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from bson import Binary, Decimal128, ObjectId
+from elune import Binary, Decimal128, ObjectId
 from pydantic import ConfigDict, Field
 import pytest
 

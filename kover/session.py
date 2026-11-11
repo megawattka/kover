@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from bson import Int64
+from elune import Int64
 
 from .exceptions import OperationFailure
 from .models.tx_state import TxnState

@@ -4,7 +4,7 @@ import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from bson import Int64
+from elune import Int64
 import pytest
 
 from kover._utils import raw_decoder  # ruff: ignore[import-private-name]

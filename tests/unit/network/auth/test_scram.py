@@ -5,7 +5,7 @@ import hashlib
 from hmac import HMAC
 from unittest.mock import AsyncMock, patch
 
-from bson import Binary
+from elune import Binary
 import pytest
 
 from kover.models.credentials import AuthCredentials

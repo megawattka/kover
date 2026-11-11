@@ -6,7 +6,7 @@ from collections.abc import Callable
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, cast, override
 
-from bson import (
+from elune import (
     Binary,
     Code,
     DatetimeMS,
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 def _core_contract(value: Any) -> Any:  # ruff: ignore[any-type]
     """Compare native BSON core contracts, not ambiguous JSON wire shapes.
 
-    BSON 0.4 creates fresh Rust validator closures on every schema request.
+    Elune creates fresh Rust validator closures on every schema request.
     Their names and the surrounding core schemas are stable; their identities
     are not. Metadata and refs belong to the use site, not the type contract.
 
@@ -72,7 +72,7 @@ def _core_contract(value: Any) -> Any:  # ruff: ignore[any-type]
 class MongoDBSchemaGenerator(GenerateJsonSchema):
     """Generate strict MongoDB validators through copy-on-transform stages.
 
-    Native BSON core schemas are adapted locally, leaving BSON's Pydantic
+    Native BSON core schemas are adapted locally, leaving Elune's Pydantic
     validation and serialization untouched. References are expanded before
     normalization, type mapping and compatibility checking. Unsupported
     constraints raise ``SchemaGenerationException`` instead of disappearing.

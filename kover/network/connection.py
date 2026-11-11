@@ -8,7 +8,7 @@ import struct
 from typing import TYPE_CHECKING, Any
 import zlib
 
-from bson.errors import InvalidBSON
+from elune.errors import InvalidBSON
 
 from .._utils.mappings import get_hello_payload
 from ..exceptions import NetworkError, ProtocolError

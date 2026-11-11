@@ -7,7 +7,7 @@ import re
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
-from bson import (
+from elune import (
     Binary,
     Code,
     DatetimeMS,

@@ -8,7 +8,7 @@ from hmac import HMAC, compare_digest
 import os
 from typing import TYPE_CHECKING, Any
 
-from bson import Binary
+from elune import Binary
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

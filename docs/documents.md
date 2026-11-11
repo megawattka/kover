@@ -8,7 +8,7 @@ APIs for reading and writing documents.
 ## Fields, aliases, and IDs
 
 ```python
-from bson import ObjectId
+from elune import ObjectId
 from pydantic import Field
 
 from kover import Document

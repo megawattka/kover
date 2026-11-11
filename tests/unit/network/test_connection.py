@@ -5,7 +5,7 @@ import struct
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
-from bson import encode
+from elune import encode
 import pytest
 
 from kover.client import Kover

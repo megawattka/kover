@@ -11,7 +11,7 @@ from .wire.codec import CommandCodec
 from .wire.compression import ZLIB_COMPRESSOR_ID, get_context_by_id
 
 if TYPE_CHECKING:
-    from bson import CodecOptions
+    from elune import CodecOptions
 
     from ..models.address import Address
     from ..models.credentials import AuthCredentials

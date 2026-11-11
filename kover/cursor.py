@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import deque
 from typing import TYPE_CHECKING, Any, NoReturn, Self, cast
 
-from bson import Int64
+from elune import Int64
 
 from ._utils.mappings import maybe_to_dict
 from .execution.context import CommandReply

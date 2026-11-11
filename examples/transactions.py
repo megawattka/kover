@@ -4,7 +4,7 @@ import asyncio
 import logging
 from typing import Any
 
-from bson import ObjectId
+from elune import ObjectId
 
 from kover import AuthCredentials, OperationFailure, make_client
 

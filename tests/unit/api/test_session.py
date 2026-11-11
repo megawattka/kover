@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-from bson import Int64
+from elune import Int64
 import pytest
 
 from kover.client import Kover

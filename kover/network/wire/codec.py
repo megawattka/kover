@@ -5,15 +5,15 @@ from __future__ import annotations
 import struct
 from typing import TYPE_CHECKING, Any, Final
 
-from bson import decode, encode
-from bson.codec_options import DEFAULT_CODEC_OPTIONS
+from elune import decode, encode
+from elune.codec_options import DEFAULT_CODEC_OPTIONS
 
 from .compression import ZLIB_COMPRESSOR_ID, get_context_by_id
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from bson.codec_options import CodecOptions
+    from elune.codec_options import CodecOptions
 
 
 OP_MSG: Final[int] = 2013

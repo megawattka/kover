@@ -7,14 +7,14 @@ from functools import partial
 import struct
 from typing import Any
 
-import bson
+import elune
 import pytest
 
 from kover import from_uri
 
 
 def reply(request_id: int, response: dict[str, Any]) -> bytes:
-    payload = bytes(5) + bson.encode(response)
+    payload = bytes(5) + elune.encode(response)
     return (
         struct.pack("<iiii", len(payload) + 16, 1, request_id, 2013) + payload
     )
@@ -44,7 +44,7 @@ async def read_command(
     )
     assert opcode == 2013
     body = await reader.readexactly(length - 16)
-    return request_id, bson.decode(body[5:])  # pyright: ignore[reportUnknownMemberType]
+    return request_id, elune.decode(body[5:])  # pyright: ignore[reportUnknownMemberType]
 
 
 @pytest.mark.parametrize(
@@ -84,13 +84,13 @@ async def test_wire_discovery_follows_replica_members(mode: str) -> None:  # ruf
                     response.update(hello_response(role, addresses))
                 elif "find" in command:
                     response["cursor"] = {
-                        "id": bson.Int64(42),
+                        "id": elune.Int64(42),
                         "ns": "test.items",
                         "firstBatch": [{"server": role, "batch": 1}],
                     }
                 elif "getMore" in command:
                     response["cursor"] = {
-                        "id": bson.Int64(42),
+                        "id": elune.Int64(42),
                         "ns": "test.items",
                         "nextBatch": [{"server": role, "batch": 2}],
                     }

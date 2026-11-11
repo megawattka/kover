@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt  # ruff: ignore[typing-only-standard-library-import]
 from typing import Annotated
 
-from bson import Binary, ObjectId  # ruff: ignore[typing-only-third-party-import]
+from elune import Binary, ObjectId  # ruff: ignore[typing-only-third-party-import]
 from pydantic import Field
 
 from ..schema.document import Document

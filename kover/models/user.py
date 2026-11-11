@@ -2,7 +2,7 @@
 
 from typing import Any, Literal
 
-from bson import Binary  # ruff: ignore[typing-only-third-party-import]
+from elune import Binary  # ruff: ignore[typing-only-third-party-import]
 from pydantic import BaseModel, Field
 
 

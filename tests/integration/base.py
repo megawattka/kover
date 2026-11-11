@@ -2,7 +2,7 @@ import os
 import unittest
 from uuid import uuid4
 
-from bson import CodecOptions, UuidRepresentation
+from elune import CodecOptions, UuidRepresentation
 
 from kover import AuthCredentials, make_client
 

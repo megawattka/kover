@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-from bson import CodecOptions, UuidRepresentation
+from elune import CodecOptions, UuidRepresentation
 import pytest
 
 from kover.bootstrap import from_uri, make_client

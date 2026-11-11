@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     import asyncio
     from collections.abc import Sequence
 
-    from bson import CodecOptions
+    from elune import CodecOptions
 
     from .models.credentials import AuthCredentials
 

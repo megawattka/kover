@@ -9,7 +9,7 @@ import math
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Self
 
-from bson import Binary, ObjectId
+from elune import Binary, ObjectId
 
 from ..models import Delete, Index, IndexDirection
 from .exceptions import GridFSFileNotFound, IncorrectGridFSData

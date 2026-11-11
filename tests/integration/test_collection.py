@@ -1,6 +1,6 @@
 from uuid import UUID, uuid4
 
-from bson import ObjectId
+from elune import ObjectId
 
 from kover import Delete, Document, Update
 from tests.integration.base import MongoTestCase

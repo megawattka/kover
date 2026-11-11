@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from bson import ObjectId  # ruff: ignore[typing-only-third-party-import]
+from elune import ObjectId  # ruff: ignore[typing-only-third-party-import]
 from pydantic import BaseModel, ConfigDict, Field
 
 

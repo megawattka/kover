@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 import zlib
 
-from bson import CodecOptions, UuidRepresentation, decode
+from elune import CodecOptions, UuidRepresentation, decode
 import pytest
 
 from kover.exceptions import PoolClosedError

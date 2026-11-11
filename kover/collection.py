@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, TypeVar, overload
 
-from bson import ObjectId
+from elune import ObjectId
 
 from ._utils import classrepr, filter_non_null, maybe_to_dict, raw_decoder
 from .cursor import Cursor
