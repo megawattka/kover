@@ -38,7 +38,6 @@ dependencies = [
     "elune>=0.5.0",
     "dnspython>=2.7.0",
     "pydantic>=2.14.3",
-    "typing-extensions>=4.16.0",
 ]
 
 [project.urls]
@@ -103,7 +102,7 @@ strict-checking = true
 ]
 
 [tool.ruff.lint.flake8-type-checking]
-exempt-modules = ["typing", "typing_extensions"]
+exempt-modules = ["typing"]
 quote-annotations = true
 strict = true
 

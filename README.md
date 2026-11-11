@@ -46,7 +46,6 @@ Runtime dependencies:
 | `elune` | `0.5.0` |
 | `dnspython` | `2.7.0` |
 | `pydantic` | `2.14.3` |
-| `typing-extensions` | `4.16.0` |
 
 Kover uses [Elune](https://github.com/megawattka/elune) for BSON serialization,
 including its native Pydantic integration.
