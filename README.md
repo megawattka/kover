@@ -579,6 +579,7 @@ Sharded tests are separately enabled by `KOVER_RUN_SHARDED=1`.
 
 - [Architecture](docs/architecture.md)
 - [Documents, IDs, serialization, and schema validation](docs/documents.md)
+- [GeoJSON models, geospatial indexes, and queries](docs/geo_json.md)
 - [Connections, authentication, pools, and deadlines](docs/connections.md)
 - [Read preferences and routing limits](docs/read_preferences.md)
 - [Transactions and session lifecycle](docs/transactions.md)

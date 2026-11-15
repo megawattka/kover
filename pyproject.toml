@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kover"
-version = "3.2.2"
+version = "3.3.0"
 description = "A fully asynchronous, strongly typed MongoDB driver for Python."
 readme = "README.md"
 authors = [{ name = "megawattka", email = "gunter56741@gmail.com" }]
@@ -13,12 +13,18 @@ requires-python = ">=3.12"
 license-files = ["LICENSE"]
 keywords = [
     "mongodb",
+    "mongodb-driver",
+    "async-mongodb",
     "async",
     "asyncio",
-    "database",
-    "driver",
-    "pymongo",
-    "odm",
+    "asynchronous-database",
+    "python-mongodb",
+    "pydantic-mongodb",
+    "mongodb-odm",
+    "motor-alternative",
+    "bson",
+    "geojson",
+    "gridfs",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -26,12 +32,14 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3 :: Only",
     "Framework :: AsyncIO",
-    "Framework :: Pydantic :: 2",
-    "Topic :: Software Development :: Quality Assurance",
+    "Framework :: Pydantic",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Database",
+    "Topic :: Database :: Database Engines/Servers",
+    "Topic :: Internet",
     "Typing :: Typed",
 ]
 dependencies = [

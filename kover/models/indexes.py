@@ -10,7 +10,8 @@ class IndexType(Enum):
     """Index types for MongoDB collections."""
 
     TEXT = "text"
-    GEOSPATIAL = "geospatial"
+    GEO_2DSPHERE = "2dsphere"
+    GEO_2D = "2d"
     HASHED = "hashed"
 
 
