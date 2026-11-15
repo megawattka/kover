@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="180" viewBox="0 0 640 180" role="img" aria-labelledby="title desc">
+  <title id="title">Kover logo</title>
+  <desc id="desc">A soft blue space-themed Kover logo with an orbit and stars.</desc>
+
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07152f"/>
+      <stop offset="0.55" stop-color="#102b58"/>
+      <stop offset="1" stop-color="#1d4775"/>
+    </linearGradient>
+    <linearGradient id="orbit" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#b8e7ff"/>
+      <stop offset="0.5" stop-color="#75bde8"/>
+      <stop offset="1" stop-color="#8f9ff0"/>
+    </linearGradient>
+    <linearGradient id="letter" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ecf9ff"/>
+      <stop offset="1" stop-color="#a9d9f4"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="rounded">
+      <rect width="640" height="180" rx="32"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#rounded)">
+    <rect width="640" height="180" fill="url(#background)"/>
+
+    <g fill="#c9efff">
+      <circle cx="42" cy="38" r="1.5" opacity="0.8"/>
+      <circle cx="91" cy="134" r="1.2" opacity="0.6"/>
+      <circle cx="174" cy="29" r="1.1" opacity="0.75"/>
+      <circle cx="260" cy="142" r="1.4" opacity="0.55"/>
+      <circle cx="393" cy="29" r="1.3" opacity="0.65"/>
+      <circle cx="548" cy="44" r="1.5" opacity="0.8"/>
+      <circle cx="602" cy="133" r="1.1" opacity="0.65"/>
+    </g>
+
+    <g fill="#e7f8ff" filter="url(#glow)">
+      <path d="M78 62h3v3h-3z" opacity="0.8"/>
+      <path d="M469 126h3v3h-3z" opacity="0.7"/>
+      <path d="m574 78 2 5 5 2-5 2-2 5-2-5-5-2 5-2z" opacity="0.85"/>
+    </g>
+
+    <g transform="translate(33 20)">
+      <circle cx="70" cy="70" r="37" fill="#173c6d" opacity="0.75"/>
+      <circle cx="70" cy="70" r="24" fill="#214f83" opacity="0.8"/>
+      <path d="M56 89V51h12v19l14-19h14L80 69l18 20H83L68 73v16z" fill="url(#letter)"/>
+      <ellipse cx="70" cy="70" rx="61" ry="25" fill="none" stroke="url(#orbit)" stroke-width="4" transform="rotate(-22 70 70)"/>
+      <ellipse cx="70" cy="70" rx="61" ry="25" fill="none" stroke="#8fd2f4" stroke-width="1" opacity="0.55" transform="rotate(28 70 70)"/>
+      <circle cx="122" cy="49" r="5" fill="#d7f5ff" filter="url(#glow)"/>
+      <circle cx="18" cy="87" r="3" fill="#9dd9f5"/>
+    </g>
+
+    <text x="180" y="111" fill="#edfaff" font-family="Inter, Segoe UI, sans-serif" font-size="90" font-weight="600" textLength="350" lengthAdjust="spacingAndGlyphs">kover</text>
+    <path d="M184 132h395" stroke="#84c8eb" stroke-width="2" stroke-linecap="round" opacity="0.65"/>
+    <circle cx="586" cy="132" r="3" fill="#bcecff"/>
+  </g>
+</svg>
