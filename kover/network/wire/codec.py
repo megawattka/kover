@@ -61,13 +61,15 @@ class CommandCodec:
             RuntimeError: if compressor is unknown.
         """
         if compressor not in {"zlib", "zstd", "snappy", None}:
-            raise RuntimeError(f"Unknown compressor: {compressor}")
+            msg = f"Unknown compressor: {compressor}"
+            raise RuntimeError(msg)
 
         self._compressor = compressor
 
     def _get_compressor_id(self) -> int:
         if self._compressor is None:
-            raise RuntimeError("Cannot retrieve compressor id")
+            msg = "Cannot retrieve compressor id"
+            raise RuntimeError(msg)
 
         ids = {"snappy": 1, "zlib": 2, "zstd": 3}
         return ids[self._compressor]
@@ -145,11 +147,13 @@ class CommandCodec:
             ValueError: if something went wrong.
         """
         if len(header) != _MESSAGE_HEADER.size:
-            raise ValueError("MongoDB message header must be exactly 16 bytes")
+            msg = "MongoDB message header must be exactly 16 bytes"
+            raise ValueError(msg)
 
         length, _, _, _ = _MESSAGE_HEADER.unpack(header)
         if length < _MESSAGE_HEADER.size:
-            raise ValueError("MongoDB message is shorter than its header")
+            msg = "MongoDB message is shorter than its header"
+            raise ValueError(msg)
 
         return length
 
@@ -164,11 +168,13 @@ class CommandCodec:
             ValueError: if something went wrong.
         """
         if len(prefix) != MONGODB_MESSAGE_PREFIX_LEN:
-            raise ValueError("MongoDB message prefix must be exactly 4 bytes")
+            msg = "MongoDB message prefix must be exactly 4 bytes"
+            raise ValueError(msg)
 
         length = struct.unpack("<i", prefix)[0]
         if length < _MESSAGE_HEADER.size:
-            raise ValueError("MongoDB message is shorter than its header")
+            msg = "MongoDB message is shorter than its header"
+            raise ValueError(msg)
 
         return length
 
@@ -198,22 +204,28 @@ class CommandCodec:
         BSON decoding and decompression errors propagate to the caller.
         """
         if len(message) < _MESSAGE_HEADER.size:
-            raise ValueError("MongoDB response is shorter than its header")
+            msg = "MongoDB response is shorter than its header"
+            raise ValueError(msg)
 
         length, _, response_to, opcode = _MESSAGE_HEADER.unpack_from(message)
         if length != len(message):
+            msg = "MongoDB response length does not match its payload"
             raise ValueError(
-                "MongoDB response length does not match its payload",
+                msg,
             )
         if response_to != request_id:
+            msg = (
+                f"wrong response id: expected {request_id}, got {response_to}"
+            )
             raise ValueError(
-                f"wrong response id: expected {request_id}, got {response_to}",
+                msg,
             )
 
         payload = message[_MESSAGE_HEADER.size :]
         if opcode == OP_COMPRESSED:
             if len(payload) < _COMPRESSION_HEADER.size:
-                raise ValueError("compressed response is truncated")
+                msg = "compressed response is truncated"
+                raise ValueError(msg)
 
             inner_opcode, _, compressor_id = _COMPRESSION_HEADER.unpack_from(
                 payload,
@@ -223,13 +235,15 @@ class CommandCodec:
             opcode = inner_opcode
 
         if opcode != OP_MSG or len(payload) < _MSG_BODY_HEADER.size:
-            raise ValueError("unsupported or invalid OP_MSG response")
+            msg = "unsupported or invalid OP_MSG response"
+            raise ValueError(msg)
 
         _, section_kind = _MSG_BODY_HEADER.unpack_from(payload)
         if section_kind != 0:
-            raise ValueError("unsupported or invalid OP_MSG response")
+            msg = "unsupported or invalid OP_MSG response"
+            raise ValueError(msg)
 
-        return decode(  # pyright: ignore[reportUnknownVariableType]
+        return decode(
             payload[_MSG_BODY_HEADER.size :],
             codec_options=self._codec_options,
         )

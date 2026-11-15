@@ -1,3 +1,5 @@
+"""Command execution, routing, and session context."""
+
 from .context import (
     CommandReply,
     ExecutionResult,

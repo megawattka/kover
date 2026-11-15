@@ -96,10 +96,10 @@ def mongodb_schema(model: type[Document]) -> dict[str, Any]:
 
 def get_root_schema(model: type[Document]) -> dict[str, Any]:
     schema = mongodb_schema(model)
-    root = schema.get("$jsonSchema")
+    root: dict[str, Any] = schema["$jsonSchema"]
 
     assert isinstance(root, dict)
-    return root  # pyright: ignore[reportUnknownVariableType]
+    return root
 
 
 def schema_type(schema: dict[str, Any]) -> str | list[str] | None:
@@ -118,7 +118,7 @@ def schema_type(schema: dict[str, Any]) -> str | list[str] | None:
 
 
 def walk_schema(
-    value: dict[str, Any] | list[str] | str,
+    value: dict[str, Any] | list[Any] | str,
     path: str = "$",
 ) -> list[tuple[str, dict[str, Any]]]:
     result: list[tuple[str, dict[str, Any]]] = []
@@ -129,8 +129,7 @@ def walk_schema(
         for key, child in value.items():
             child_path = f"{path}.{key}"
 
-            if isinstance(child, (dict, list)):
-                result.extend(walk_schema(child, child_path))  # pyright: ignore[reportUnknownArgumentType]
+            result.extend(walk_schema(child, child_path))
 
     elif isinstance(value, list):
         for index, child in enumerate(value):
@@ -253,22 +252,22 @@ def test_nested_document_id_is_optional() -> None:
     friend: dict[str, Any] = properties["friend"]
     assert isinstance(friend, dict)
 
-    any_of: dict[str, Any] = friend["anyOf"]
+    any_of: list[dict[str, Any]] = friend["anyOf"]
     assert isinstance(any_of, list)
 
     friend_object: dict[str, Any] = next(
         branch
         for branch in any_of
-        if isinstance(branch, dict) and "properties" in branch
+        if "properties" in branch
     )
 
-    friend_properties = friend_object["properties"]  # pyright: ignore[reportArgumentType]
-    friend_required = friend_object["required"]  # pyright: ignore[reportArgumentType]
+    friend_properties: dict[str, Any] = friend_object["properties"]
+    friend_required: list[str] = friend_object["required"]
 
     assert isinstance(friend_properties, dict)
     assert isinstance(friend_required, list)
 
-    assert friend_properties["_id"] == {"bsonType": "objectId"}  # pyright: ignore[reportArgumentType]
+    assert friend_properties["_id"] == {"bsonType": "objectId"}
     assert "_id" not in friend_required
 
 
@@ -364,14 +363,14 @@ def test_nullable_nested_document_uses_any_of() -> None:
     friend: dict[str, Any] = properties["friend"]
     assert isinstance(friend, dict)
 
-    any_of: dict[str, Any] = friend["anyOf"]
+    any_of: list[dict[str, Any]] = friend["anyOf"]
     assert isinstance(any_of, list)
     assert len(any_of) == 2
 
     null_branches = [
         branch
         for branch in any_of
-        if isinstance(branch, dict) and branch.get("bsonType") == "null"  # pyright: ignore[reportUnknownMemberType]
+        if branch.get("bsonType") == "null"
     ]
 
     assert len(null_branches) == 1

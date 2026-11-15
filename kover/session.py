@@ -56,7 +56,8 @@ class Session:
             ValueError: if session already pinned to another server.
         """
         if self._pinned_server is not None and self._pinned_server != address:
-            raise ValueError("session is already pinned to another server")
+            msg = "session is already pinned to another server"
+            raise ValueError(msg)
 
         self._pinned_server = address
 
@@ -79,7 +80,8 @@ class Session:
             ValueError: if transaction already has been started.
         """
         if self.in_transaction or self._state is TxnState.COMMITTING:
-            raise ValueError("Session already has an active transaction")
+            msg = "Session already has an active transaction"
+            raise ValueError(msg)
 
         self._transaction_number = Int64(self._transaction_number + 1)
         self._transaction_options = options
@@ -110,7 +112,8 @@ class Session:
             TxnState.IN_PROGRESS,
             TxnState.COMMITTING,
         }:
-            raise ValueError("session has no active transaction")
+            msg = "session has no active transaction"
+            raise ValueError(msg)
 
         self._state = TxnState.COMMITTING
         try:
@@ -156,7 +159,8 @@ class Session:
             TxnState.IN_PROGRESS,
             TxnState.COMMITTING,
         }:
-            raise ValueError("session has no active transaction")
+            msg = "session has no active transaction"
+            raise ValueError(msg)
 
         try:
             await self.client.command(

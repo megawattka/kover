@@ -62,18 +62,21 @@ class ReadPreference(BaseModel):
     @model_validator(mode="after")
     def _validate_read_preference(self) -> Self:
         if self.mode not in _MODES:
-            raise ValueError(f"unsupported read preference mode: {self.mode}")
+            msg = f"unsupported read preference mode: {self.mode}"
+            raise ValueError(msg)
 
         if (
             self.max_staleness_seconds != -1
             and self.max_staleness_seconds < _MIN_STALENESS
         ):
-            raise ValueError("max_staleness_seconds must be -1 or >= 90")
+            msg = "max_staleness_seconds must be -1 or >= 90"
+            raise ValueError(msg)
 
         if self.mode == "primary" and (
             self.max_staleness_seconds != -1 or self.tag_sets
         ):
-            raise ValueError("primary does not support tags or max staleness")
+            msg = "primary does not support tags or max staleness"
+            raise ValueError(msg)
 
         return self
 

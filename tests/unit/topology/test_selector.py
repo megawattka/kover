@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -19,8 +20,11 @@ from kover.topology.selector import (
     eligible_servers,
 )
 
+if TYPE_CHECKING:
+    from kover.models.read_preference import ReadPreferenceMode
 
-def server(
+
+def server(  # ruff: ignore[too-many-arguments] -- Independent server properties for topology scenarios.
     host: str,
     *,
     primary: bool = False,
@@ -81,13 +85,16 @@ def selector(
         ("nearest", ["p", "s"]),
     ],
 )
-def test_read_preference_modes(mode: str, expected: list[str]) -> None:
+def test_read_preference_modes(
+    mode: ReadPreferenceMode,
+    expected: list[str],
+) -> None:
     descriptions = [server("p", primary=True), server("s")]
     assert [
         item.address.host
         for item in eligible_servers(
             descriptions,
-            ReadPreference(mode=mode),  # pyright: ignore[reportArgumentType]
+            ReadPreference(mode=mode),
         )
     ] == expected
 
@@ -230,8 +237,11 @@ async def test_discovery_retains_members_across_preferences() -> None:
     )
 
     observed = await discovery.scan()
-    assert {description.address for description in observed} == {  # pyright: ignore[reportUnhashable]
-        primary.address,  # pyright: ignore[reportUnhashable]
-        secondary.address,  # pyright: ignore[reportUnhashable]
+    assert {
+        (description.address.host, description.address.port)
+        for description in observed
+    } == {
+        (primary.address.host, primary.address.port),
+        (secondary.address.host, secondary.address.port),
     }
     assert probe.probe.await_count == 2

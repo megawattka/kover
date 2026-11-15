@@ -34,7 +34,7 @@ def _parse_address(value: str) -> Address:
 class ServerDiscovery:
     """Discover topology by probing seeds and members via ``hello``."""
 
-    def __init__(
+    def __init__(  # ruff: ignore[too-many-arguments] -- Explicit discovery configuration and injectable components.
         self,
         seeds: Sequence[Address],
         *,
@@ -49,13 +49,15 @@ class ServerDiscovery:
     ) -> None:
         self.options = options or DiscoveryOptions()
         if not seeds:
-            raise ValueError("at least one seed is required")
+            msg = "at least one seed is required"
+            raise ValueError(msg)
 
         self._seeds = {_key(seed): seed for seed in seeds}
         # Addresses survive failed probes and empty published snapshots.
         self._known_addresses = dict(self._seeds)
         if self.options.direct_connection and len(self._seeds) != 1:
-            raise ValueError("directConnection requires exactly one seed")
+            msg = "directConnection requires exactly one seed"
+            raise ValueError(msg)
 
         self._tls = tls
         self._loop = loop

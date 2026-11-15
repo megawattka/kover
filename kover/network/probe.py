@@ -38,7 +38,8 @@ class ServerProbe:
         try:
             hello: HelloResult | None = connection.hello_result
             if hello is None:
-                raise RuntimeError("connection factory did not complete hello")
+                msg = "connection factory did not complete hello"
+                raise RuntimeError(msg)
             finished = loop.time()
             return ServerDescription(
                 address=address,

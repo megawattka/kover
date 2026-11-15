@@ -21,22 +21,26 @@ class DiscoveryOptions(BaseModel):
     @model_validator(mode="after")
     def _validate_options(self) -> Self:
         if self.local_threshold < 0 or math.isnan(self.local_threshold):
-            raise ValueError("Invalid local threeshold")
+            msg = "Invalid local threeshold"
+            raise ValueError(msg)
 
         if (
             not math.isfinite(self.server_selection_timeout)
             or self.server_selection_timeout < 0
         ):
+            msg = "server_selection_timeout must be finite and >= 0"
             raise ValueError(
-                "server_selection_timeout must be finite and >= 0",
+                msg,
             )
         if self.connect_timeout is not None and (
             not math.isfinite(self.connect_timeout)
             or self.connect_timeout <= 0
         ):
-            raise ValueError("connect_timeout must be finite and > 0, or None")
+            msg = "connect_timeout must be finite and > 0, or None"
+            raise ValueError(msg)
 
         if self.replica_set is not None and not self.replica_set:
-            raise ValueError("replica_set must not be empty")
+            msg = "replica_set must not be empty"
+            raise ValueError(msg)
 
         return self

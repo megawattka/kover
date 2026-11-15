@@ -102,7 +102,8 @@ class MongoDBSchemaGenerator(GenerateJsonSchema):
             ValueError: If serialization mode is requested.
         """
         if mode != "validation":
-            raise ValueError("Only validation mode is supported.")
+            msg = "Only validation mode is supported."
+            raise ValueError(msg)
 
         return mongodb_schema(super().generate(schema, mode=mode))
 
@@ -210,16 +211,18 @@ class MongoDBSchemaGenerator(GenerateJsonSchema):
         Raises:
             SchemaGenerationException: Always; use datetime instead.
         """
+        msg = "datetime.date cannot be used as annotation; use datetime."
         raise SchemaGenerationException(
-            "datetime.date cannot be used as annotation; use datetime.",
+            msg,
         )
 
     @staticmethod
     def _reject_constraints(schema: Any, *keys: str) -> None:  # ruff: ignore[any-type]
         for key in keys:
             if key in schema:
+                msg = f"MongoDB cannot enforce {key!r} for {schema['type']!r}."
                 raise SchemaGenerationException(
-                    f"MongoDB cannot enforce {key!r} for {schema['type']!r}.",
+                    msg,
                 )
 
 

@@ -37,7 +37,8 @@ class ConnectionPool(IServerPool):
         connection_timeout: float | None = 10.0,
     ) -> None:
         if max_pool_size < 1:
-            raise ValueError("max_pool_size must be positive")
+            msg = "max_pool_size must be positive"
+            raise ValueError(msg)
 
         self.address = address
         self._connection_factory = connection_factory
@@ -82,12 +83,13 @@ class ConnectionPool(IServerPool):
         if connection is not None:
             return ConnectionLease(self, connection)
 
+        closed_message = "pool closed during connection creation"
         try:
             connection = await self._create_connection(deadline)
             async with self._condition:
                 if self._closed:
                     raise PoolClosedError(  # ruff: ignore[raise-within-try]
-                        "pool closed during connection creation",
+                        closed_message,
                     )
                 self._checked_out.add(connection)
         except (Exception, asyncio.CancelledError) as error:
@@ -123,10 +125,14 @@ class ConnectionPool(IServerPool):
             async with self._condition:
                 if self._closed:
                     if self._total:
-                        raise PoolTimeoutError(
-                            "pool closed while connection creation is pending",
+                        msg = (
+                            "pool closed while connection creation is pending"
                         )
-                    raise PoolClosedError("connection pool is closed")
+                        raise PoolTimeoutError(
+                            msg,
+                        )
+                    msg = "connection pool is closed"
+                    raise PoolClosedError(msg)
 
                 connection = await self._take_usable_idle()
                 if connection is not None:
@@ -161,8 +167,9 @@ class ConnectionPool(IServerPool):
             async with asyncio.timeout_at(deadline):
                 await self._condition.wait()
         except TimeoutError as e:
+            msg = "connection checkout deadline expired"
             raise PoolTimeoutError(
-                "connection checkout deadline expired",
+                msg,
             ) from e
 
     async def _create_connection(self, deadline: float | None) -> Connection:
@@ -192,8 +199,9 @@ class ConnectionPool(IServerPool):
             async with asyncio.timeout_at(timeout_deadline):
                 return await self._connection_factory()
         except TimeoutError as e:
+            msg = "connection creation exceeded checkout deadline"
             raise PoolTimeoutError(
-                "connection creation exceeded checkout deadline",
+                msg,
             ) from e
 
     async def release(
@@ -209,8 +217,9 @@ class ConnectionPool(IServerPool):
         """
         async with self._condition:
             if connection not in self._checked_out:
+                msg = "connection is not checked out from this pool"
                 raise RuntimeError(
-                    "connection is not checked out from this pool",
+                    msg,
                 )
 
             self._checked_out.remove(connection)
@@ -273,7 +282,8 @@ class ConnectionPool(IServerPool):
             PoolClosedError: if pool is closed.
         """
         if self._closed:
-            raise PoolClosedError("connection pool is closed")
+            msg = "connection pool is closed"
+            raise PoolClosedError(msg)
 
         return self
 

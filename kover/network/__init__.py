@@ -1,3 +1,5 @@
+"""MongoDB connections, authentication, and connection pools."""
+
 from .auth import Authenticator
 from .connection import Connection
 from .factory import ConnectionFactory

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 class ConnectionFactory:
     """Create a connected, handshaken, and authenticated connection."""
 
-    def __init__(
+    def __init__(  # ruff: ignore[too-many-arguments] -- Independent connection setup components.
         self,
         *,
         tls: bool = False,

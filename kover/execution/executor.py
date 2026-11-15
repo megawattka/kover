@@ -38,7 +38,7 @@ class CommandExecutor(ICommandExecutor):
         self._pools = pools
         self._default_preference = default_preference or ReadPreference()
 
-    async def execute(
+    async def execute(  # ruff: ignore[too-many-arguments] -- Implements the typed command execution contract.
         self,
         command: dict[str, Any],
         *,

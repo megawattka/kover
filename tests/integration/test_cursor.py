@@ -1,3 +1,5 @@
+import pytest
+
 from kover.exceptions import OperationFailure
 from kover.models.tx_state import TxnState
 from tests.integration.base import MongoTestCase
@@ -20,7 +22,7 @@ class CursorIntegrationTests(MongoTestCase):
         await cursor.close()
         async with self.collection.find().batch_size(2) as cursor:
             await anext(cursor)
-        with self.assertRaises(StopAsyncIteration):
+        with pytest.raises(StopAsyncIteration):
             await anext(cursor)
         assert await self.database.ping()
 
@@ -96,9 +98,9 @@ class SessionIntegrationTests(MongoTestCase):
         self.session.start_transaction()
         document = {"_id": "duplicate"}
         await self.collection.insert_one(document, session=self.session)
-        with self.assertRaises(OperationFailure) as caught:
+        with pytest.raises(OperationFailure) as caught:
             await self.collection.insert_one(document, session=self.session)
-        assert caught.exception.code == 11000
+        assert caught.value.code == 11000
         await self.session.abort_transaction()
         assert self.session.state is TxnState.ABORTED
         assert await self.collection.count() == 0

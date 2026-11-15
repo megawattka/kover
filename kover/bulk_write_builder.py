@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 class BulkWriteBuilder:
     """Builder for bulk write operations."""
 
-    def __init__(
+    def __init__(  # ruff: ignore[too-many-arguments] -- Mirrors MongoDB bulk-write options.
         self,
         *,
         ordered: bool = True,

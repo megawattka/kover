@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 T_co = TypeVar("T_co", bound=Document, covariant=True)
 
 
-@classrepr("name", "database")
+@classrepr("name", "database")  # ruff: ignore[too-many-public-methods] -- Collection facade exposes MongoDB operations.
 class Collection:
     """Collection.
 
@@ -113,7 +113,7 @@ class Collection:
         })
 
     # https://www.mongodb.com/docs/manual/reference/command/insert/
-    async def insert_one(
+    async def insert_one(  # ruff: ignore[too-many-arguments] -- Mirrors MongoDB insert options.
         self,
         document: dict[str, Any] | Document,
         /,
@@ -155,7 +155,7 @@ class Collection:
         return document_id
 
     # https://www.mongodb.com/docs/manual/reference/command/insert/
-    async def insert_many(
+    async def insert_many(  # ruff: ignore[too-many-arguments] -- Mirrors MongoDB insert options.
         self,
         documents: Sequence[dict[str, Any] | Document],
         /,
@@ -200,7 +200,7 @@ class Collection:
         return document_ids
 
     # https://www.mongodb.com/docs/manual/reference/command/update/
-    async def update(
+    async def update(  # ruff: ignore[too-many-arguments] -- Mirrors MongoDB update options.
         self,
         *updates: Update,
         ordered: bool = True,
@@ -245,7 +245,7 @@ class Collection:
         return request["nModified"]
 
     # https://www.mongodb.com/docs/manual/reference/command/delete
-    async def delete(
+    async def delete(  # ruff: ignore[too-many-arguments] -- Mirrors MongoDB delete options.
         self,
         *deletes: Delete,
         comment: str | None = None,
@@ -406,9 +406,8 @@ class Collection:
             session=session,
         )
 
-    # TODO @megawattka: prob make overloads for cls like in "find"?
     # https://www.mongodb.com/docs/manual/reference/command/aggregate/
-    def aggregate(
+    def aggregate(  # ruff: ignore[too-many-arguments] -- Mirrors MongoDB aggregation options.
         self,
         pipeline: list[dict[str, Any]],
         *,
@@ -470,7 +469,7 @@ class Collection:
         )
 
     # https://www.mongodb.com/docs/manual/reference/command/distinct/
-    async def distinct(
+    async def distinct(  # ruff: ignore[too-many-arguments, too-many-positional-arguments] -- Preserve public query options and positional compatibility.
         self,
         key: str,
         query: dict[str, Any] | None = None,
@@ -512,7 +511,7 @@ class Collection:
         return request["values"]
 
     # https://www.mongodb.com/docs/manual/reference/command/count
-    async def count(
+    async def count(  # ruff: ignore[too-many-arguments, too-many-positional-arguments] -- Preserve public query options and positional compatibility.
         self,
         query: dict[str, Any] | None = None,
         limit: int = 0,
@@ -572,7 +571,8 @@ class Collection:
             ValueError : If the specified size is less than or equal to zero.
         """
         if size <= 0:
-            raise ValueError("Cannot set size below zero.")
+            msg = "Cannot set size below zero."
+            raise ValueError(msg)
         command = filter_non_null({
             "convertToCapped": self.name,
             "size": size,
@@ -598,7 +598,8 @@ class Collection:
             ValueError : If no indexes are provided.
         """
         if len(indexes) == 0:
-            raise ValueError("Empty sequence of indexes")
+            msg = "Empty sequence of indexes"
+            raise ValueError(msg)
 
         command = filter_non_null({
             "createIndexes": self.name,

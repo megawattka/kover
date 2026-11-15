@@ -104,18 +104,21 @@ type _OptionValue = (
 
 def _boolean(key: str, value: str) -> bool:
     if value not in {"true", "false"}:
-        raise ValueError(f"{key} must be 'true' or 'false'")
+        msg = f"{key} must be 'true' or 'false'"
+        raise ValueError(msg)
 
     return value == "true"
 
 
 def _integer(key: str, value: str, minimum: int) -> int:
     if not re.fullmatch(r"-?[0-9]+", value):
-        raise ValueError(f"{key} must be an integer")
+        msg = f"{key} must be an integer"
+        raise ValueError(msg)
 
     result = int(value)
     if result < minimum:
-        raise ValueError(f"{key} must be >= {minimum}")
+        msg = f"{key} must be >= {minimum}"
+        raise ValueError(msg)
 
     return result
 
@@ -125,17 +128,20 @@ def _milliseconds(key: str, value: str) -> float:
         r"[+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?",
         value,
     ):
-        raise ValueError(f"{key} must be a finite nonnegative number")
+        msg = f"{key} must be a finite nonnegative number"
+        raise ValueError(msg)
 
     try:
         result = float(value)
     except ValueError as error:
+        msg = f"{key} must be a finite nonnegative number"
         raise ValueError(
-            f"{key} must be a finite nonnegative number",
+            msg,
         ) from error
 
     if not math.isfinite(result) or result < 0:
-        raise ValueError(f"{key} must be a finite nonnegative number")
+        msg = f"{key} must be a finite nonnegative number"
+        raise ValueError(msg)
 
     return result
 
@@ -148,7 +154,8 @@ def _pairs(key: str, value: str) -> dict[str, str]:
     for item in value.split(","):
         name, separator, content = item.partition(":")
         if not separator or not name or name in result:
-            raise ValueError(f"{key} requires unique key:value pairs")
+            msg = f"{key} requires unique key:value pairs"
+            raise ValueError(msg)
 
         result[name] = content
 
@@ -162,13 +169,15 @@ def _option(key: str, value: str) -> _OptionValue:  # ruff: ignore[too-many-retu
     if key in _INTEGERS:
         number = _integer(key, value, _INTEGERS[key])
         if key == "zlibCompressionLevel" and number > _MAX_ZLIB_LEVEL:
-            raise ValueError("zlibCompressionLevel must be between -1 and 9")
+            msg = "zlibCompressionLevel must be between -1 and 9"
+            raise ValueError(msg)
         return number
 
     if key in _TIMEOUTS:
         milliseconds = _milliseconds(key, value)
         if key == "heartbeatFrequencyMS" and milliseconds < _MIN_HEARTBEAT_MS:
-            raise ValueError("heartbeatFrequencyMS must be >= 500")
+            msg = "heartbeatFrequencyMS must be >= 500"
+            raise ValueError(msg)
         return milliseconds / 1000
 
     if key == "localThresholdMS":
@@ -176,7 +185,8 @@ def _option(key: str, value: str) -> _OptionValue:  # ruff: ignore[too-many-retu
 
     if key == "w":
         if not value:
-            raise ValueError("w must not be empty")
+            msg = "w must not be empty"
+            raise ValueError(msg)
 
         return (
             _integer(key, value, 0)
@@ -200,28 +210,34 @@ def _option(key: str, value: str) -> _OptionValue:  # ruff: ignore[too-many-retu
     if key == "compressors":
         compressors = value.split(",") if value else []
         if set(compressors) - {"snappy", "zlib", "zstd"}:
+            msg = "compressors must contain only snappy, zlib, zstd"
             raise ValueError(
-                "compressors must contain only snappy, zlib, zstd",
+                msg,
             )
         return compressors
 
     if not value:
-        raise ValueError(f"{key} must not be empty")
+        msg = f"{key} must not be empty"
+        raise ValueError(msg)
 
     if key == "appname" and len(value.encode("utf-8")) > _MAX_APPNAME_BYTES:
-        raise ValueError("appName must be at most 128 UTF-8 bytes")
+        msg = "appName must be at most 128 UTF-8 bytes"
+        raise ValueError(msg)
 
     if key == "authMechanism" and value not in _AUTH_MECHANISMS:
-        raise ValueError("Unsupported authMechanism")
+        msg = "Unsupported authMechanism"
+        raise ValueError(msg)
 
     if key in _ENUMS and value not in _ENUMS[key]:
-        raise ValueError(f"Unsupported {key}")
+        msg = f"Unsupported {key}"
+        raise ValueError(msg)
 
     if key == "srvServiceName" and not re.fullmatch(
         r"[a-zA-Z0-9][a-zA-Z0-9-]*",
         value,
     ):
-        raise ValueError("Invalid srvServiceName")
+        msg = "Invalid srvServiceName"
+        raise ValueError(msg)
 
     return value
 
@@ -244,21 +260,27 @@ def parse_options(query: str, *, txt: bool = False) -> dict[str, Any]:
         return options
 
     if "&" in query and ";" in query:
-        raise ValueError("Cannot mix '&' and ';' option separators")
+        msg = "Cannot mix '&' and ';' option separators"
+        raise ValueError(msg)
 
     for item in re.split(r"[&;]", query):
         name, separator, raw = item.partition("=")
         if not separator or not name:
-            raise ValueError("URI options must be key=value pairs")
+            msg = "URI options must be key=value pairs"
+            raise ValueError(msg)
 
         key = _CANONICAL.get(decode_component(name).lower())
         if key is None:
-            raise ValueError("Unknown MongoDB URI option")
+            msg = "Unknown MongoDB URI option"
+            raise ValueError(msg)
 
         if txt and key not in {"authSource", "replicaSet", "loadBalanced"}:
-            raise ValueError(
+            msg = (
                 "TXT records may only set "
-                "authSource, replicaSet, loadBalanced",
+                "authSource, replicaSet, loadBalanced"
+            )
+            raise ValueError(
+                msg,
             )
 
         value = _option(key, decode_component(raw))
@@ -266,7 +288,8 @@ def parse_options(query: str, *, txt: bool = False) -> dict[str, Any]:
             options.setdefault(key, []).append(value)
 
         elif key in options:
-            raise ValueError(f"Duplicate URI option: {key}")
+            msg = f"Duplicate URI option: {key}"
+            raise ValueError(msg)
         else:
             options[key] = value
 
@@ -285,33 +308,41 @@ def validate_options(
         ValueError: If options contradict each other or the seed list.
     """
     if options.get("directConnection") and (srv or node_count != 1):
-        raise ValueError("directConnection=true requires one non-SRV host")
+        msg = "directConnection=true requires one non-SRV host"
+        raise ValueError(msg)
 
     if options.get("loadBalanced") and (
         node_count != 1
         or options.get("directConnection")
         or "replicaSet" in options
     ):
-        raise ValueError(
+        msg = (
             "loadBalanced=true requires one host "
-            "and no replicaSet/directConnection",
+            "and no replicaSet/directConnection"
+        )
+        raise ValueError(
+            msg,
         )
 
     if not srv and {"srvMaxHosts", "srvServiceName"} & options.keys():
-        raise ValueError("srvMaxHosts and srvServiceName require mongodb+srv")
+        msg = "srvMaxHosts and srvServiceName require mongodb+srv"
+        raise ValueError(msg)
 
     if options.get("srvMaxHosts") and (
         options.get("replicaSet") or options.get("loadBalanced")
     ):
+        msg = "srvMaxHosts cannot be combined with replicaSet or loadBalanced"
         raise ValueError(
-            "srvMaxHosts cannot be combined with replicaSet or loadBalanced",
+            msg,
         )
 
     if options.get("minPoolSize", 0) > options.get("maxPoolSize", 100) != 0:
-        raise ValueError("minPoolSize cannot exceed maxPoolSize")
+        msg = "minPoolSize cannot exceed maxPoolSize"
+        raise ValueError(msg)
 
     if options.get("w") == 0 and options.get("journal"):
-        raise ValueError("w=0 cannot be combined with journal=true")
+        msg = "w=0 cannot be combined with journal=true"
+        raise ValueError(msg)
 
     ReadPreference(
         mode=options.get("readPreference", "primary"),
@@ -325,6 +356,7 @@ def validate_options(
         "tlsAllowInvalidCertificates" in options
         or "tlsAllowInvalidHostnames" in options
     ):
+        msg = "tlsInsecure conflicts with explicit TLS validation options"
         raise ValueError(
-            "tlsInsecure conflicts with explicit TLS validation options",
+            msg,
         )

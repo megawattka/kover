@@ -71,7 +71,8 @@ class GridFS:
 
         else:
             cls = getattr(data, "__class__", None)
-            raise IncorrectGridFSData(f"Incorrect data passed: {cls}, {data}")
+            msg = f"Incorrect data passed: {cls}, {data}"
+            raise IncorrectGridFSData(msg)
 
         binary.seek(0)
         return binary, name
@@ -93,7 +94,7 @@ class GridFS:
         for chunk_group in splitted:
             await self._chunks.insert_many(chunk_group)
 
-    async def put(
+    async def put(  # ruff: ignore[too-many-arguments] -- Explicit upload and metadata options.
         self,
         data: GridFSPayloadT,
         *,
@@ -126,8 +127,9 @@ class GridFS:
         """
         chunk_size = DEFAULT_CHUNK_SIZE if chunk_size is None else chunk_size
         if isinstance(chunk_size, bool) or not 0 < chunk_size < SIZE_LIMIT:
+            msg = f"chunk_size must be > 0 and < {SIZE_LIMIT}"
             raise ValueError(
-                f"chunk_size must be > 0 and < {SIZE_LIMIT}",
+                msg,
             )
         file_id = ObjectId()
 
@@ -206,9 +208,11 @@ class GridFS:
                     calculated = sha1(binary.getvalue()).hexdigest()
 
                     if stored_sha1 != calculated:
-                        raise RuntimeError("sha1 hash mismatch")
+                        msg = "sha1 hash mismatch"
+                        raise RuntimeError(msg)
             return file, binary
-        raise GridFSFileNotFound("No file with that id found")
+        msg = "No file with that id found"
+        raise GridFSFileNotFound(msg)
 
     async def get_by_filename(
         self,
@@ -230,7 +234,8 @@ class GridFS:
 
             return await self.get_by_file_id(file.object_id)
 
-        raise GridFSFileNotFound("No file with that filename found")
+        msg = "No file with that filename found"
+        raise GridFSFileNotFound(msg)
 
     async def delete(
         self,

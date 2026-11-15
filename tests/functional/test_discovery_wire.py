@@ -44,7 +44,7 @@ async def read_command(
     )
     assert opcode == 2013
     body = await reader.readexactly(length - 16)
-    return request_id, elune.decode(body[5:])  # pyright: ignore[reportUnknownMemberType]
+    return request_id, elune.decode(body[5:])
 
 
 @pytest.mark.parametrize(

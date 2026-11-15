@@ -112,20 +112,23 @@ def resolve_refs(schema: Schema) -> Schema:
         reference = node.get("$ref")
         if reference is not None:
             if reference in active:
+                msg = f"{path}: recursive $ref {reference!r} is unsupported."
                 raise SchemaGenerationException(
-                    f"{path}: recursive $ref {reference!r} is unsupported.",
+                    msg,
                 )
             if not reference.startswith("#/"):
+                msg = f"{path}: external $ref {reference!r} is unsupported."
                 raise SchemaGenerationException(
-                    f"{path}: external $ref {reference!r} is unsupported.",
+                    msg,
                 )
             target = schema
             try:
                 for part in reference[2:].split("/"):
                     target = target[part.replace("~1", "/").replace("~0", "~")]
             except (KeyError, TypeError) as error:
+                msg = f"{path}: unresolved $ref {reference!r}."
                 raise SchemaGenerationException(
-                    f"{path}: unresolved $ref {reference!r}.",
+                    msg,
                 ) from error
             resolved = resolve(target, path, (*active, reference))
             siblings = resolve(
@@ -225,8 +228,9 @@ def map_types(schema: Schema) -> Schema:
         if "type" not in result:
             return result
         if "bsonType" in result:
+            msg = f"{path}: conflicting type and bsonType."
             raise SchemaGenerationException(
-                f"{path}: conflicting type and bsonType.",
+                msg,
             )
         source = result["type"]
         types = (
@@ -239,8 +243,9 @@ def map_types(schema: Schema) -> Schema:
                 ),
             )
         except KeyError as error:
+            msg = f"{path}: unsupported JSON type {source!r}."
             raise SchemaGenerationException(
-                f"{path}: unsupported JSON type {source!r}.",
+                msg,
             ) from error
         return {
             **{key: value for key, value in result.items() if key != "type"},
@@ -260,16 +265,18 @@ def validate_compatibility(schema: Schema) -> Schema:
     def validate(node: Schema, path: str) -> Schema:
         for key in node:
             if key not in _KEYWORDS:
+                msg = f"{path}/{key}: unsupported MongoDB keyword {key!r}."
                 raise SchemaGenerationException(
-                    f"{path}/{key}: unsupported MongoDB keyword {key!r}.",
+                    msg,
                 )
         bson_types = node.get("bsonType", [])
         if isinstance(bson_types, str):
             bson_types = [bson_types]
         for bson_type in bson_types:
             if bson_type not in _BSON_TYPES:
+                msg = f"{path}/bsonType: unsupported BSON type {bson_type!r}."
                 raise SchemaGenerationException(
-                    f"{path}/bsonType: unsupported BSON type {bson_type!r}.",
+                    msg,
                 )
         # JSON representation constraints must not silently become no-ops on
         # native BSON values (for example minLength on Binary or Code).
@@ -287,9 +294,12 @@ def validate_compatibility(schema: Schema) -> Schema:
                 and bson_types
                 and not (set(bson_types) & applicable)
             ):
-                raise SchemaGenerationException(
+                msg = (
                     f"{path}/{keyword}: constraint does not apply to "
-                    f"BSON types {bson_types!r}.",
+                    f"BSON types {bson_types!r}."
+                )
+                raise SchemaGenerationException(
+                    msg,
                 )
         return _walk(node, path, validate)
 
@@ -310,8 +320,9 @@ def mongodb_schema(schema: Schema) -> Schema:
     mapped = map_types(normalized)
     compatible = validate_compatibility(mapped)
     if compatible.get("bsonType") != "object":
+        msg = "$: a MongoDB document must be object."
         raise SchemaGenerationException(
-            "$: a MongoDB document must be object.",
+            msg,
         )
     properties = compatible.get("properties", {})
     return {

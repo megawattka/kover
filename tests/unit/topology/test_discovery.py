@@ -42,7 +42,8 @@ async def test_discovery_remembers_members_when_seed_is_unavailable(
     ) -> ServerDescription:
         assert deadline is not None
         if address.host not in available:
-            raise OSError("server unavailable")
+            msg = "server unavailable"
+            raise OSError(msg)
         return available[address.host]
 
     probe = AsyncMock(spec=IServerProbe)

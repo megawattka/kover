@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from .models.credentials import AuthCredentials
 
 
-async def _build_client(
+async def _build_client(  # ruff: ignore[too-many-arguments] -- Assembles independent client components.
     seeds: list[Address],
     *,
     options: DiscoveryOptions,
@@ -76,7 +76,7 @@ async def _build_client(
     return Kover(executor, write_concern=write_concern)
 
 
-async def make_client(
+async def make_client(  # ruff: ignore[too-many-arguments] -- Public connection options remain explicit and typed.
     host: str = "127.0.0.1",
     port: int = 27017,
     *,
@@ -144,7 +144,8 @@ async def from_uri(
     parsed = await parse_uri(uri)
     values = parsed.options
     if values.get("loadBalanced", False):
-        raise ValueError("loadBalanced=true is not supported")
+        msg = "loadBalanced=true is not supported"
+        raise ValueError(msg)
 
     return await _build_client(
         [Address(host=host, port=port) for host, port in parsed.node_list],

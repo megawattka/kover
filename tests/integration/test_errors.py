@@ -1,3 +1,5 @@
+import pytest
+
 from kover import Update
 from kover.exceptions import OperationFailure
 from tests.integration.base import MongoTestCase
@@ -7,10 +9,10 @@ class ErrorIntegrationTests(MongoTestCase):
     async def test_duplicate_key_preserves_connection(self) -> None:
         collection = await self.database.create_collection("items")
         await collection.insert_one({"_id": "duplicate"})
-        with self.assertRaises(OperationFailure) as caught:
+        with pytest.raises(OperationFailure) as caught:
             await collection.insert_one({"_id": "duplicate"})
 
-        error = caught.exception
+        error = caught.value
         assert error.code == 11000
         assert error.details["ok"] == 1
         assert error.details["writeErrors"][0]["code"] == 11000
@@ -20,16 +22,16 @@ class ErrorIntegrationTests(MongoTestCase):
 
     async def test_unordered_insert_reports_partial_failure(self) -> None:
         collection = self.database.get_collection("items")
-        with self.assertRaises(OperationFailure) as caught:
+        with pytest.raises(OperationFailure) as caught:
             await collection.insert_many([
                 {"_id": "duplicate"},
                 {"_id": "duplicate"},
                 {"_id": "after"},
             ], ordered=False)
 
-        assert caught.exception.code == 11000
-        assert caught.exception.details["n"] == 2
-        assert caught.exception.details["writeErrors"][0]["index"] == 1
+        assert caught.value.code == 11000
+        assert caught.value.details["n"] == 2
+        assert caught.value.details["writeErrors"][0]["index"] == 1
         assert await collection.find_one({"_id": "after"}) is not None
 
     async def test_validation_update_and_explicit_bypass(self) -> None:
@@ -43,13 +45,13 @@ class ErrorIntegrationTests(MongoTestCase):
             "validationAction": "error",
         })
         identifier = await collection.insert_one({"value": 1})
-        with self.assertRaises(OperationFailure) as caught:
+        with pytest.raises(OperationFailure) as caught:
             await collection.update(Update(
                 {"_id": identifier}, {"$set": {"value": "invalid"}},
             ))
 
-        assert caught.exception.code == 121
-        assert caught.exception.err_info is not None
+        assert caught.value.code == 121
+        assert caught.value.err_info is not None
         stored = await collection.find_one({"_id": identifier})
         assert stored is not None
         assert stored["value"] == 1
@@ -60,12 +62,12 @@ class ErrorIntegrationTests(MongoTestCase):
 
     async def test_command_error_preserves_connection(self) -> None:
         assert await self.database.ping()
-        with self.assertRaises(OperationFailure) as caught:
+        with pytest.raises(OperationFailure) as caught:
             await self.database.command({"koverUnknownCommand": 1})
 
-        assert caught.exception.code == 59
-        assert caught.exception.code_name == "CommandNotFound"
-        assert caught.exception.details["ok"] == 0
+        assert caught.value.code == 59
+        assert caught.value.code_name == "CommandNotFound"
+        assert caught.value.details["ok"] == 0
         assert await self.database.ping()
 
     async def test_write_concern_error_is_not_silenced(self) -> None:
@@ -77,14 +79,14 @@ class ErrorIntegrationTests(MongoTestCase):
             len(hello.get(key, []))
             for key in ("hosts", "passives", "arbiters")
         )
-        with self.assertRaises(OperationFailure) as caught:
+        with pytest.raises(OperationFailure) as caught:
             await self.database.command({
                 "insert": collection.name,
                 "documents": [{"_id": "written"}],
                 "writeConcern": {"w": member_count + 1, "wtimeout": 100},
             })
 
-        error = caught.exception
+        error = caught.value
         assert error.details["ok"] == 1
         concern_error = error.details["writeConcernError"]
         assert error.code == concern_error["code"]

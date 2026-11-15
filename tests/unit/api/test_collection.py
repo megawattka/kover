@@ -176,12 +176,13 @@ async def test_collection_metadata_and_index_management() -> None:
     assert command.await_args.args[0] == {"reIndex": "items"}
 
     database = collection.database
-    database.list_collections.return_value = [  # pyright: ignore[reportAttributeAccessIssue]
+    assert isinstance(database.list_collections, AsyncMock)
+    database.list_collections.return_value = [
         Collection("items", database, options={"capped": True}),
     ]
     assert await collection.create_if_not_exists() is not None
     assert (await collection.with_options()).options == {"capped": True}
-    database.list_collections.return_value = []  # pyright: ignore[reportAttributeAccessIssue]
+    database.list_collections.return_value = []
     database.create_collection = AsyncMock(
         return_value=Collection("items", database),
     )
@@ -237,4 +238,6 @@ async def test_convert_to_capped_validator_and_drop() -> None:
         "validationLevel": "moderate",
     }
     await collection.drop()
-    collection.database.drop_collection.assert_awaited_once_with("items")  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+    drop_collection = collection.database.drop_collection
+    assert isinstance(drop_collection, AsyncMock)
+    drop_collection.assert_awaited_once_with("items")

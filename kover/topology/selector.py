@@ -202,8 +202,9 @@ class ServerSelector(IServerSelector):
         try:
             return self._state.get(address)
         except KeyError as error:
+            msg = f"srv {address.host}:{address.port} has no known description"
             raise ServerSelectionError(
-                f"srv {address.host}:{address.port} has no known description",
+                msg,
             ) from error
 
     async def select(
@@ -250,8 +251,9 @@ class ServerSelector(IServerSelector):
                     selection_deadline,
                 )
         except TimeoutError as error:
+            msg = "server selection deadline expired"
             raise ServerSelectionError(
-                "server selection deadline expired",
+                msg,
             ) from error
 
     async def _select_direct(
@@ -286,15 +288,19 @@ class ServerSelector(IServerSelector):
                     self.replace_descriptions(refreshed)
 
                 if not self.descriptions:
+                    msg = "no server discovered for direct connection"
                     raise ServerSelectionError(
-                        "no server discovered for direct connection",
+                        msg,
                     )
 
                 return self.descriptions[0].address
         except TimeoutError as e:
-            raise ServerSelectionError(
+            msg = (
                 "no server found for direct connection "
-                "before the selection deadline",
+                "before the selection deadline"
+            )
+            raise ServerSelectionError(
+                msg,
             ) from e
 
     async def _select_until_deadline(
@@ -322,7 +328,8 @@ class ServerSelector(IServerSelector):
 
             remaining = deadline - loop.time()
             if remaining <= 0:
-                raise TimeoutError("server selection deadline expired")
+                msg = "server selection deadline expired"
+                raise TimeoutError(msg)
             await asyncio.sleep(min(0.5, remaining))
 
     def _choose(

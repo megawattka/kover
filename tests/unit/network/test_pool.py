@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Never
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -11,7 +11,7 @@ from kover.models.address import Address
 from kover.network import ConnectionPool
 
 if TYPE_CHECKING:
-    from kover.network import Connection, ConnectionLease
+    from kover.network import ConnectionLease
 
 
 def connection(*, usable: bool = True) -> MagicMock:
@@ -69,9 +69,10 @@ async def test_checkout_deadline_expires_while_pool_is_full() -> None:
 async def test_creation_deadline_and_close_during_creation() -> None:
     started = asyncio.Event()
 
-    async def blocked_factory() -> Connection:  # pyright: ignore[reportReturnType]
+    async def blocked_factory() -> Never:
         started.set()
-        await asyncio.Event().wait()
+        while True:
+            await asyncio.Event().wait()
 
     pool = ConnectionPool(
         Address(host="db"),

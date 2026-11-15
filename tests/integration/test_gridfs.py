@@ -2,6 +2,8 @@ from hashlib import sha1
 import logging
 import os
 
+import pytest
+
 from kover.gridfs import GridFS
 from kover.gridfs.exceptions import GridFSFileNotFound
 from tests.integration.base import MongoTestCase
@@ -44,5 +46,5 @@ class GridFSIntegrationTests(MongoTestCase):
         assert await chunks.count() == 0
         assert not await fs.delete(file_id)
 
-        with self.assertRaises(GridFSFileNotFound):
+        with pytest.raises(GridFSFileNotFound):
             await fs.get_by_file_id(file_id)

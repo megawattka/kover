@@ -28,8 +28,9 @@ def auth_database(options: dict[str, Any], database: str | None) -> str:
     mechanism = options.get("authMechanism")
     if mechanism in _EXTERNAL_MECHANISMS:
         if options.get("authSource", "$external") != "$external":
+            msg = "This authMechanism requires authSource=$external"
             raise ValueError(
-                "This authMechanism requires authSource=$external",
+                msg,
             )
         return "$external"
     default = "$external" if mechanism == "PLAIN" else "admin"

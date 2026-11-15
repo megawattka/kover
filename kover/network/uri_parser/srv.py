@@ -36,8 +36,9 @@ def validate_srv_host(host: str) -> str:
     except ValueError:
         pass
     else:
+        msg = "mongodb+srv requires a DNS hostname, not an IP address"
         raise ValueError(
-            "mongodb+srv requires a DNS hostname, not an IP address",
+            msg,
         )
     labels = host.rstrip(".").split(".")
     if (
@@ -55,8 +56,9 @@ def validate_srv_host(host: str) -> str:
             for label in labels
         )
     ):
+        msg = "mongodb+srv requires a valid DNS hostname with a domain"
         raise ValueError(
-            "mongodb+srv requires a valid DNS hostname with a domain",
+            msg,
         )
     return ".".join(labels[1:] if len(labels) > _MIN_DOMAIN_LABELS else labels)
 
@@ -85,20 +87,23 @@ async def resolve_srv(
             search=False,
         )
     except DNSException as error:
-        raise ValueError("Unable to resolve MongoDB SRV records") from error
+        msg = "Unable to resolve MongoDB SRV records"
+        raise ValueError(msg) from error
 
     nodes: list[tuple[str, int]] = []
     for record in answer:
         srv = cast("SRV", record)
         target = srv.target.to_text(omit_final_dot=True).lower()
         if not target.endswith(f".{parent}"):
-            raise ValueError("SRV target is outside the seed's parent domain")
+            msg = "SRV target is outside the seed's parent domain"
+            raise ValueError(msg)
         node = parse_host(f"{target}:{srv.port}")
         if node not in nodes:
             nodes.append(node)
 
     if not nodes:
-        raise ValueError("MongoDB SRV response contains no hosts")
+        msg = "MongoDB SRV response contains no hosts"
+        raise ValueError(msg)
 
     return nodes, await _resolve_txt(host, lifetime)
 
@@ -115,10 +120,12 @@ async def _resolve_txt(host: str, lifetime: float) -> dict[str, Any]:
         return {}
 
     except DNSException as error:
-        raise ValueError("Unable to resolve MongoDB TXT records") from error
+        msg = "Unable to resolve MongoDB TXT records"
+        raise ValueError(msg) from error
 
     if len(txt_answer) > 1:
-        raise ValueError("Only one MongoDB TXT record is allowed")
+        msg = "Only one MongoDB TXT record is allowed"
+        raise ValueError(msg)
 
     txt_options: dict[str, Any] = {}
     for record in txt_answer:
@@ -126,8 +133,9 @@ async def _resolve_txt(host: str, lifetime: float) -> dict[str, Any]:
         try:
             text = b"".join(txt.strings).decode("utf-8")
         except UnicodeError as error:
+            msg = "MongoDB TXT record is not valid UTF-8"
             raise ValueError(
-                "MongoDB TXT record is not valid UTF-8",
+                msg,
             ) from error
         txt_options = parse_options(text, txt=True)
 

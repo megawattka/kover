@@ -2,6 +2,8 @@ import asyncio
 import os
 from urllib.parse import quote
 
+import pytest
+
 from kover import AuthCredentials, from_uri, make_client
 from tests.integration.base import MongoTestCase
 
@@ -40,10 +42,15 @@ class ConnectionIntegrationTests(MongoTestCase):
             credentials=AuthCredentials.from_environ(),
         )
         self.addAsyncCleanup(client.close)
-        with self.assertRaisesRegex(ValueError, "body failed"):
+
+        async def use_client() -> None:
             async with client:
                 assert await client.get_database("admin").ping()
-                raise ValueError("body failed")
+                msg = "body failed"
+                raise ValueError(msg)
+
+        with pytest.raises(ValueError, match="body failed"):
+            await use_client()
 
     async def test_uri_and_zlib_roundtrip(self) -> None:
         credentials = AuthCredentials.from_environ()

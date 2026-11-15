@@ -63,27 +63,21 @@ docstring-code-line-length = "dynamic"
 [tool.ruff.lint]
 preview = true
 ignore = [
-    "implicit-namespace-package",  # __init__.py in public namespaces
-    "missing-todo-link",  # issue links for todos
-    "line-contains-todo",  # TODOs
-    "relative-imports",  # fvck absolute imports
-    "error-suffix-on-exception-name",  # "Error" suffix in exception class
-    "assert",  # assertions
-    "hashlib-insecure-hash-function",  # I want to use sha1 please
-    "undocumented-magic-method",  # undocumented-magic-method
-    "undocumented-public-init",  # undocumented-public-init
-    "missing-copyright-notice",  # Copyright notice at the top
-    "too-many-arguments",  # too many arguments in function def
-    "too-many-positional-arguments",  # too many positional arguments in function def
-    "too-many-public-methods",  # too many public methods
-    "raw-string-in-exception", "f-string-in-exception", "raise-vanilla-args",  # string literal in exception
-    "undocumented-public-package",  # undocumented public package
+    "implicit-namespace-package",
+    "missing-todo-link",
+    "relative-imports",
+    "error-suffix-on-exception-name",
+    "assert",
+    "hashlib-insecure-hash-function",
+    "undocumented-magic-method",
+    "undocumented-public-init",
+    "missing-copyright-notice",
 ]
 select = ["ALL"]
 unfixable = [
-    "unused-noqa", # unused noqa
+    "unused-noqa",
     "T20",  # removes print statements
-    "unused-variable", # removes unused variables
+    "unused-variable",
 ]
 
 [tool.ruff.lint.flake8-builtins]
@@ -96,7 +90,6 @@ strict-checking = true
     "undocumented-public-method",  # undocumented public method
     "undocumented-public-function",
     "typing-only-standard-library-import",  # type checking blocks
-    "pytest-unittest-raises-assertion",  # unittest style
     "undocumented-public-module",  # module docstring
     "magic-value-comparison",  # constant comparisons
 ]
@@ -131,8 +124,6 @@ include = [
     "CODE_OF_CONDUCT.md",
     "kover",
     "docs",
-    # "Cargo.toml",
-    # "rust/*.rs"
 ]
 exclude = [
     "examples",
@@ -146,10 +137,3 @@ typeCheckingMode = "strict"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-
-# [tool.maturin]
-# python-source = "."
-# module-name = "kover.rlib"
-# bindings = "pyo3"
-
-# [tool.hatch.build.targets.wheel.hooks.custom]

@@ -1,6 +1,8 @@
 import os
 from urllib.parse import quote
 
+import pytest
+
 from kover import (
     AuthCredentials,
     BulkWriteBuilder,
@@ -80,14 +82,18 @@ class UpstreamFeatureTests(MongoTestCase):
         )
 
         helper = ErrorMapper()
-        with self.assertRaises(OperationFailure) as caught:
-            reply = await self.client.bulk_write(builder.build()).to_list()
+        reply = await self.client.bulk_write(builder.build()).to_list()
+
+        async def raise_write_error() -> None:
             for op in reply:
                 if op["ok"] == 0:
                     exc = await helper.get_exception(op)
                     raise exc
 
-        assert caught.exception.code == 11000
+        with pytest.raises(OperationFailure) as caught:
+            await raise_write_error()
+
+        assert caught.value.code == 11000
         assert len(reply) == 3
         assert await self.database.bulk.find_one({"_id": "after"}) is not None
 
@@ -100,7 +106,7 @@ class UpstreamFeatureTests(MongoTestCase):
         assert stream.read() == b""
         assert await self.database.fs.chunks.count() == 0
         for size in (0, -1, True, 16 * 1024 * 1024):
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError, match="chunk_size must be"):
                 await fs.put(b"data", chunk_size=size)
 
     async def test_gridfs_metadata_no_checksum_corruption_and_drop(
@@ -125,14 +131,14 @@ class UpstreamFeatureTests(MongoTestCase):
                 {"$set": {"data": b"bad"}},
             ),
         )
-        with self.assertRaisesRegex(RuntimeError, "sha1"):
+        with pytest.raises(RuntimeError, match="sha1"):
             await fs.get_by_file_id(checked)
         _, corrupted = await fs.get_by_file_id(checked, check_sha1=False)
         assert corrupted.read() == b"badginal"
         assert await fs.drop_all_files() == 2
         assert await self.database.fs.chunks.count() == 0
         assert await fs.list() == []
-        with self.assertRaises(GridFSFileNotFound):
+        with pytest.raises(GridFSFileNotFound):
             await fs.get_by_filename("missing")
 
     async def test_bulk_ordered_stops_and_unordered_continues(self) -> None:

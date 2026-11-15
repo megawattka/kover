@@ -1,3 +1,5 @@
+"""Async MongoDB client, operations, and Pydantic document models."""
+
 # MIT License
 
 # Copyright (c) 2024 megawattka

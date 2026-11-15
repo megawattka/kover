@@ -75,11 +75,13 @@ class Cursor[T]:
 
     def _ensure_at_start(self) -> None:
         if self._started or self._closed:
-            raise RuntimeError("Cursor is already started or closed")
+            msg = "Cursor is already started or closed"
+            raise RuntimeError(msg)
 
     def _ensure_single_thread(self) -> None:
         if self._reading:
-            raise RuntimeError("Concurrent use of cursor is not supported")
+            msg = "Concurrent use of cursor is not supported"
+            raise RuntimeError(msg)
 
     def _set_option(self, name: str, value: object) -> Self:
         self._ensure_at_start()
@@ -175,9 +177,12 @@ class Cursor[T]:
             self._get_more_batch_size = cursor_options["batchSize"]
 
         elif "batchSize" in options:
-            raise ValueError(
+            msg = (
                 "Cannot determine batchSize placement for this command; "
-                "specify its initial batch options directly in the query",
+                "specify its initial batch options directly in the query"
+            )
+            raise ValueError(
+                msg,
             )
 
         query.update(options)
@@ -201,7 +206,8 @@ class Cursor[T]:
         if namespace is not None:
             database, separator, collection = namespace.partition(".")
             if not database or not separator or not collection:
-                raise ValueError(f"Invalid cursor namespace: {namespace!r}")
+                msg = f"Invalid cursor namespace: {namespace!r}"
+                raise ValueError(msg)
             self._server_database = database
             self._server_collection = collection
 
@@ -222,7 +228,8 @@ class Cursor[T]:
 
     async def _get_more(self) -> None:
         if self._id is None or self._id == 0:
-            raise RuntimeError("Cursor has no active server ID")
+            msg = "Cursor has no active server ID"
+            raise RuntimeError(msg)
 
         command: dict[str, Any] = {
             "getMore": self._id,
@@ -296,7 +303,8 @@ class Cursor[T]:
             await self._start()
 
             if self._command_response is None:
-                raise RuntimeError("Command returned a cursor;")  # ruff: ignore[raise-within-try]
+                msg = "Command returned a cursor;"
+                raise RuntimeError(msg)  # ruff: ignore[raise-within-try]
 
             self._docs.clear()
             return self._command_response  # ruff: ignore[try-consider-else]

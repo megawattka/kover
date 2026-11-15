@@ -29,7 +29,8 @@ class PoolRegistry(IPoolProvider):
         pool_factory: Callable[..., ConnectionPool] = ConnectionPool,
     ) -> None:
         if max_pool_size < 1:
-            raise ValueError("max_pool_size must be positive")
+            msg = "max_pool_size must be positive"
+            raise ValueError(msg)
 
         self._connection_factory = connection_factory
         self._max_pool_size = max_pool_size
@@ -45,7 +46,8 @@ class PoolRegistry(IPoolProvider):
             PoolClosedError: if pool is closed.
         """
         if self._closed:
-            raise PoolClosedError("pool registry is closed")
+            msg = "pool registry is closed"
+            raise PoolClosedError(msg)
 
         key = self._key(address)
         pool = self._pools.get(key)

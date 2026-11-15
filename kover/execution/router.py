@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from ..topology.protocols import IServerSelector
 
 
-async def route_command(
+async def route_command(  # ruff: ignore[too-many-arguments] -- Independent routing and session inputs.
     command: dict[str, Any],
     *,
     selector: IServerSelector,

@@ -6,9 +6,37 @@
 [![PyPI](https://img.shields.io/pypi/v/kover)](https://pypi.org/project/kover/)
 [![Typing](https://img.shields.io/badge/typing-py.typed-blue)](https://peps.python.org/pep-0561/)
 
-**Kover** is an asynchronous MongoDB driver and Pydantic v2 document toolkit
-for Python 3.12+. Networking uses `asyncio` streams and MongoDB's `OP_MSG` /
-`OP_COMPRESSED` wire protocol directly, without thread-pool wrappers.
+**Kover lets your Python application save, find, update, and delete data in
+MongoDB using Python dictionaries or typed Pydantic models.**
+
+For example, define a `User` model, save a user to the database, and read it
+back as a `User` object with validated fields and editor autocomplete.
+
+Use it for async applications such as a FastAPI backend storing users,
+products, or messages. It requires Python **3.12+** and Pydantic **v2**.
+
+### Where does Kover fit?
+
+```text
+Your Python application (for example, a FastAPI backend)
+    → Kover (validates models and sends database requests)
+    → MongoDB (stores your data)
+```
+
+- **A MongoDB driver:** connects your application to MongoDB and runs database
+  operations asynchronously with `await`. No PyMongo or Motor dependency.
+- **Pydantic integration:** define the shape of your data with Python classes,
+  validate it, and read database results back as model instances. Plain
+  dictionaries work too.
+- **Optional database-side validation:** generate MongoDB validation rules
+  from your models so the database can reject invalid documents too.
+
+Kover is a Python library, **not a database or a web framework**. You still
+need a running MongoDB server, locally or hosted. It has its own API; it is
+not a drop-in replacement for PyMongo or Motor.
+
+Want to see it in an API? See the
+[complete FastAPI CRUD application](https://github.com/megawattka/kover-fastapi-crud).
 
 ## Contents
 
@@ -27,6 +55,9 @@ for Python 3.12+. Networking uses `asyncio` streams and MongoDB's `OP_MSG` /
 - [Documentation and examples](#documentation-and-examples)
 
 ## Capabilities and requirements
+
+Kover talks directly to MongoDB using `asyncio` streams and MongoDB's
+`OP_MSG` / `OP_COMPRESSED` wire protocol, without thread-pool wrappers.
 
 - Native asynchronous clients, per-server connection pools, and lazy cursors.
 - All five read preference modes, ordered tag sets, max staleness, and latency windows.
@@ -52,7 +83,13 @@ including its native Pydantic integration.
 
 ## Installation
 
-Install Kover using uv:
+Install Kover using pip:
+
+```bash
+pip install kover
+```
+
+Or using uv:
 
 ```bash
 uv add kover
@@ -64,26 +101,50 @@ uv add "kover[snappy,zstd]"
 
 ## Quick start
 
-`from_uri()` and `make_client()` are **module-level factory functions** returning
-a `Kover` client. They are not methods on the `Kover` class. Factories perform
-initial server discovery; application connections are opened lazily in pools.
+With MongoDB running at `127.0.0.1:27017`, save this as `main.py` and run
+`python main.py`. This example defines a user, saves it, and reads it back:
 
 ```python
 import asyncio
 
-from kover import from_uri
+from pydantic import Field
+
+from kover import Document, from_uri
+
+
+class User(Document):
+    name: str
+    age: int = Field(ge=0)
 
 
 async def main() -> None:
     async with await from_uri("mongodb://127.0.0.1:27017/") as client:
-        messages = client.get_database("demo").get_collection("messages")
-        document_id = await messages.insert_one({"message": "Hello, Kover!"})
-        print(await messages.find_one({"_id": document_id}))
+        users = client.get_database("demo").get_collection("users")
+
+        # Validate the data with Pydantic, then save it to MongoDB.
+        user_id = await users.insert_one(User(name="Maksim", age=21))
+
+        # Read it back as a User object rather than a dictionary.
+        user = await users.find_one({"_id": user_id}, cls=User)
+        if user is not None:
+            print(user.name, user.age)  # Maksim 21
 
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+
+`User(name="Maksim", age=-1)` raises a Pydantic validation error before any
+database request. `cls=User` also validates documents when reading them back.
+To enforce rules inside MongoDB itself, see
+[MongoDB schema validation](#mongodb-schema-validation).
+
+You can also pass dictionaries to `insert_one()` and omit `cls` when querying
+to receive dictionaries instead. Each run of this example inserts a new user.
+
+`from_uri()` and `make_client()` are **module-level factory functions** returning
+a `Kover` client. They are not methods on the `Kover` class. Factories perform
+initial server discovery; application connections are opened lazily in pools.
 
 The remaining asynchronous snippets belong inside an async function. Unless a
 snippet creates its own client, it assumes an open `client` and reuses models

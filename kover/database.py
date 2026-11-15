@@ -131,7 +131,7 @@ class Database:
         await self.command(command)
 
     # https://gist.github.com/xandout/61d25df23a77236ab28236650f84ce6b
-    async def create_user(
+    async def create_user(  # ruff: ignore[too-many-arguments] -- Mirrors MongoDB user administration options.
         self,
         name: str,
         password: str,
@@ -166,7 +166,8 @@ class Database:
                 {"role": "readWriteAnyDatabase", "db": "admin"},
             ]
         if roles is None:
-            raise ValueError("You need to specify user roles.")
+            msg = "You need to specify user roles."
+            raise ValueError(msg)
 
         command = filter_non_null(
             {
@@ -180,7 +181,7 @@ class Database:
         )
         await self.command(command)
 
-    async def users_info(
+    async def users_info(  # ruff: ignore[too-many-arguments] -- Mirrors MongoDB user query options.
         self,
         query: str | dict[str, Any] | list[dict[str, Any]] | float | None = None,  # ruff: ignore[line-too-long]
         *,
@@ -287,7 +288,7 @@ class Database:
             },
         )
 
-    async def command(
+    async def command(  # ruff: ignore[too-many-arguments] -- Explicit per-command execution options.
         self,
         doc: dict[str, Any],
         /,
@@ -315,7 +316,8 @@ class Database:
             ValueError: if clients are different
         """
         if session is not None and session.client is not self.client:
-            raise ValueError("Session belongs to a different client")
+            msg = "Session belongs to a different client"
+            raise ValueError(msg)
 
         return await self.client.command(
             doc=doc,

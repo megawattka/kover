@@ -32,14 +32,15 @@ def effective_read_preference(
         session.in_transaction or session.state is TxnState.COMMITTING
     )
     if transactional and is_read and preference.mode != "primary":
-        raise ValueError("transaction reads require readPreference=primary")
+        msg = "transaction reads require readPreference=primary"
+        raise ValueError(msg)
     return (
         preference if is_read and not transactional else ReadPreference(),
         transactional,
     )
 
 
-def apply_rp_metadata(
+def apply_rp_metadata(  # ruff: ignore[too-many-arguments] -- Independent read preference metadata inputs.
     command: dict[str, Any],
     *,
     address: Address,
@@ -75,7 +76,7 @@ def apply_rp_metadata(
     return result, effective
 
 
-async def resolve_address(
+async def resolve_address(  # ruff: ignore[too-many-arguments] -- Independent routing and session inputs.
     command: dict[str, Any],
     *,
     selector: IServerSelector,
@@ -95,7 +96,8 @@ async def resolve_address(
     name = next(iter(command), "")
     if name in {"getMore", "killCursors"}:
         if cursor_address is None:
-            raise ValueError(f"{name} requires the cursor's server address")
+            msg = f"{name} requires the cursor's server address"
+            raise ValueError(msg)
         return cursor_address
 
     if session is not None and (

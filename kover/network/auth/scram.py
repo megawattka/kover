@@ -24,7 +24,8 @@ def _parse_attributes(payload: bytes) -> dict[str, bytes]:
     for item in payload.split(b","):
         key, separator, value = item.partition(b"=")
         if not separator or not key:
-            raise ValueError("invalid SCRAM server response")
+            msg = "invalid SCRAM server response"
+            raise ValueError(msg)
         result[key.decode("ascii")] = value
     return result
 
@@ -35,7 +36,8 @@ def _escape_username(username: bytes) -> bytes:
 
 def _xor(first: bytes, second: bytes) -> bytes:
     if len(first) != len(second):
-        raise ValueError("SCRAM values must have the same length")
+        msg = "SCRAM values must have the same length"
+        raise ValueError(msg)
     return bytes(a ^ b for a, b in zip(first, second, strict=True))
 
 
@@ -70,8 +72,9 @@ class ScramAuthenticator:
             digest_name, digestmod = "sha256", hashlib.sha256
             password = credentials.password.encode()
         else:
+            msg = f"unsupported authentication mechanism: {mechanism}"
             raise ValueError(
-                f"unsupported authentication mechanism: {mechanism}",
+                msg,
             )
 
         nonce = b64encode(os.urandom(32))
@@ -91,11 +94,13 @@ class ScramAuthenticator:
         fields = _parse_attributes(server_first)
         iterations = int(fields["i"])
         if iterations < MIN_ITERATIONS:
-            raise ValueError("server sent an invalid iteration count")
+            msg = "server sent an invalid iteration count"
+            raise ValueError(msg)
 
         server_nonce = fields["r"]
         if not server_nonce.startswith(nonce):
-            raise ValueError("server sent an invalid nonce")
+            msg = "server sent an invalid nonce"
+            raise ValueError(msg)
 
         salted = hashlib.pbkdf2_hmac(
             digest_name,
@@ -128,10 +133,12 @@ class ScramAuthenticator:
             database=credentials.auth_database,
         )
         if not final.get("done"):
-            raise RuntimeError("SASL conversation not completed")
+            msg = "SASL conversation not completed"
+            raise RuntimeError(msg)
 
         response = _parse_attributes(bytes(final["payload"]))
         if not compare_digest(response.get("v", b""), server_signature):
-            raise ValueError("authentication failed: server signatures differ")
+            msg = "authentication failed: server signatures differ"
+            raise ValueError(msg)
 
         return server_signature

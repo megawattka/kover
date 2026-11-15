@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from .models.replica_set import ReplicaSetConfig
 
 
-@classrepr("_write_concern", "_executor")
+@classrepr("_write_concern", "_executor")  # ruff: ignore[too-many-public-methods] -- Client facade exposes database operations.
 class Kover:
     """Expose database and administrative helpers through an executor.
 
@@ -91,7 +91,7 @@ class Kover:
         )
         return self
 
-    async def command(
+    async def command(  # ruff: ignore[too-many-arguments] -- Explicit per-command execution options.
         self,
         doc: dict[str, Any],
         *,
@@ -116,7 +116,8 @@ class Kover:
                 transaction read requests a non-primary preference.
         """
         if session is not None and session.client is not self:
-            raise ValueError("Session belongs to a different client")
+            msg = "Session belongs to a different client"
+            raise ValueError(msg)
 
         return await self._executor.execute(
             doc,
@@ -161,7 +162,8 @@ class Kover:
         """
         for session in sessions:
             if session.client is not self:
-                raise ValueError("Cannot refresh foreign session")
+                msg = "Cannot refresh foreign session"
+                raise ValueError(msg)
 
         documents: list[dict[str, Any]] = [x.document for x in sessions]
         await self.command({"refreshSessions": documents})
@@ -177,7 +179,8 @@ class Kover:
         """
         for session in sessions:
             if session.client is not self:
-                raise ValueError("Cannot end foreign session")
+                msg = "Cannot end foreign session"
+                raise ValueError(msg)
 
         documents: list[dict[str, Any]] = [x.document for x in sessions]
         await self.command({"endSessions": documents})

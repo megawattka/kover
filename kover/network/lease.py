@@ -27,7 +27,8 @@ class ConnectionLease:
             RuntimeError: If this lease has already been released.
         """
         if self._connection is None:
-            raise RuntimeError("connection lease has been released")
+            msg = "connection lease has been released"
+            raise RuntimeError(msg)
         return self._connection
 
     @property

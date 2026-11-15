@@ -21,7 +21,7 @@ def test_concern_models_serialize_defaults_and_optional_fields() -> None:
     assert ReadConcern().model_dump() == {"level": "local"}
     assert ReadConcern(level="snapshot").model_dump() == {"level": "snapshot"}
     with pytest.raises(ValidationError):
-        ReadConcern(level="invalid")  # pyright: ignore[reportArgumentType]
+        ReadConcern.model_validate({"level": "invalid"})
 
 
 @pytest.mark.parametrize(
@@ -40,7 +40,7 @@ def test_discovery_options_reject_invalid_limits(
     kwargs: dict[str, object],
 ) -> None:
     with pytest.raises(ValidationError):
-        DiscoveryOptions(**kwargs)  # pyright: ignore[reportArgumentType]
+        DiscoveryOptions.model_validate(kwargs)
 
 
 def test_discovery_options_accept_zero_and_disabled_timeout() -> None:

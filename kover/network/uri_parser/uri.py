@@ -15,14 +15,16 @@ def _userinfo(authority: str) -> tuple[str, str | None, str | None]:
     userinfo, _, hosts = authority.rpartition("@")
     username, separator, password = userinfo.partition(":")
     if not username or "@" in userinfo or ":" in password:
+        msg = "Username and password must escape reserved URI characters"
         raise ValueError(
-            "Username and password must escape reserved URI characters",
+            msg,
         )
 
     for component in (username, password):
         if any(char in component for char in "$:/?#[]@"):
+            msg = "Username and password must escape reserved URI characters"
             raise ValueError(
-                "Username and password must escape reserved URI characters",
+                msg,
             )
 
     return (
@@ -39,11 +41,13 @@ def _namespace(path: str) -> tuple[str | None, str | None]:
     namespace = decode_component(path)
     database, separator, collection = namespace.partition(".")
     if not database or any(char in database for char in '/\\ "$.'):
-        raise ValueError("Invalid database name in MongoDB URI")
+        msg = "Invalid database name in MongoDB URI"
+        raise ValueError(msg)
 
     if "/" in namespace or "\\" in namespace:
+        msg = "MongoDB URI must contain only one database path segment"
         raise ValueError(
-            "MongoDB URI must contain only one database path segment",
+            msg,
         )
 
     return database, collection if separator else None
@@ -60,8 +64,9 @@ def _seeds(
         return nodes, None
 
     if len(raw_hosts) != 1 or ":" in decode_component(raw_hosts[0]):
+        msg = "mongodb+srv requires exactly one hostname without a port"
         raise ValueError(
-            "mongodb+srv requires exactly one hostname without a port",
+            msg,
         )
 
     fqdn = nodes[0][0].rstrip(".")
@@ -72,17 +77,22 @@ def _seeds(
 def _split_uri(uri: str) -> tuple[str, str, str, str]:
     scheme, separator, remainder = uri.partition("://")
     if not separator or scheme not in {"mongodb", "mongodb+srv"}:
-        raise ValueError("URI must begin with mongodb:// or mongodb+srv://")
+        msg = "URI must begin with mongodb:// or mongodb+srv://"
+        raise ValueError(msg)
 
     if "#" in remainder or has_control_characters(uri):
+        msg = (
+            "Fragments and control characters are not allowed in MongoDB URIs"
+        )
         raise ValueError(
-            "Fragments and control characters are not allowed in MongoDB URIs",
+            msg,
         )
 
     location, _, query = remainder.partition("?")
     authority, slash, path = location.partition("/")
     if not authority and slash:
-        raise ValueError("Unix domain sockets are not supported")
+        msg = "Unix domain sockets are not supported"
+        raise ValueError(msg)
 
     return scheme, authority, path, query
 

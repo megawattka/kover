@@ -30,15 +30,18 @@ def decode_component(value: str) -> str:
         ValueError: If the component contains invalid escapes or NUL.
     """
     if re.search(r"%(?![0-9a-fA-F]{2})", value):
-        raise ValueError("Invalid percent escape in MongoDB URI")
+        msg = "Invalid percent escape in MongoDB URI"
+        raise ValueError(msg)
 
     try:
         decoded = unquote_plus(value, errors="strict")
     except UnicodeError as error:
-        raise ValueError("Invalid UTF-8 in MongoDB URI") from error
+        msg = "Invalid UTF-8 in MongoDB URI"
+        raise ValueError(msg) from error
 
     if "\x00" in decoded:
-        raise ValueError("NUL is not allowed in MongoDB URI components")
+        msg = "NUL is not allowed in MongoDB URI components"
+        raise ValueError(msg)
 
     return decoded
 
@@ -48,25 +51,29 @@ def _split_host(value: str) -> tuple[str, str | None]:
     if value.startswith("["):
         host, bracket, suffix = value[1:].partition("]")
         if not bracket or (suffix and not suffix.startswith(":")):
-            raise ValueError("Invalid bracketed IPv6 address")
+            msg = "Invalid bracketed IPv6 address"
+            raise ValueError(msg)
 
         try:
             IPv6Address(host)
         except ValueError as error:
-            raise ValueError("Invalid IPv6 address") from error
+            msg = "Invalid IPv6 address"
+            raise ValueError(msg) from error
 
         if suffix:
             port_text = suffix[1:]
     else:
         if value.count(":") > 1:
-            raise ValueError("IPv6 addresses must be enclosed in brackets")
+            msg = "IPv6 addresses must be enclosed in brackets"
+            raise ValueError(msg)
 
         host, separator, port = value.partition(":")
         if separator:
             port_text = port
 
         if any(char in host for char in "[]%"):
-            raise ValueError("Invalid hostname")
+            msg = "Invalid hostname"
+            raise ValueError(msg)
 
     return host, port_text
 
@@ -75,17 +82,20 @@ def _parse_port(port_text: str | None, default_port: int) -> int:
     port_number = default_port
     if port_text is not None:
         if not port_text.isascii() or not port_text.isdecimal():
-            raise ValueError("Port must be an integer between 1 and 65535")
+            msg = "Port must be an integer between 1 and 65535"
+            raise ValueError(msg)
 
         try:
             port_number = int(port_text)
         except ValueError as error:
+            msg = "Port must be an integer between 1 and 65535"
             raise ValueError(
-                "Port must be an integer between 1 and 65535",
+                msg,
             ) from error
 
     if not 1 <= port_number <= _MAX_PORT:
-        raise ValueError("Port must be an integer between 1 and 65535")
+        msg = "Port must be an integer between 1 and 65535"
+        raise ValueError(msg)
 
     return port_number
 
@@ -106,19 +116,23 @@ def parse_host(
         ValueError: If the address is empty, malformed, or a Unix socket.
     """
     if "/" in value or "\\" in value:
-        raise ValueError("Unix domain sockets are not supported")
+        msg = "Unix domain sockets are not supported"
+        raise ValueError(msg)
     if (
         not value
         or has_control_characters(value)
         or any(char.isspace() for char in value)
     ):
-        raise ValueError("Host must be nonempty and contain no whitespace")
+        msg = "Host must be nonempty and contain no whitespace"
+        raise ValueError(msg)
 
     host, port_text = _split_host(value)
     if host.lower().endswith(".sock"):
-        raise ValueError("Unix domain sockets are not supported")
+        msg = "Unix domain sockets are not supported"
+        raise ValueError(msg)
 
     if not host or any(char in host for char in "@,/?#\x00"):
-        raise ValueError("Invalid hostname")
+        msg = "Invalid hostname"
+        raise ValueError(msg)
 
     return host.lower(), _parse_port(port_text, default_port)

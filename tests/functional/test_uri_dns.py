@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
+from typing import cast
 from unittest.mock import patch
 
 import dns.asyncresolver
@@ -33,7 +35,10 @@ class MongoDnsServer(asyncio.DatagramProtocol):
         else:
             values = ('"authSource=users&replicaSet=rs"',)
         response.answer.append(
-            dns.rrset.from_text(
+            cast(
+                "Callable[..., dns.rrset.RRset]",
+                vars(dns.rrset)["from_text"],
+            )(
                 question.name,
                 60,
                 "IN",

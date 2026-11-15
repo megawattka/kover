@@ -1,3 +1,5 @@
+"""Environment-based client configuration."""
+
 from .environment import (
     get_runtime_environment,
     read_auth_credentials_from_env,

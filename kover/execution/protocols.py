@@ -44,7 +44,7 @@ class IPoolProvider(Protocol):
 class ICommandExecutor(Protocol):
     """Execute a command using selection, preparation, and a server pool."""
 
-    async def execute(
+    async def execute(  # ruff: ignore[too-many-arguments] -- Independent command execution options.
         self,
         command: dict[str, Any],
         *,

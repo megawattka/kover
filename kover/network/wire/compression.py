@@ -90,9 +90,12 @@ def get_context_by_id(
     }
     ctx, available, module = compressors[compressor_id]
     if not available:
-        raise ModuleNotFoundError(
+        msg = (
             f"{module} compression cannot be used. "
             f"{module} is missing. "
-            f"Install it via kover[{module.lower()}]",
+            f"Install it via kover[{module.lower()}]"
+        )
+        raise ModuleNotFoundError(
+            msg,
         )
     return ctx()
