@@ -48,3 +48,17 @@ class GridFSIntegrationTests(MongoTestCase):
 
         with pytest.raises(GridFSFileNotFound):
             await fs.get_by_file_id(file_id)
+
+    async def test_download_stream_reads_chunks_without_buffering_file(
+        self,
+    ) -> None:
+        fs = await GridFS(self.database).indexed()
+        data = b"0123456789" * 1000
+        file_id = await fs.put(data, chunk_size=257)
+
+        file, stream = await fs.open_download_stream(file_id)
+        chunks = [chunk async for chunk in stream]
+
+        assert file.length == len(data)
+        assert all(len(chunk) <= 257 for chunk in chunks)
+        assert b"".join(chunks) == data

@@ -14,20 +14,28 @@ from elune import Binary, ObjectId
 from ..models import Delete, Index, IndexDirection
 from .exceptions import GridFSFileNotFound, IncorrectGridFSData
 from .models import Chunk, File
+from .stream import GridFSDownloadStream
 
 if TYPE_CHECKING:
     from ..database import Database
     from .annotations import GridFSPayloadT
 
 # pre-created index models
-FS_IDX: Final[Index] = Index("_fs_idx", {
-    "filename": IndexDirection.ASCENDING,
-    "uploadDate": IndexDirection.ASCENDING,
-})
-CHUNKS_IDX: Final[Index] = Index("_chunks_idx", {
-    "files_id": IndexDirection.ASCENDING,
-    "n": IndexDirection.ASCENDING,
-}, unique=True)
+FS_IDX: Final[Index] = Index(
+    "_fs_idx",
+    {
+        "filename": IndexDirection.ASCENDING,
+        "uploadDate": IndexDirection.ASCENDING,
+    },
+)
+CHUNKS_IDX: Final[Index] = Index(
+    "_chunks_idx",
+    {
+        "files_id": IndexDirection.ASCENDING,
+        "n": IndexDirection.ASCENDING,
+    },
+    unique=True,
+)
 
 DEFAULT_CHUNK_SIZE: Final[int] = 255 * 1024  # from pymongo
 SIZE_LIMIT: Final[int] = 1 * 1024 * 1024 * 16  # 16MB
@@ -88,7 +96,7 @@ class GridFS:
 
         max_amount = max(1, math.ceil(SIZE_LIMIT / chunk_size) - 1)
         splitted = [
-            chunks[x:x + max_amount]
+            chunks[x : x + max_amount]
             for x in range(0, len(chunks), max_amount)
         ]
         for chunk_group in splitted:
@@ -161,7 +169,9 @@ class GridFS:
             filename=filename,
             metadata={
                 "sha1": sha1(binary.getvalue()).hexdigest(),
-            } if add_sha1 else {},
+            }
+            if add_sha1
+            else {},
         )
         file.object_id = file_id
 
@@ -188,31 +198,74 @@ class GridFS:
 
         Raises:
             GridFSFileNotFound : If no file with the given ID is found.
-            RuntimeError: if sha1 hash mismatch occur.
         """
         file = await self._files.find_one({"_id": file_id}, cls=File)
         if file is not None:
-            chunks = await self._chunks.aggregate([
-                {"$match": {"files_id": file_id}},
-                {"$sort": {"n": 1}},
-            ]).to_list()
-
             binary = BytesIO()
-            for chunk in chunks:
-                binary.write(chunk["data"])
+            stream = self._make_download_stream(
+                file, check_sha1=check_sha1,
+            )
+            async for chunk in stream:
+                binary.write(chunk)
 
             binary.seek(0)
-            if check_sha1:
-                stored_sha1 = file.metadata.get("sha1")
-                if stored_sha1 is not None:
-                    calculated = sha1(binary.getvalue()).hexdigest()
-
-                    if stored_sha1 != calculated:
-                        msg = "sha1 hash mismatch"
-                        raise RuntimeError(msg)
             return file, binary
         msg = "No file with that id found"
         raise GridFSFileNotFound(msg)
+
+    async def open_download_stream(
+        self,
+        file_id: ObjectId | None,
+        *,
+        check_sha1: bool = True,
+    ) -> tuple[File, GridFSDownloadStream]:
+        """Open a file for bounded-memory asynchronous chunked reading.
+
+        Consume the returned stream with ``async for`` and call
+        ``await stream.aclose()`` when reading stops early.
+
+        Returns:
+            The file metadata and a chunked download stream.
+
+        Raises:
+            GridFSFileNotFound: If no file with the given ID is found.
+        """
+        file = await self._files.find_one({"_id": file_id}, cls=File)
+        if file is None:
+            msg = "No file with that id found"
+            raise GridFSFileNotFound(msg)
+
+        return file, self._make_download_stream(
+            file,
+            check_sha1=check_sha1,
+        )
+
+    def _make_download_stream(
+        self,
+        file: File,
+        *,
+        check_sha1: bool,
+    ) -> GridFSDownloadStream:
+        """Create a chunk cursor for a stored GridFS file.
+
+        Returns:
+            A stream over the file's chunks.
+        """
+        cursor = self._chunks.aggregate(
+            [
+                {"$match": {"files_id": file.object_id}},
+                {"$sort": {"n": 1}},
+            ],
+        )
+        stored_sha1 = file.metadata.get("sha1")
+        if not isinstance(stored_sha1, str):
+            stored_sha1 = None
+
+        return GridFSDownloadStream(
+            cursor,
+            stored_sha1,
+            check_sha1=check_sha1,
+        )
 
     async def get_by_filename(
         self,
@@ -231,7 +284,6 @@ class GridFS:
         """
         file = await self._files.find_one({"filename": filename}, cls=File)
         if file is not None:
-
             return await self.get_by_file_id(file.object_id)
 
         msg = "No file with that filename found"
