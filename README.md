@@ -1,13 +1,19 @@
-# Kover
+<h1 align="center">
+  <img src="assets/kover-logo.svg" alt="Kover" width="560">
+</h1>
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/megawattka/kover/actions.yml)](https://github.com/megawattka/kover/actions/workflows/actions.yml)
-[![License](https://img.shields.io/github/license/megawattka/kover)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
-[![PyPI](https://img.shields.io/pypi/v/kover)](https://pypi.org/project/kover/)
-[![Typing](https://img.shields.io/badge/typing-py.typed-blue)](https://peps.python.org/pep-0561/)
+<p align="center">
+  <a href="https://github.com/megawattka/kover/actions/workflows/actions.yml"><img src="https://img.shields.io/github/actions/workflow/status/megawattka/kover/actions.yml?label=build" alt="Build status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/megawattka/kover" alt="License"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12 or newer"></a>
+  <a href="https://pypi.org/project/kover/"><img src="https://img.shields.io/pypi/v/kover" alt="PyPI version"></a>
+  <a href="https://peps.python.org/pep-0561/"><img src="https://img.shields.io/badge/typing-py.typed-blue" alt="Typed package"></a>
+</p>
 
-**Kover lets your Python application save, find, update, and delete data in
-MongoDB using Python dictionaries or typed Pydantic models.**
+<p align="center">
+  <strong>Async MongoDB driver for Python with first-class Pydantic support.</strong><br>
+  Save, validate, find, update, and delete data with typed models or dictionaries.
+</p>
 
 For example, define a `User` model, save a user to the database, and read it
 back as a `User` object with validated fields and editor autocomplete.
