@@ -84,12 +84,12 @@ class ConnectionFactory:
                     self._credentials,
                     self._application,
                 )
-        except Exception as error:
+        except Exception as exc:
             try:
                 await connection.close()
-            except (Exception, asyncio.CancelledError) as cleanup_error:  # ruff: ignore[blind-except]
-                error.add_note(
-                    f"Connection cleanup also failed: {cleanup_error!r}",
+            except (Exception, asyncio.CancelledError) as c_exc:  # ruff: ignore[blind-except]
+                exc.add_note(
+                    f"Connection cleanup also failed: {c_exc!r}",
                 )
             raise
         except asyncio.CancelledError:

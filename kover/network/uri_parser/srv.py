@@ -86,9 +86,9 @@ async def resolve_srv(
             lifetime=lifetime,
             search=False,
         )
-    except DNSException as error:
+    except DNSException as exc:
         msg = "Unable to resolve MongoDB SRV records"
-        raise ValueError(msg) from error
+        raise ValueError(msg) from exc
 
     nodes: list[tuple[str, int]] = []
     for record in answer:
@@ -119,9 +119,9 @@ async def _resolve_txt(host: str, lifetime: float) -> dict[str, Any]:
     except (NoAnswer, NXDOMAIN):
         return {}
 
-    except DNSException as error:
+    except DNSException as exc:
         msg = "Unable to resolve MongoDB TXT records"
-        raise ValueError(msg) from error
+        raise ValueError(msg) from exc
 
     if len(txt_answer) > 1:
         msg = "Only one MongoDB TXT record is allowed"
@@ -132,11 +132,11 @@ async def _resolve_txt(host: str, lifetime: float) -> dict[str, Any]:
         txt = cast("TXT", record)
         try:
             text = b"".join(txt.strings).decode("utf-8")
-        except UnicodeError as error:
+        except UnicodeError as exc:
             msg = "MongoDB TXT record is not valid UTF-8"
             raise ValueError(
                 msg,
-            ) from error
+            ) from exc
         txt_options = parse_options(text, txt=True)
 
     return txt_options

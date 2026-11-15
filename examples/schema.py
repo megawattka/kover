@@ -79,8 +79,8 @@ async def main() -> None:
             user_type=UserType.ADMIN,
             friend=Friend(name="roma", age=25),
         )
-    except ValidationError as e:  # it wont let you create such model
-        log.info("%s", e)
+    except ValidationError as exc:  # it wont let you create such model
+        log.info("%s", exc)
 
     # somehow if you try to insert invalid object
     # kover.exceptions.ErrDocumentValidationFailure: Rick's age is less than 18
@@ -92,10 +92,10 @@ async def main() -> None:
             "friend": {"name": "roma", "age": 25},
         }
         await collection.insert_one(invalid)
-    except OperationFailure as e:
-        if e.code != 121:  # ErrDocumentValidationFailure  # ruff: ignore[magic-value-comparison]
+    except OperationFailure as exc:
+        if exc.code != 121:  # ErrDocumentValidationFailure  # ruff: ignore[magic-value-comparison]
             raise
-        log.info("got Error: %s, %s", e.__class__, e)
+        log.info("got Error: %s, %s", exc.__class__, exc)
 
     await client.db.drop_collection("test")
 

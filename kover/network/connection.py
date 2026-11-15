@@ -112,14 +112,14 @@ class Connection:
                 InvalidBSON,
                 struct.error,
                 zlib.error,
-            ) as error:
-                raise ProtocolError(str(error)) from error
-        except BaseException as error:
+            ) as exc:
+                raise ProtocolError(str(exc)) from exc
+        except BaseException as exc:
             try:
                 await self.close()
-            except (Exception, asyncio.CancelledError) as cleanup_error:  # ruff: ignore[blind-except]
-                error.add_note(
-                    f"Connection cleanup also failed: {cleanup_error!r}",
+            except (Exception, asyncio.CancelledError) as c_exc:  # ruff: ignore[blind-except]
+                exc.add_note(
+                    f"Connection cleanup also failed: {c_exc!r}",
                 )
             raise
 
@@ -142,9 +142,9 @@ class Connection:
         try:
             async with asyncio.timeout_at(deadline):
                 return await self._send_and_receive(request)
-        except asyncio.IncompleteReadError as error:
+        except asyncio.IncompleteReadError as exc:
             msg = "MongoDB response was truncated"
-            raise NetworkError(msg) from error
+            raise NetworkError(msg) from exc
 
     async def _send_and_receive(self, request: bytes) -> bytes:
         """Send one encoded request and receive one encoded response.
@@ -167,8 +167,9 @@ class Connection:
         prefix = await self._transport.receive(4)
         try:
             length = self._codec.frame_length(prefix)
-        except ValueError as error:
-            raise ProtocolError(str(error)) from error
+        except ValueError as exc:
+            raise ProtocolError(str(exc)) from exc
+
         if length > _MAX_MESSAGE_SIZE:
             msg = f"invalid MongoDB message length: {length}"
             raise ProtocolError(msg)

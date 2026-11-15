@@ -105,8 +105,8 @@ class CommandExecutor(ICommandExecutor):
         ):
             self._selector.invalidate(address)
             raise
-        except OperationFailure as error:
-            if error.is_server_selection_error:
+        except OperationFailure as exc:
+            if exc.is_server_selection_error:
                 self._selector.invalidate(address)
             raise
 

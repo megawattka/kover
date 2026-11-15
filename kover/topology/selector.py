@@ -201,11 +201,11 @@ class ServerSelector(IServerSelector):
         """
         try:
             return self._state.get(address)
-        except KeyError as error:
+        except KeyError as exc:
             msg = f"srv {address.host}:{address.port} has no known description"
             raise ServerSelectionError(
                 msg,
-            ) from error
+            ) from exc
 
     async def select(
         self,
@@ -250,11 +250,11 @@ class ServerSelector(IServerSelector):
                     preference,
                     selection_deadline,
                 )
-        except TimeoutError as error:
+        except TimeoutError as exc:
             msg = "server selection deadline expired"
             raise ServerSelectionError(
                 msg,
-            ) from error
+            ) from exc
 
     async def _select_direct(
         self,
@@ -294,14 +294,14 @@ class ServerSelector(IServerSelector):
                     )
 
                 return self.descriptions[0].address
-        except TimeoutError as e:
+        except TimeoutError as exc:
             msg = (
                 "no server found for direct connection "
                 "before the selection deadline"
             )
             raise ServerSelectionError(
                 msg,
-            ) from e
+            ) from exc
 
     async def _select_until_deadline(
         self,

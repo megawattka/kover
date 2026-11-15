@@ -125,11 +125,11 @@ def resolve_refs(schema: Schema) -> Schema:
             try:
                 for part in reference[2:].split("/"):
                     target = target[part.replace("~1", "/").replace("~0", "~")]
-            except (KeyError, TypeError) as error:
+            except (KeyError, TypeError) as exc:
                 msg = f"{path}: unresolved $ref {reference!r}."
                 raise SchemaGenerationException(
                     msg,
-                ) from error
+                ) from exc
             resolved = resolve(target, path, (*active, reference))
             siblings = resolve(
                 {key: value for key, value in node.items() if key != "$ref"},
@@ -242,11 +242,11 @@ def map_types(schema: Schema) -> Schema:
                     target for item in types for target in mapping[item]
                 ),
             )
-        except KeyError as error:
+        except KeyError as exc:
             msg = f"{path}: unsupported JSON type {source!r}."
             raise SchemaGenerationException(
                 msg,
-            ) from error
+            ) from exc
         return {
             **{key: value for key, value in result.items() if key != "type"},
             "bsonType": targets if len(targets) != 1 else targets[0],

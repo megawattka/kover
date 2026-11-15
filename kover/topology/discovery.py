@@ -102,8 +102,8 @@ class ServerDiscovery:
             PoolTimeoutError,
             ProtocolError,
             TimeoutError,
-        ) as e:
-            self._errors[_key(address)] = f"{type(e).__name__}: {e}"
+        ) as exc:
+            self._errors[_key(address)] = f"{type(exc).__name__}: {exc}"
             return None
 
     def _accept(

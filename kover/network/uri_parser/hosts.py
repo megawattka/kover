@@ -35,9 +35,9 @@ def decode_component(value: str) -> str:
 
     try:
         decoded = unquote_plus(value, errors="strict")
-    except UnicodeError as error:
+    except UnicodeError as exc:
         msg = "Invalid UTF-8 in MongoDB URI"
-        raise ValueError(msg) from error
+        raise ValueError(msg) from exc
 
     if "\x00" in decoded:
         msg = "NUL is not allowed in MongoDB URI components"
@@ -56,9 +56,9 @@ def _split_host(value: str) -> tuple[str, str | None]:
 
         try:
             IPv6Address(host)
-        except ValueError as error:
+        except ValueError as exc:
             msg = "Invalid IPv6 address"
-            raise ValueError(msg) from error
+            raise ValueError(msg) from exc
 
         if suffix:
             port_text = suffix[1:]
@@ -87,11 +87,11 @@ def _parse_port(port_text: str | None, default_port: int) -> int:
 
         try:
             port_number = int(port_text)
-        except ValueError as error:
+        except ValueError as exc:
             msg = "Port must be an integer between 1 and 65535"
             raise ValueError(
                 msg,
-            ) from error
+            ) from exc
 
     if not 1 <= port_number <= _MAX_PORT:
         msg = "Port must be an integer between 1 and 65535"

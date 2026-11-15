@@ -92,18 +92,19 @@ class ConnectionPool(IServerPool):
                         closed_message,
                     )
                 self._checked_out.add(connection)
-        except (Exception, asyncio.CancelledError) as error:
+        except (Exception, asyncio.CancelledError) as exc:
             # The reservation belongs to this checkout until registration,
             # including while it waits for the condition after creation.
             async with self._condition:
                 self._total -= 1
                 self._condition.notify_all()
+
             if connection is not None:
                 try:
                     await connection.close()
-                except (Exception, asyncio.CancelledError) as cleanup_error:  # ruff: ignore[blind-except]
-                    error.add_note(
-                        f"Connection cleanup also failed: {cleanup_error!r}",
+                except (Exception, asyncio.CancelledError) as c_exc:  # ruff: ignore[blind-except]
+                    exc.add_note(
+                        f"Connection cleanup also failed: {c_exc!r}",
                     )
             raise
 
@@ -166,11 +167,11 @@ class ConnectionPool(IServerPool):
         try:
             async with asyncio.timeout_at(deadline):
                 await self._condition.wait()
-        except TimeoutError as e:
+        except TimeoutError as exc:
             msg = "connection checkout deadline expired"
             raise PoolTimeoutError(
                 msg,
-            ) from e
+            ) from exc
 
     async def _create_connection(self, deadline: float | None) -> Connection:
         """Create a handshaken connection, respecting the checkout deadline.
@@ -198,11 +199,11 @@ class ConnectionPool(IServerPool):
             timeout_deadline = min(limits) if limits else None
             async with asyncio.timeout_at(timeout_deadline):
                 return await self._connection_factory()
-        except TimeoutError as e:
+        except TimeoutError as exc:
             msg = "connection creation exceeded checkout deadline"
             raise PoolTimeoutError(
                 msg,
-            ) from e
+            ) from exc
 
     async def release(
         self,

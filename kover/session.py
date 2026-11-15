@@ -124,8 +124,8 @@ class Session:
                 session=self,
                 deadline=deadline,
             )
-        except OperationFailure as e:
-            if not e.is_unknown_commit_result:
+        except OperationFailure as exc:
+            if not exc.is_unknown_commit_result:
                 self._state = TxnState.ABORTED
                 self.unpin_server()
             raise
@@ -168,10 +168,10 @@ class Session:
                 session=self,
                 deadline=deadline,
             )
-        except OperationFailure as e:
+        except OperationFailure as exc:
             # A failed write may have already aborted the transaction.
             # 251 corresponds to NoSuchTransaction
-            if e.code != 251:  # ruff: ignore[magic-value-comparison]
+            if exc.code != 251:  # ruff: ignore[magic-value-comparison]
                 raise
 
         finally:

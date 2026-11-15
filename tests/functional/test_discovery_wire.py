@@ -98,8 +98,8 @@ async def test_wire_discovery_follows_replica_members(mode: str) -> None:  # ruf
                 await writer.drain()
         except asyncio.IncompleteReadError:
             pass
-        except (AssertionError, OSError, ValueError) as error:
-            errors.append(error)
+        except (AssertionError, OSError, ValueError) as exc:
+            errors.append(exc)
         finally:
             writer.close()
             with suppress(OSError):

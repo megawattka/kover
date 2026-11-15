@@ -186,10 +186,10 @@ async def assert_document_rejected(
     collection: Collection,
     document: dict[str, Any],
 ) -> None:
-    with pytest.raises(OperationFailure) as error:
+    with pytest.raises(OperationFailure) as exc:
         await collection.insert_one(document)
 
-    assert error.value.code == 121
+    assert exc.value.code == 121
 
 
 async def test_mongodb_accepts_generated_validator(
@@ -564,8 +564,8 @@ async def test_native_bson_validator_on_mongodb(
     )
     try:
         await collection.insert_one({"value": value})
-        with pytest.raises(OperationFailure) as error:
+        with pytest.raises(OperationFailure) as exc:
             await collection.insert_one({"value": "wrong BSON type"})
-        assert error.value.code == 121
+        assert exc.value.code == 121
     finally:
         await collection.drop()

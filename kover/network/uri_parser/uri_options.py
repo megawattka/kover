@@ -133,11 +133,11 @@ def _milliseconds(key: str, value: str) -> float:
 
     try:
         result = float(value)
-    except ValueError as error:
+    except ValueError as exc:
         msg = f"{key} must be a finite nonnegative number"
         raise ValueError(
             msg,
-        ) from error
+        ) from exc
 
     if not math.isfinite(result) or result < 0:
         msg = f"{key} must be a finite nonnegative number"

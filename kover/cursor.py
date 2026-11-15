@@ -274,8 +274,8 @@ class Cursor[T]:
             raise
 
         # Decoder failures and cancellation both require cursor cleanup.
-        except BaseException as e:
-            await self._close_after_error(e)
+        except BaseException as exc:
+            await self._close_after_error(exc)
             raise
 
         finally:
@@ -309,8 +309,8 @@ class Cursor[T]:
             self._docs.clear()
             return self._command_response  # ruff: ignore[try-consider-else]
 
-        except BaseException as e:
-            await self._close_after_error(e)
+        except BaseException as exc:
+            await self._close_after_error(exc)
             raise
 
         finally:
@@ -338,10 +338,10 @@ class Cursor[T]:
     ) -> None:
         try:
             await self._close()
-        except BaseException as e:
+        except BaseException as exc:
             # Preserve the original failure, including task cancellation.
-            error.add_note(f"Cursor cleanup also failed: {e!r}")
-            raise error from e
+            error.add_note(f"Cursor cleanup also failed: {exc!r}")
+            raise error from exc
 
     async def close(self) -> None:
         """Close locally and attempt to kill the server cursor."""
