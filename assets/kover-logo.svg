@@ -25,6 +25,16 @@
       <stop stop-color="#edf8ff"/>
       <stop offset="1" stop-color="#b7d9ef"/>
     </linearGradient>
+    <linearGradient id="underline" x1="225" y1="133" x2="522" y2="133" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#76a8d6" stop-opacity="0"/>
+      <stop offset="0.28" stop-color="#91c9ef" stop-opacity="0.65"/>
+      <stop offset="0.7" stop-color="#b3e1ff"/>
+      <stop offset="1" stop-color="#86bce8" stop-opacity="0.35"/>
+    </linearGradient>
+    <linearGradient id="underlineTail" x1="518" y1="132" x2="545" y2="125" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a6d7f8" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#a6d7f8" stop-opacity="0"/>
+    </linearGradient>
     <clipPath id="rounded">
       <rect width="640" height="180" rx="30"/>
     </clipPath>
@@ -54,6 +64,11 @@
 
     <!-- Restrained accents away from the wordmark. -->
     <circle cx="527" cy="54" r="1.3" fill="#badfff" opacity="0.5"/>
-    <path d="m559 119 1.5 4.5 4.5 1.5-4.5 1.5-1.5 4.5-1.5-4.5-4.5-1.5 4.5-1.5z" fill="#b8dfff" opacity="0.75"/>
+
+    <!-- A soft rising underline with a small star at its tip. -->
+    <path d="M225 134c83 5 189 5 293-1" fill="none" stroke="url(#underline)" stroke-width="2" stroke-linecap="round"/>
+    <path d="M518 133q15-1 27-8" fill="none" stroke="url(#underlineTail)" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="m522 126 1.5 4.5 4.5 1.5-4.5 1.5-1.5 4.5-1.5-4.5-4.5-1.5 4.5-1.5z" fill="#c1e6ff"/>
+    <circle cx="227" cy="134" r="1.4" fill="#a2d1f3" opacity="0.6"/>
   </g>
 </svg>
