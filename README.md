@@ -1,8 +1,8 @@
-# Kover
-
 <p align="center">
   <img src="assets/kover-logo.svg" alt="Kover logo" width="360">
 </p>
+
+# Kover
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/megawattka/kover/actions.yml)](https://github.com/megawattka/kover/actions/workflows/actions.yml)
 [![License](https://img.shields.io/github/license/megawattka/kover)](LICENSE)
