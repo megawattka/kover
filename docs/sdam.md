@@ -58,8 +58,9 @@ addresses. When a new primary is observed, the previous primary becomes
 
 Each known address has a dedicated heartbeat connection independent of the
 application pool. In streaming mode a second monitoring connection measures
-RTT without counting the time spent waiting for topology changes. Each client
-allows up to ten concurrent monitoring handshakes.
+RTT without counting the time spent waiting for topology changes. Neither
+connection uses application credentials or performs SCRAM authentication.
+Each client allows up to ten concurrent monitoring handshakes.
 
 The default heartbeat interval is 10 seconds and the minimum is 500 ms:
 
@@ -112,11 +113,13 @@ when a later check succeeds. Removing a server from the topology also retires
 its pool.
 
 Applicable application transport errors also retire the pool and request a
-fresh check. A role-change error with a stale or equal `topologyVersion` is
-ignored for SDAM. Other role-change errors request a check, but retire the pool
-only for shutdown errors or a server with wire version below 8 (MongoDB 4.2).
-On retirement, idle connections close and leased ones close when returned. An
-error from a retired pool cannot invalidate its replacement.
+fresh check. A timeout during a command on an established connection only
+discards that connection; the server remains eligible and the rest of its pool
+stays open. A role-change error with a stale or equal `topologyVersion` is ignored
+for SDAM. Other role-change errors request a check, but retire the pool only for
+shutdown errors or a server with wire version below 8 (MongoDB 4.2). On
+retirement, idle connections close and leased ones close when returned. An error
+from a retired pool cannot invalidate its replacement.
 
 SDAM changes server eligibility but does not replay the failed command. Kover
 does not implement transparent retryable reads, retryable writes, or automatic

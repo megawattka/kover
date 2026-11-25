@@ -50,6 +50,7 @@ def prepare_command(
         and "writeConcern" not in document
     ):
         document["writeConcern"] = context.write_concern.model_dump()
+
     starts_transaction = False
     if context.session is not None:
         starts_transaction = context.session.apply_to(document)

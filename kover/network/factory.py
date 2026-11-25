@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 class ConnectionFactory:
-    """Create a connected, handshaken, and authenticated connection."""
+    """Initialize application or dedicated monitoring connections."""
 
     def __init__(  # ruff: ignore[too-many-arguments] -- Independent connection setup components.
         self,
@@ -67,7 +67,7 @@ class ConnectionFactory:
         *,
         deadline: float,
     ) -> Connection:
-        """Open a dedicated monitoring connection.
+        """Open a dedicated monitoring connection without authentication.
 
         Returns:
             A connection initialized with hello.
@@ -101,7 +101,7 @@ class ConnectionFactory:
                 await connection.connect()
                 await connection.hello(
                     self._compression,
-                    self._credentials,
+                    None if monitoring else self._credentials,
                     self._application,
                 )
         except Exception as exc:

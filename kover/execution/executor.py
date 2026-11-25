@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 from ..exceptions import (
     NetworkError,
     OperationFailure,
-    PoolTimeoutError,
     ProtocolError,
 )
 from ..models.read_preference import ReadPreference
@@ -64,11 +63,10 @@ class CommandExecutor(ICommandExecutor):
         Raises:
             NetworkError: If communication with the selected server fails.
             OperationFailure: If the server rejects the command.
-            PoolTimeoutError: If no connection is available before the
-                connection checkout deadline.
             ProtocolError: If the server sends a malformed wire response.
             OSError: If a socket operation fails before network translation.
-            TimeoutError: If server selection or command execution times out.
+            TimeoutError: If selection, connection checkout, or command
+                execution times out.
         """
         context = OperationContext(
             command=command,
@@ -104,15 +102,13 @@ class CommandExecutor(ICommandExecutor):
                 database=context.database,
                 deadline=deadline,
             )
-        except (
-            NetworkError,
-            PoolTimeoutError,
-            ProtocolError,
-            TimeoutError,
-            OSError,
-        ) as exc:
+        except TimeoutError:
+            # Checkout and command timeouts do not invalidate the server.
+            raise
+        except (NetworkError, ProtocolError, OSError) as exc:
             self._report_error(address, pool, exc)
             raise
+
         except OperationFailure as exc:
             if exc.is_server_selection_error:
                 self._report_error(address, pool, exc)
@@ -131,9 +127,9 @@ class CommandExecutor(ICommandExecutor):
     ) -> None:
         if self._monitor is None:
             self._selector.invalidate(address)
-        elif not isinstance(error, PoolTimeoutError) and (
-            self._pool_is_current is None
-            or self._pool_is_current(address, pool)
+        elif self._pool_is_current is None or self._pool_is_current(
+            address,
+            pool,
         ):
             self._monitor.application_error(address, error)
 

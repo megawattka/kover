@@ -5,15 +5,19 @@ import struct
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
-from elune import encode
+from elune import decode, encode
 import pytest
 
 from kover.client import Kover
 from kover.exceptions import NetworkError, ProtocolError
 from kover.execution.executor import CommandExecutor
 from kover.models.address import Address
+from kover.models.credentials import AuthCredentials
 from kover.network.connection import Connection
+from kover.network.factory import ConnectionFactory
+from kover.network.registry import PoolRegistry
 from kover.network.transport import Transport
+from kover.topology.monitor import TopologyMonitor
 
 
 def response(
@@ -112,6 +116,115 @@ async def test_exchange_failure_survives_cleanup_failure(
     assert caught.value is failure
     assert not connection.usable
     transport.close.assert_awaited_once()
+
+
+@pytest.mark.parametrize("with_monitor", [False, True])
+async def test_command_timeout_discards_only_its_connection(
+    *,
+    with_monitor: bool,
+) -> None:
+    address = Address(host="db")
+    stalled_reader = asyncio.StreamReader()
+    stalled_transport = MagicMock(spec=Transport, connected=True)
+    stalled_transport.receive.side_effect = stalled_reader.readexactly
+    stalled = Connection(address, stalled_transport)
+
+    healthy_reader = asyncio.StreamReader()
+    healthy_reader.feed_data(response())
+    healthy_transport = MagicMock(spec=Transport, connected=True)
+    healthy_transport.receive.side_effect = healthy_reader.readexactly
+    healthy = Connection(address, healthy_transport)
+
+    factory = MagicMock(spec=ConnectionFactory)
+    factory.create.side_effect = [stalled, healthy]
+    pools = PoolRegistry(factory, max_pool_size=2)
+    selector = MagicMock()
+    selector.select = AsyncMock(return_value=address)
+    monitor = MagicMock(spec=TopologyMonitor)
+    executor = CommandExecutor(
+        selector=selector,
+        pools=pools,
+        monitor=monitor if with_monitor else None,
+        pool_is_current=pools.is_current,
+    )
+
+    async with Kover(executor) as client:
+        pools.for_server(address)
+        (pool,) = pools.pools
+        first = await pool.acquire()
+        second = await pool.acquire()
+        await first.release()
+        await second.release()
+
+        with pytest.raises(TimeoutError):
+            await client.command(
+                {"ping": 1},
+                deadline=asyncio.get_running_loop().time(),
+            )
+
+        selector.invalidate.assert_not_called()
+        monitor.application_error.assert_not_called()
+        stalled_transport.receive.assert_awaited_once_with(4)
+        stalled_transport.close.assert_awaited_once()
+        assert not stalled.usable
+        assert pools.is_current(address, pool)
+        assert await client.command({"ping": 1}) == {"ok": 1}
+        healthy_transport.close.assert_not_awaited()
+        assert factory.create.await_count == 2
+
+
+@pytest.mark.parametrize("monitoring", [False, True])
+async def test_factory_only_authenticates_application_connections(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    monitoring: bool,
+) -> None:
+    hello_reply = {
+        "ok": 1,
+        "isWritablePrimary": True,
+        "saslSupportedMechs": ["SCRAM-SHA-256"],
+    }
+    reader = asyncio.StreamReader()
+    reader.feed_data(response(body=bytes(5) + encode(hello_reply)))
+    transport = MagicMock(spec=Transport, connected=True)
+    transport.receive.side_effect = reader.readexactly
+    authenticate = AsyncMock()
+    monkeypatch.setattr(
+        "kover.network.factory.Transport",
+        MagicMock(return_value=transport),
+    )
+    monkeypatch.setattr(
+        "kover.network.auth.scram.ScramAuthenticator.authenticate",
+        authenticate,
+    )
+    credentials = AuthCredentials(
+        username="user",
+        password=uuid4().hex,
+        auth_database="admin",
+    )
+    factory = ConnectionFactory(credentials=credentials)
+    address = Address(host="db")
+    if monitoring:
+        connection = await factory.create_monitor(
+            address,
+            deadline=asyncio.get_running_loop().time() + 1,
+        )
+    else:
+        connection = await factory.create(address)
+    try:
+        assert connection.hello_result is not None
+        assert connection.hello_result.is_primary
+        transport.send.assert_awaited_once()
+        hello = decode(transport.send.await_args.args[0][21:])
+        assert "hello" in hello
+        if monitoring:
+            assert "saslSupportedMechs" not in hello
+            authenticate.assert_not_awaited()
+        else:
+            assert hello["saslSupportedMechs"] == "admin.user"
+            authenticate.assert_awaited_once_with("SCRAM-SHA-256", credentials)
+    finally:
+        await connection.close()
 
 
 @pytest.mark.parametrize(

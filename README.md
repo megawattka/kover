@@ -87,8 +87,7 @@ Runtime dependencies:
 | `dnspython` | `2.7.0` |
 | `pydantic` | `2.14.3` |
 
-Kover uses [Elune](https://github.com/megawattka/elune) for BSON serialization,
-including its native Pydantic integration.
+Kover uses [Elune](https://github.com/megawattka/elune) for BSON serialization.
 
 ## Installation
 
@@ -105,8 +104,6 @@ uv add kover
 # Optional Snappy and Zstandard compression:
 uv add "kover[snappy,zstd]"
 ```
-
-`zlib` compression needs no extra dependency.
 
 ## Quick start
 
@@ -128,10 +125,12 @@ class User(Document):
 
 async def main() -> None:
     async with await from_uri("mongodb://127.0.0.1:27017/") as client:
-        users = client.get_database("demo").get_collection("users")
+        # .get_database and .get_collection are also exists
+        users = client.demo.users
 
         # Validate the data with Pydantic, then save it to MongoDB.
-        user_id = await users.insert_one(User(name="Maksim", age=21))
+        user = User(name="Maksim", age=21)
+        user_id = await users.insert_one(user)
 
         # Read it back as a User object rather than a dictionary.
         user = await users.find_one({"_id": user_id}, cls=User)
@@ -168,17 +167,17 @@ or `await client.close()` when finished.
 ```python
 from kover import AuthCredentials, make_client
 
+credentials = AuthCredentials.from_environ()
 client = await make_client(
     host="127.0.0.1",
     port=27017,
-    credentials=AuthCredentials.from_environ(),
+    credentials=credentials,
     tls=False,
     compression=["zlib"],
     max_pool_size=50,
-    application={"name": "my-service"},
 )
 async with client:
-    print(await client.admin.ping())
+    await client.admin.ping()
 ```
 
 `AuthCredentials.from_environ()` reads `MONGO_USER`, `MONGO_PASSWORD`, and
@@ -219,11 +218,6 @@ base timeout. Server selection and explicit operation deadlines still apply.
 setting is a socket timeout for commands on established connections.
 `client.command()` and `Database.command()` accept an absolute `deadline`
 measured by the event-loop clock.
-
-For low-level single-server use, the constructor is
-`ConnectionPool(address, connection_factory)`: `address` is an `Address`, and
-the factory is a zero-argument async callable returning an open, handshaken
-`Connection`. Use the client factories for discovery and routing.
 
 ### Read preferences
 
@@ -338,7 +332,7 @@ from kover import from_uri
 
 client = await from_uri(
     "mongodb://127.0.0.1:27017/",
-    codec_options=CodecOptions(
+    codec_options=CodecOptions(  # or via url parameter
         uuid_representation=UuidRepresentation.STANDARD,
     ),
 )
