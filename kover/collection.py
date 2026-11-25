@@ -141,18 +141,17 @@ class Collection:
             The boolean value that indicates document insertion.
         """
         insertable = dict(maybe_to_dict(document))
-        document_id = insertable.setdefault("_id", ObjectId())
+        insertable.setdefault("_id", ObjectId())
 
-        command: dict[str, Any] = filter_non_null({
-            "insert": self.name,
-            "ordered": ordered,
-            "documents": [insertable],
-            "maxTimeMS": max_time_ms,
-            "bypassDocumentValidation": bypass_document_validation,
-            "comment": comment,
-        })
-        await self.database.command(command, session=session)
-        return document_id
+        ids = await self.insert_many(
+            [insertable],
+            ordered=ordered,
+            max_time_ms=max_time_ms,
+            bypass_document_validation=bypass_document_validation,
+            comment=comment,
+            session=session,
+        )
+        return ids[0]
 
     # https://www.mongodb.com/docs/manual/reference/command/insert/
     async def insert_many(  # ruff: ignore[too-many-arguments] -- Mirrors MongoDB insert options.

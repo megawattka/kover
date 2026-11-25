@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from ...error_codes import get_exception_type
 from ...exceptions import OperationFailure
+from .error_codes import get_exception_type
 
 
 class ErrorMapper:

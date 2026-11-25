@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kover"
-version = "3.4.2"
-description = "A fully asynchronous, strongly typed MongoDB driver for Python."
+version = "3.4.3"
+description = "experimental/modern async MongoDB driver with Pydantic-first API"
 readme = "README.md"
 authors = [{ name = "megawattka", email = "gunter56741@gmail.com" }]
 license = "Apache-2.0 AND CC-BY-4.0"

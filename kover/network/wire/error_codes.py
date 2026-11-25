@@ -6,7 +6,6 @@ from ...exceptions import OperationFailure
 
 # https://www.mongodb.com/docs/manual/reference/error-codes/
 _codes_to_exc_name: dict[str, str] = {
-    "0": "OK",
     "1": "InternalError",
     "2": "BadValue",
     "4": "NoSuchKey",
