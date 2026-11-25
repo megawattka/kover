@@ -140,11 +140,8 @@ class Collection:
         Returns:
             The boolean value that indicates document insertion.
         """
-        insertable = dict(maybe_to_dict(document))
-        insertable.setdefault("_id", ObjectId())
-
         ids = await self.insert_many(
-            [insertable],
+            [document],
             ordered=ordered,
             max_time_ms=max_time_ms,
             bypass_document_validation=bypass_document_validation,
