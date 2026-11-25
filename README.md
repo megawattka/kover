@@ -547,34 +547,44 @@ See [Transactions](docs/transactions.md) before implementing production retry lo
 ## GridFS
 
 GridFS stores files as chunks, allowing files larger than MongoDB's 16 MiB
-document limit. `put()` accepts `bytes`, `str`, `pathlib.Path`, or binary file objects.
+document limit. Uploads and downloads can both stream without assembling a
+complete file in memory.
 
 ```python
 from kover import GridFS
 
 fs = await GridFS(client.get_database("files")).indexed()
-file_id = await fs.put(
-    b"Hello from GridFS!",
-    filename="hello.txt",
-    metadata={"contentType": "text/plain"},
+async with fs.open_upload_stream("hello.txt") as upload:
+    await upload.write(b"Hello from ")
+    await upload.write(b"GridFS!")
+
+file_doc, download = await fs.open_download_stream(
+    upload.file_id, chunk_size=64 * 1024,
 )
-file_doc, content = await fs.get_by_file_id(file_id)
-print(file_doc.filename, content.read())
-await fs.delete(file_id)
+async with download:
+    async for chunk in download:
+        print(chunk)
 ```
 
-SHA-1 is stored in metadata by default and verified on download when present.
-Files can also be retrieved by filename, listed, and checked with `exists()`.
+`await fs.put(source)` accepts an async iterable of `bytes`, `pathlib.Path`,
+binary or text file objects, and in-memory `bytes` or `str`. Local files are
+read in bounded blocks in a worker thread. The driver writes bounded batches
+and only publishes the file document after the last batch. Use small input
+blocks when producing an async source to keep its own memory use bounded.
 
-**Current limitation:** This is a buffered API, not a streaming API. Uploads
-read the complete input into memory and build the chunks before writing.
-Downloads load all chunks and assemble a complete `BytesIO`. Memory use grows
-with file size and can exceed the payload size because of intermediate copies.
-Local file reads are synchronous. Chunking avoids the BSON document limit,
-not the client's memory limit.
+An upload stream publishes on successful exit from `async with` or `close()`.
+Call `await upload.abort()` to discard it. Source errors and exceptions in the
+upload context also abort the upload. Failed MongoDB writes can leave orphaned
+chunks, as specified by GridFS.
 
-**TODO:** Implement asynchronous chunk-by-chunk upload/download with bounded
-buffers, incremental checksums, and nonblocking local file reads.
+`open_download_stream(chunk_size=...)` sets the output block size in bytes.
+The last block may be shorter. Without it, the stream yields the chunks as
+stored in MongoDB. Downloads check stored chunk order and sizes.
+SHA-1 is stored in metadata by default
+and checked at the end of a complete download when present. Leaving the
+download context early closes the cursor without checking the full hash.
+For small files, `get_by_file_id()` and `get_by_filename()` still return the
+complete data as a `BytesIO` buffer.
 
 ## Errors
 
@@ -584,7 +594,7 @@ buffers, incremental checksums, and nonblocking local file reads.
 - `NetworkError` / `ProtocolError`: failed socket exchange or invalid server wire reply. Initial connection setup may also propagate `OSError`.
 - `CredentialsException`: incomplete environment credentials.
 - `SchemaGenerationException`: unsupported schema or constraint. Invalid model data raises Pydantic `ValidationError`.
-- `GridFSFileNotFound` / `IncorrectGridFSData`: missing file or unsupported upload payload. A checksum mismatch raises `RuntimeError`.
+- `GridFSFileNotFound` / `IncorrectGridFSData`: missing file, unsupported upload payload, or invalid download chunk. A checksum mismatch raises `RuntimeError`.
 - `ValueError` / `TypeError`: invalid configuration, session ownership, or operation use. BSON encoding errors are local errors, not MongoDB command failures.
 
 For raw operations use `await client.command(document, db_name="demo")` or

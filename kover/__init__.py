@@ -35,7 +35,9 @@ from .gridfs import (
     Chunk,
     File,
     GridFS,
+    GridFSDownloadStream,
     GridFSFileNotFound,
+    GridFSUploadStream,
     IncorrectGridFSData,
 )
 from .models import (
@@ -103,7 +105,9 @@ __all__ = (
     "ExcludeIfNone",
     "File",
     "GridFS",
+    "GridFSDownloadStream",
     "GridFSFileNotFound",
+    "GridFSUploadStream",
     "Handshake",
     "HelloResult",
     "IncorrectGridFSData",

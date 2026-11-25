@@ -1,7 +1,6 @@
 """Example of using GridFS with Kover.
 
-This example demonstrates how to put, get, list, and delete
-files using Kover's GridFS implementation.
+This example demonstrates streaming uploads and downloads with GridFS.
 """
 
 import asyncio
@@ -15,24 +14,25 @@ logging.basicConfig(level=logging.INFO)
 
 
 async def main() -> None:
-    """Entrypoint."""
+    """Upload, stream back, and delete a file."""
     credentials = AuthCredentials.from_environ()
-    kover = await make_client(credentials=credentials)
+    async with await make_client(credentials=credentials) as client:
+        fs = await GridFS(client.get_database("files")).indexed()
 
-    database = kover.get_database("files")
-    fs = await GridFS(database).indexed()
+        # alias for await fs.put(b"Hello world!", filename="hello.txt")
+        async with fs.open_upload_stream("hello.txt") as upload:
+            await upload.write(b"Hello ")
+            await upload.write(b"World!")
 
-    # can be bytes, any type of IO str or path
-    file_id = await fs.put(b"Hello World!")
+        file, download = await fs.open_download_stream(
+            upload.file_id, chunk_size=1024,
+        )
+        async with download:
+            async for chunk in download:
+                log.info("%s: %s", file.filename, chunk)
 
-    file, binary = await fs.get_by_file_id(file_id)
-    log.info("%s %s", file, binary.read())
-
-    files = await fs.list()
-    log.info("total files: %d", len(files))
-
-    deleted = await fs.delete(file_id)
-    log.info("is file deleted? %s", deleted)
+        deleted = await fs.delete(upload.file_id)
+        log.info("File deleted: %s", deleted)
 
 
 if __name__ == "__main__":

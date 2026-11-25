@@ -2,21 +2,21 @@
 
 from __future__ import annotations
 
-import datetime as dt
-from hashlib import sha1
-from io import BytesIO, IOBase
-import math
+from contextlib import aclosing
+from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Self
 
-from elune import Binary, ObjectId
-
 from ..models import Delete, Index, IndexDirection
-from .exceptions import GridFSFileNotFound, IncorrectGridFSData
-from .models import Chunk, File
+from .exceptions import GridFSFileNotFound
+from .models import File
+from .sources import read_blocks
 from .stream import GridFSDownloadStream
+from .upload import DEFAULT_CHUNK_SIZE, GridFSUploadStream
 
 if TYPE_CHECKING:
+    from elune import ObjectId
+
     from ..database import Database
     from .annotations import GridFSPayloadT
 
@@ -37,9 +37,6 @@ CHUNKS_IDX: Final[Index] = Index(
     unique=True,
 )
 
-DEFAULT_CHUNK_SIZE: Final[int] = 255 * 1024  # from pymongo
-SIZE_LIMIT: Final[int] = 1 * 1024 * 1024 * 16  # 16MB
-
 
 class GridFS:
     """Create new instance of GridFS class."""
@@ -54,53 +51,31 @@ class GridFS:
         self._files = self._collection.files
         self._chunks = self._collection.chunks
 
-    @staticmethod
-    def _get_binary_io(
-        data: GridFSPayloadT,
-        *,
-        encoding: str = "utf-8",
-    ) -> tuple[BytesIO, str | None]:
-        name = None
-
-        if isinstance(data, IOBase):  # io-like obj
-            if data.tell() != 0 and data.seekable():
-                data.seek(0)
-            data = data.read()
-
-        if isinstance(data, str):
-            binary = BytesIO(data.encode(encoding=encoding))
-
-        elif isinstance(data, Path):
-            name = data.name
-            binary = BytesIO(data.read_bytes())
-
-        elif isinstance(data, bytes):
-            binary = BytesIO(data)
-
-        else:
-            cls = getattr(data, "__class__", None)
-            msg = f"Incorrect data passed: {cls}, {data}"
-            raise IncorrectGridFSData(msg)
-
-        binary.seek(0)
-        return binary, name
-
-    async def _partial_write_chunks(
+    def open_upload_stream(
         self,
-        chunks: list[Chunk],
-        chunk_size: int,
-    ) -> None:
-        total_chunks = len(chunks)
-        if total_chunks == 0:
-            return
+        filename: str | None = None,
+        *,
+        chunk_size: int | None = None,
+        add_sha1: bool = True,
+        metadata: dict[str, Any] | None = None,
+    ) -> GridFSUploadStream:
+        """Create a stream you can write to with ``await stream.write(data)``.
 
-        max_amount = max(1, math.ceil(SIZE_LIMIT / chunk_size) - 1)
-        splitted = [
-            chunks[x : x + max_amount]
-            for x in range(0, len(chunks), max_amount)
-        ]
-        for chunk_group in splitted:
-            await self._chunks.insert_many(chunk_group)
+        Use ``async with`` or explicitly call ``await stream.close()`` to
+        publish the file. Use ``await stream.abort()`` to discard it instead.
+
+        Returns:
+            A new asynchronous GridFS upload stream.
+        """
+        size = DEFAULT_CHUNK_SIZE if chunk_size is None else chunk_size
+        return GridFSUploadStream(
+            self._files,
+            self._chunks,
+            filename=filename,
+            chunk_size=size,
+            add_sha1=add_sha1,
+            metadata=metadata,
+        )
 
     async def put(  # ruff: ignore[too-many-arguments] -- Explicit upload and metadata options.
         self,
@@ -112,73 +87,38 @@ class GridFS:
         add_sha1: bool = True,
         metadata: dict[str, Any] | None = None,
     ) -> ObjectId:
-        """Store a file in GridFS, splitting it into chunks.
+        """Store a file in GridFS without buffering the complete payload.
+
+        Seekable file objects are read from the start. Caller-owned files and
+        async sources are not closed. Local file reads run in a worker thread.
 
         Parameters:
-            data : The file data to store
-                (can be bytes, str, Path, or file-like object).
+            data : Bytes, text, a path, a file, or an async iterable of bytes.
             filename : The name of the file, defaults to None.
             encoding : Encoding to use if data is a string,
                 defaults to "utf-8".
-            chunk_size : Size of each chunk in bytes,
-                defaults to DEFAULT_CHUNK_SIZE.
+            chunk_size : Positive chunk size in bytes, small enough to fit in
+                a BSON insert command. Defaults to 255 KiB.
             add_sha1 : Whether to add a SHA1 hash to the
                 file metadata, defaults to True.
             metadata : Additional metadata to store with the file.
 
         Returns:
             The ObjectId of the stored file.
-
-        Raises:
-            ValueError: if ``chunk_size`` is not positive or exceeds the
-                maximum BSON document size.
         """
-        chunk_size = DEFAULT_CHUNK_SIZE if chunk_size is None else chunk_size
-        if isinstance(chunk_size, bool) or not 0 < chunk_size < SIZE_LIMIT:
-            msg = f"chunk_size must be > 0 and < {SIZE_LIMIT}"
-            raise ValueError(
-                msg,
-            )
-        file_id = ObjectId()
+        if isinstance(data, Path) and not filename:
+            filename = data.name
 
-        binary, name = self._get_binary_io(data, encoding=encoding)
-        chunks: list[Chunk] = []
-        size = len(binary.getvalue())
-
-        iterations = math.ceil(size / chunk_size)
-        filename = filename or name
-
-        for n in range(iterations):
-            data = binary.read(chunk_size)
-            chunk = Chunk(
-                files_id=file_id,
-                n=n,
-                data=Binary(data),
-            )
-            chunks.append(chunk)
-        await self._partial_write_chunks(
-            chunks,
+        async with self.open_upload_stream(
+            filename,
             chunk_size=chunk_size,
-        )
-        upload_date = dt.datetime.now(tz=dt.UTC)
+            add_sha1=add_sha1,
+            metadata=metadata,
+        ) as stream, aclosing(read_blocks(data, encoding)) as blocks:
+            async for block in blocks:
+                await stream.write(block)
 
-        file = File(
-            chunk_size=chunk_size,
-            length=size,
-            upload_date=upload_date,
-            filename=filename,
-            metadata={
-                "sha1": sha1(binary.getvalue()).hexdigest(),
-            }
-            if add_sha1
-            else {},
-        )
-        file.object_id = file_id
-
-        file.metadata.update(metadata or {})
-        await self._files.insert_one(file)
-
-        return file_id
+        return stream.file_id
 
     async def get_by_file_id(
         self,
@@ -186,7 +126,7 @@ class GridFS:
         *,
         check_sha1: bool = True,
     ) -> tuple[File, BytesIO]:
-        """Retrieve a file and its binary data from GridFS by file ID.
+        """Retrieve the whole file by ID (raises if the file is missing).
 
         Parameters:
             file_id : The unique identifier of the file to retrieve.
@@ -195,34 +135,37 @@ class GridFS:
 
         Returns:
             The File object and its binary data.
-
-        Raises:
-            GridFSFileNotFound : If no file with the given ID is found.
         """
-        file = await self._files.find_one({"_id": file_id}, cls=File)
-        if file is not None:
-            binary = BytesIO()
-            stream = self._make_download_stream(
-                file, check_sha1=check_sha1,
-            )
+        file, stream = await self.open_download_stream(
+            file_id, check_sha1=check_sha1,
+        )
+        return file, await self._buffer_download(stream)
+
+    @staticmethod
+    async def _buffer_download(stream: GridFSDownloadStream) -> BytesIO:
+        binary = BytesIO()
+        async with stream:
             async for chunk in stream:
                 binary.write(chunk)
 
-            binary.seek(0)
-            return file, binary
-        msg = "No file with that id found"
-        raise GridFSFileNotFound(msg)
+        binary.seek(0)
+        return binary
 
     async def open_download_stream(
         self,
         file_id: ObjectId | None,
         *,
         check_sha1: bool = True,
+        chunk_size: int | None = None,
     ) -> tuple[File, GridFSDownloadStream]:
         """Open a file for bounded-memory asynchronous chunked reading.
 
-        Consume the returned stream with ``async for`` and call
-        ``await stream.aclose()`` when reading stops early.
+        Consume the returned stream with ``async for`` inside ``async with``
+        to close its cursor even if reading stops early.
+
+        With ``chunk_size=None``, yield the original stored chunks. Otherwise,
+        yield blocks of the requested size in bytes, except the final block,
+        which may be shorter. The stored chunks are not modified.
 
         Returns:
             The file metadata and a chunked download stream.
@@ -238,6 +181,7 @@ class GridFS:
         return file, self._make_download_stream(
             file,
             check_sha1=check_sha1,
+            chunk_size=chunk_size,
         )
 
     def _make_download_stream(
@@ -245,6 +189,7 @@ class GridFS:
         file: File,
         *,
         check_sha1: bool,
+        chunk_size: int | None = None,
     ) -> GridFSDownloadStream:
         """Create a chunk cursor for a stored GridFS file.
 
@@ -265,6 +210,8 @@ class GridFS:
             cursor,
             stored_sha1,
             check_sha1=check_sha1,
+            file=file,
+            chunk_size=chunk_size,
         )
 
     async def get_by_filename(
@@ -284,7 +231,9 @@ class GridFS:
         """
         file = await self._files.find_one({"filename": filename}, cls=File)
         if file is not None:
-            return await self.get_by_file_id(file.object_id)
+            return file, await self._buffer_download(
+                self._make_download_stream(file, check_sha1=True),
+            )
 
         msg = "No file with that filename found"
         raise GridFSFileNotFound(msg)

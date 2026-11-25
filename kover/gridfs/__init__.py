@@ -5,6 +5,7 @@ from .exceptions import GridFSFileNotFound, IncorrectGridFSData
 from .gridfs import GridFS
 from .models import Chunk, File
 from .stream import GridFSDownloadStream
+from .upload import GridFSUploadStream
 
 __all__ = (
     "Chunk",
@@ -13,5 +14,6 @@ __all__ = (
     "GridFSDownloadStream",
     "GridFSFileNotFound",
     "GridFSPayloadT",
+    "GridFSUploadStream",
     "IncorrectGridFSData",
 )
