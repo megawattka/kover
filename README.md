@@ -635,4 +635,8 @@ and pull requests. Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-[MIT](LICENSE). Copyright (c) 2024–present megawattka.
+Kover is licensed under the [Apache License 2.0](LICENSE).
+Copyright (c) 2024–present megawattka.
+
+The [Code of Conduct](CODE_OF_CONDUCT.md) is separately licensed under
+[Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/).
