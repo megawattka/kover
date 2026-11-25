@@ -17,11 +17,14 @@ from .protocols import ICommandExecutor
 from .router import route_command
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from ..models.address import Address
     from ..models.concerns import WriteConcern
     from ..session import Session
+    from ..topology.monitor import TopologyMonitor
     from ..topology.protocols import IServerSelector
-    from .protocols import IPoolProvider
+    from .protocols import IPoolProvider, IServerPool
 
 
 class CommandExecutor(ICommandExecutor):
@@ -33,10 +36,14 @@ class CommandExecutor(ICommandExecutor):
         selector: IServerSelector,
         pools: IPoolProvider,
         default_preference: ReadPreference | None = None,
+        monitor: TopologyMonitor | None = None,
+        pool_is_current: Callable[[Address, IServerPool], bool] | None = None,
     ) -> None:
         self._selector = selector
         self._pools = pools
         self._default_preference = default_preference or ReadPreference()
+        self._monitor = monitor
+        self._pool_is_current = pool_is_current
 
     async def execute(  # ruff: ignore[too-many-arguments] -- Implements the typed command execution contract.
         self,
@@ -90,8 +97,9 @@ class CommandExecutor(ICommandExecutor):
         if prepared.transactional and session is not None:
             session.pin_server(address)
 
+        pool = self._pools.for_server(address)
         try:
-            reply = await self._pools.for_server(address).execute(
+            reply = await pool.execute(
                 prepared.document,
                 database=context.database,
                 deadline=deadline,
@@ -102,12 +110,12 @@ class CommandExecutor(ICommandExecutor):
             ProtocolError,
             TimeoutError,
             OSError,
-        ):
-            self._selector.invalidate(address)
+        ) as exc:
+            self._report_error(address, pool, exc)
             raise
         except OperationFailure as exc:
             if exc.is_server_selection_error:
-                self._selector.invalidate(address)
+                self._report_error(address, pool, exc)
             raise
 
         if prepared.starts_transaction and session is not None:
@@ -115,6 +123,24 @@ class CommandExecutor(ICommandExecutor):
 
         return CommandReply(reply, address)
 
+    def _report_error(
+        self,
+        address: Address,
+        pool: IServerPool,
+        error: Exception,
+    ) -> None:
+        if self._monitor is None:
+            self._selector.invalidate(address)
+        elif not isinstance(error, PoolTimeoutError) and (
+            self._pool_is_current is None
+            or self._pool_is_current(address, pool)
+        ):
+            self._monitor.application_error(address, error)
+
     async def close(self) -> None:
-        """Close all server pools owned by the provider."""
-        await self._pools.close()
+        """Stop monitoring before closing the application server pools."""
+        try:
+            if self._monitor is not None:
+                await self._monitor.stop()
+        finally:
+            await self._pools.close()

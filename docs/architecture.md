@@ -3,7 +3,7 @@
 Kover is a Python 3.12+ `asyncio` MongoDB driver. It uses asyncio streams for
 network I/O, Pydantic v2 for models, Elune for BSON serialization, and
 its own URI parser with asynchronous dnspython SRV/TXT discovery.
-Application commands are not delegated to a PyMongo client or a thread pool;
+Application commands are not delegated to a PyMongo client or a thread pool.
 
 See [connections](connections.md) for configuration,
 [read preferences](read_preferences.md) for routing,
@@ -18,7 +18,7 @@ See [connections](connections.md) for configuration,
 | Composition | `bootstrap.make_client`, `bootstrap.from_uri` | Validate configuration, construct dependencies, perform initial selection |
 | Execution | `CommandExecutor`, router, preparation | Resolve a server, copy and prepare commands, apply metadata, execute |
 | Policies | `policies.commands`, `policies.routing` | Classify reads/writes and enforce routing rules |
-| Topology | `ServerDiscovery`, `ServerSelector`, `TopologyState` | Probe servers, publish snapshots, choose eligible addresses |
+| Topology | `ServerDiscovery`, `TopologyMonitor`, `Topology`, `ServerSelector`, `TopologyState` | Discover members, monitor heartbeats, apply SDAM transitions, publish snapshots, choose eligible addresses |
 | Pooling | `PoolRegistry`, `ConnectionPool`, `ConnectionLease` | Lazily create per-server pools and grant exclusive connections |
 | Connections | `ConnectionFactory`, `Connection`, `ServerProbe` | Connect, handshake, authenticate, exchange commands |
 | Wire and transport | codec, handshake, error mapper, `Transport` | BSON framing, compression, reply validation, TCP/TLS bytes |
@@ -36,18 +36,18 @@ serialization and schema contracts.
 ```text
 make_client(...) / from_uri(...)
   -> ConnectionFactory
-  -> ServerProbe -> ServerDiscovery -> ServerSelector
-  -> PoolRegistry
+  -> PoolRegistry (application connections)
+  -> TopologyMonitor -> TopologyState -> ServerSelector
   -> CommandExecutor
-  -> initial server selection
+  -> initial selection starts monitoring and waits for an eligible server
   -> Kover
 ```
 
-Construction is asynchronous: the factory verifies that a suitable server can
-be discovered before returning a client. Discovery uses temporary connections
-which are closed after probing. Application connections are opened lazily when
-commands check out a connection from a server pool. Initial selection failure
-also closes the composed executor.
+Construction is asynchronous: the monitor starts with the configured seeds
+and publishes topology updates while the factory waits for a suitable server.
+The monitor owns its own connections. Application connections open lazily on
+checkout. If initial selection fails or is cancelled, the executor shuts down
+the monitor and pools.
 
 `Kover(executor)` is the injection boundary for custom composition and unit
 tests. It does not accept host/port configuration itself. The client owns its
@@ -75,24 +75,40 @@ Successful command replies carry the selected server address internally in a
 dict-compatible `CommandReply`. Cursors use it to retain server affinity for
 `getMore` and `killCursors` without retaining a socket.
 
-## Server snapshots
+## SDAM topology and server snapshots
 
-Discovery starts from configured seeds and follows advertised replica-set
-members. Selection first checks its current snapshot. With no eligible cached
-candidate it serializes refreshes under a lock and invokes discovery until a
-candidate appears or the selection deadline expires. A complete snapshot
-replaces the old one rather than being mutated while it is being selected.
+`TopologyMonitor` runs one worker per known address. Each worker starts with a
+handshake, then performs regular or awaitable `hello` checks on a dedicated
+connection. `TopologyState` publishes server descriptions as a new tuple
+rather than mutating the previous snapshot in place. `ServerDiscovery.scan()`
+remains available for one-shot discovery without a live monitor.
+
+`Topology` applies SDAM transitions synchronously before publication. It tracks
+single-server, sharded, replica-set-with-primary, and replica-set-without-primary
+topology kinds; validates replica-set names; detects stale topology versions and
+primaries; adds advertised members; and removes members no longer advertised.
+Temporary failures do not erase addresses: the last description is retained as
+`Unknown` with the latest error so the worker can reconnect.
 
 Eligible servers are filtered by role, read preference, tags, and staleness.
 Selection then chooses randomly within an RTT window of the fastest eligible
 server. For mongos deployments the router is selected locally; read-preference
 metadata tells mongos how to route the read.
 
-The executor invalidates a cached server description on network/protocol/time
-failures and server errors indicating a role change. It does **not** retry the
-failed operation. Other eligible cached servers may still be selected without
-a new scan. There is no continuous topology monitoring or transparent failover
-and replay guarantee.
+Topology publications wake server-selection waiters, so a newly elected primary
+or recovered secondary can become eligible without waiting for the selection
+timeout. Application network/topology errors also request an immediate monitor
+refresh. The executor does **not** retry the failed operation: SDAM changes
+server eligibility, but command replay is an application-level decision.
+
+See [SDAM and server monitoring](sdam.md) for monitoring modes, heartbeat
+configuration, pool generations, and shutdown behavior.
+
+Both command and monitor replies pass through `CommandCodec.decode()`. By
+default it returns the reply document and rejects the `moreToCome` flag.
+Streaming monitoring calls `decode(..., exhaustive=False)` to receive
+`(document, message_id, more_to_come)` and validate each subsequent response
+against the preceding server message ID.
 
 ## Resource ownership and concurrency
 
@@ -104,8 +120,9 @@ and replay guarantee.
   constructing `find()` or `aggregate()` does not issue a command.
 - Cursor operations must not run concurrently on the same cursor. Do not
   concurrently mutate or use one transaction session either.
-- Closing a client closes idle pool connections. Checked-out connections are
-  closed when returned. Finish application tasks before shutting down clients.
+- Closing a client stops the monitors before closing idle pool connections.
+  Checked-out connections close when returned. Finish application tasks before
+  shutting down clients.
 
 ## Extension and test boundaries
 

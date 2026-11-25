@@ -37,6 +37,7 @@ class PoolRegistry(IPoolProvider):
         self._connection_timeout = connection_timeout
         self._pool_factory = pool_factory
         self._pools: dict[tuple[str, int], ConnectionPool] = {}
+        self._retiring: set[asyncio.Task[None]] = set()
         self._closed = False
 
     def for_server(self, address: Address) -> IServerPool:
@@ -70,6 +71,22 @@ class PoolRegistry(IPoolProvider):
         """A stable snapshot of currently registered pools."""
         return tuple(self._pools.values())
 
+    def is_current(self, address: Address, pool: IServerPool) -> bool:
+        """Check that an operation did not use a retired pool generation.
+
+        Returns:
+            Whether ``pool`` is the current pool for ``address``.
+        """
+        return self._pools.get(self._key(address)) is pool
+
+    def clear(self, address: Address) -> None:
+        """Retire this pool so future operations use a new generation."""
+        pool = self._pools.pop(self._key(address), None)
+        if pool is not None:
+            task = asyncio.create_task(pool.close())
+            self._retiring.add(task)
+            task.add_done_callback(self._retiring.discard)
+
     @property
     def closed(self) -> bool:
         """Whether registry shutdown has begun."""
@@ -85,6 +102,7 @@ class PoolRegistry(IPoolProvider):
         self._pools.clear()
 
         await asyncio.gather(
+            *self._retiring,
             *(pool.close() for pool in pools),
             return_exceptions=True,
         )

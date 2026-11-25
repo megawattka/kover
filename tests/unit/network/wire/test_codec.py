@@ -9,6 +9,7 @@ from elune.codec_options import CodecOptions
 import pytest
 
 from kover.network.wire.codec import (
+    MORE_TO_COME,
     OP_COMPRESSED,
     OP_MSG,
     CommandCodec,
@@ -21,12 +22,14 @@ def response(
     *,
     request_id: int = 7,
     section_kind: int = 0,
+    message_id: int = 9,
+    flags: int = 0,
 ) -> bytes:
-    payload = struct.pack("<iB", 0, section_kind) + encode(document)
+    payload = struct.pack("<iB", flags, section_kind) + encode(document)
     header = struct.pack(
         "<iiii",
         16 + len(payload),
-        9,
+        message_id,
         request_id,
         OP_MSG,
     )
@@ -111,6 +114,11 @@ def test_encode_and_decode_compressed_op_msg() -> None:
     assert codec.decode(compressed_response({"ok": 1}), request_id=7) == {
         "ok": 1,
     }
+    assert codec.decode(
+        response({"ok": 1}),
+        request_id=7,
+        exhaustive=False,
+    ) == ({"ok": 1}, 9, False)
     assert (
         codec.decode(response({"data": Binary(b"\x00\xff")}), request_id=7)[
             "data"
@@ -119,6 +127,29 @@ def test_encode_and_decode_compressed_op_msg() -> None:
     )
     codec.set_compressor(None)
     assert codec.encode(command, "shop", request_id=5) != wire
+
+
+def test_decode_chained_streaming_replies() -> None:
+    codec = CommandCodec()
+    first = response({"ok": 1}, flags=MORE_TO_COME)
+    with pytest.raises(ValueError, match="moreToCome"):
+        codec.decode(first, request_id=7)
+
+    document, message_id, more = codec.decode(
+        first,
+        request_id=7,
+        exhaustive=False,
+    )
+    assert (document, message_id, more) == ({"ok": 1}, 9, True)
+
+    last = response({"ok": 1}, request_id=message_id, message_id=10)
+    with pytest.raises(ValueError, match="wrong response id"):
+        codec.decode(last, request_id=7, exhaustive=False)
+    assert codec.decode(last, request_id=message_id, exhaustive=False) == (
+        {"ok": 1},
+        10,
+        False,
+    )
 
 
 @pytest.mark.parametrize("level", [-1, 0, 1, 9])

@@ -50,6 +50,7 @@ Want to see it in an API? See the
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Connections and routing](#connections-and-routing)
+- [SDAM and server monitoring](#sdam-and-server-monitoring)
 - [Typed documents and BSON](#typed-documents-and-bson)
 - [MongoDB schema validation](#mongodb-schema-validation)
 - [CRUD and cursors](#crud-and-cursors)
@@ -66,6 +67,8 @@ Kover talks directly to MongoDB using `asyncio` streams and MongoDB's
 `OP_MSG` / `OP_COMPRESSED` wire protocol, without thread-pool wrappers.
 
 - Native asynchronous clients, per-server connection pools, and lazy cursors.
+- Live discovery and monitoring (SDAM) for standalone servers, replica sets,
+  and sharded deployments.
 - All five read preference modes, ordered tag sets, max staleness, and latency windows.
 - Pydantic `Document` models and strict MongoDB `$jsonSchema` generation.
 - CRUD, aggregation, indexes, database/user administration, and GridFS.
@@ -150,7 +153,8 @@ to receive dictionaries instead. Each run of this example inserts a new user.
 
 `from_uri()` and `make_client()` are **module-level factory functions** returning
 a `Kover` client. They are not methods on the `Kover` class. Factories perform
-initial server discovery; application connections are opened lazily in pools.
+initial server selection and start SDAM monitoring; application connections are
+opened lazily in per-server pools.
 
 The remaining asynchronous snippets belong inside an async function. Unless a
 snippet creates its own client, it assumes an open `client` and reuses models
@@ -173,10 +177,8 @@ client = await make_client(
     max_pool_size=50,
     application={"name": "my-service"},
 )
-try:
+async with client:
     print(await client.admin.ping())
-finally:
-    await client.close()
 ```
 
 `AuthCredentials.from_environ()` reads `MONGO_USER`, `MONGO_PASSWORD`, and
@@ -203,13 +205,15 @@ set configuration, not just reachable seed aliases.
 | `serverSelectionTimeoutMS` | `server_selection_timeout` | 30 seconds |
 | `connectTimeoutMS` | `connect_timeout` | 10 seconds |
 | `localThresholdMS` | `local_threshold` | 0.015 seconds |
+| `heartbeatFrequencyMS` | `heartbeat_frequency` | 10 seconds; minimum 500 ms |
+| `serverMonitoringMode` | `server_monitoring_mode` | `"auto"` (`"poll"` or `"stream"`) |
 | `maxPoolSize` | `max_pool_size` | 100 connections per server |
 
-URI timeout/latency values in this table use milliseconds; programmatic
-arguments use seconds. `connect_timeout` limits each discovery probe and each
-new pooled connection's setup, including handshake/authentication.
-`connect_timeout=None` (`connectTimeoutMS=0`) disables those individual limits,
-not the server-selection or explicit operation deadline.
+URI durations in this table use milliseconds; Python arguments use seconds.
+`connect_timeout` limits connection setup, including the handshake and
+authentication. `connect_timeout=None` (`connectTimeoutMS=0`) disables the
+per-connection setup limit for the application pool; monitors use a 10-second
+base timeout. Server selection and explicit operation deadlines still apply.
 
 `server_selection_timeout` limits selection, not command execution. Neither
 setting is a socket timeout for commands on established connections.
@@ -229,23 +233,20 @@ from kover import ReadPreference, from_uri
 client = await from_uri(
     "mongodb://seed1:27017,seed2:27017/shop?replicaSet=rs0"
     "&readPreference=secondaryPreferred"
-    "&readPreferenceTags=region:east&readPreferenceTags="
-    "&maxStalenessSeconds=120&localThresholdMS=15"
+    "&readPreferenceTags=region:east"
+    "&readPreferenceTags="
+    "&maxStalenessSeconds=120"
+    "&localThresholdMS=15",
 )
-try:
+async with client:
     orders = client.shop.orders
-    documents = await (
-        orders.find({})
-        .read_preference(ReadPreference("nearest"))
-        .to_list()
-    )
+    cursor = orders.find({}).read_preference(ReadPreference("nearest"))
+    documents = await cursor.to_list()
     reply = await client.command(
         {"count": "orders"},
         db_name="shop",
         read_preference=ReadPreference("primary"),
     )
-finally:
-    await client.close()
 ```
 
 Modes are `primary` (default), `primaryPreferred`, `secondary`,
@@ -264,13 +265,47 @@ reads and pin a server address, never a connection.
 even if it is a secondary. Writes are not redirected; direct mode does not
 make secondary transactions valid.
 
-**Routing limitations:** Discovery is snapshot-based, not full SDAM. There is
-no background monitoring, automatic retry after command failure, or automatic
-failover guarantee. On-demand scans run when cached servers cannot satisfy an
-operation; cached roles and staleness measurements can become outdated.
-Recreate the client when a fresh topology view is needed. Load-balanced mode
-is unsupported. URI parsing does not imply every parsed option is applied;
-automatic retries and custom TLS certificate options are not implemented.
+## SDAM and server monitoring
+
+Kover starts a background monitor for each seed during initial server selection
+and follows replica-set membership changes reported by `hello`. Heartbeats use
+dedicated connections, so they don't compete with application operations for
+pool capacity. When a heartbeat fails, the server is marked `Unknown` and
+monitored for recovery. Topology changes wake waiting selectors, so a later
+operation can use a new primary without recreating the client.
+
+The default mode, `"auto"`, prefers streaming `hello` when the server reports
+`topologyVersion` and uses polling in detected FaaS environments. Use `"poll"`
+to force polling or `"stream"` to prefer streaming explicitly:
+
+```python
+from kover import make_client
+
+
+client = await make_client(
+    host="db1",
+    heartbeat_frequency=5.0,
+    server_monitoring_mode="stream",
+)
+async with client:
+    await client.admin.ping()
+```
+
+The equivalent URI options are:
+
+```text
+mongodb://db1:27017/?heartbeatFrequencyMS=5000&serverMonitoringMode=stream
+```
+
+`"stream"` falls back to polling if a server doesn't advertise
+`topologyVersion`. Closing the client stops monitoring before closing the
+application pools. See the [SDAM guide](docs/sdam.md) for timeout and pool
+retirement details.
+
+**What SDAM doesn't do:** Kover does not retry or replay failed commands. A
+command can still fail during an election, and a transaction or cursor pinned
+to an address does not move to another server. Load-balanced mode and custom
+TLS certificate options are not supported.
 
 ## Typed documents and BSON
 
@@ -307,11 +342,13 @@ client = await from_uri(
         uuid_representation=UuidRepresentation.STANDARD,
     ),
 )
+users = client.demo.users
 ```
 
 `make_client()` accepts the same `codec_options=` argument. `STANDARD` encodes
 UUIDs as binary subtype 4 and decodes them back to `UUID`. The default
-`UNSPECIFIED` representation rejects native UUID encoding.
+`UNSPECIFIED` representation rejects native UUID encoding. Keep this client
+open for the following examples and close it when done.
 
 | API | Purpose |
 | --- | --- |
@@ -417,10 +454,12 @@ contents through these schemas.
 ```python
 from kover import Delete, Update
 
-await users.insert_many([
-    User(username="charlie", age=31),
-    User(username="dana", age=24),
-])
+await users.insert_many(
+    [
+        User(username="charlie", age=31),
+        User(username="dana", age=24),
+    ]
+)
 user: User | None = await users.find_one({"username": "charlie"}, cls=User)
 
 cursor = (
@@ -451,10 +490,11 @@ up the server cursor. `to_list()` consumes remaining results; `first()` raises
 `StopAsyncIteration` if empty. Close the cursor if you only consume its first item.
 
 ```python
-stats = await users.aggregate([
-    {"$group": {"_id": None, "count": {"$sum": 1}}},
-]).to_list()
-plan = await users.aggregate([{"$match": {"age": {"$gte": 18}}}], explain=True).command_result()
+group_by_age = [{"$group": {"_id": "$age", "count": {"$sum": 1}}}]
+stats = await users.aggregate(group_by_age).to_list()
+
+adults = [{"$match": {"age": {"$gte": 18}}}]
+plan = await users.aggregate(adults, explain=True).command_result()
 ```
 
 Aggregation returns a lazy cursor. For commands returning a document rather
@@ -572,14 +612,17 @@ Unit tests include local TCP protocol tests but do not require MongoDB.
 Integration tests are opt-in:
 
 ```bash
-KOVER_RUN_INTEGRATION=1 MONGO_HOST=127.0.0.1 MONGO_PORT=27017 \
-    uv run pytest tests/integration -v
+KOVER_RUN_INTEGRATION=1 \
+  MONGO_HOST=127.0.0.1 \
+  MONGO_PORT=27017 \
+  uv run pytest tests/integration -v
 ```
 
 Optional credentials use `MONGO_USER`, `MONGO_PASSWORD`, and `MONGO_AUTH_DB`.
 The current test suite does not consume `MONGODB_URI`. Use a deployment
 supporting the tested features, including transactions and MongoDB 8.0+ bulk writes.
-Sharded tests are separately enabled by `KOVER_RUN_SHARDED=1`.
+To run against a sharded deployment, point `MONGO_HOST` and `MONGO_PORT`
+at a `mongos` router on a disposable cluster.
 
 ## Documentation and examples
 
@@ -587,6 +630,7 @@ Sharded tests are separately enabled by `KOVER_RUN_SHARDED=1`.
 - [Documents, IDs, serialization, and schema validation](docs/documents.md)
 - [GeoJSON models, geospatial indexes, and queries](docs/geo_json.md)
 - [Connections, authentication, pools, and deadlines](docs/connections.md)
+- [SDAM and server monitoring](docs/sdam.md)
 - [Read preferences and routing limits](docs/read_preferences.md)
 - [Transactions and session lifecycle](docs/transactions.md)
 - [Development and integration configuration](docs/development.md)

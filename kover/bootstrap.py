@@ -2,20 +2,23 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from .client import Kover
 from .execution.executor import CommandExecutor
 from .models.address import Address
 from .models.concerns import WriteConcern
-from .models.options import DiscoveryOptions
 from .models.read_preference import ReadPreference
 from .network.factory import ConnectionFactory
-from .network.probe import ServerProbe
 from .network.registry import PoolRegistry
 from .network.uri_parser import parse_uri
-from .topology.discovery import ServerDiscovery
-from .topology.selector import ServerSelector
+from .topology import (
+    DiscoveryOptions,
+    ServerDiscovery,
+    ServerProbe,
+    ServerSelector,
+    TopologyMonitor,
+)
 
 if TYPE_CHECKING:
     import asyncio
@@ -24,6 +27,7 @@ if TYPE_CHECKING:
     from elune import CodecOptions
 
     from .models.credentials import AuthCredentials
+    from .topology.options import MonitoringMode
 
 
 async def _build_client(  # ruff: ignore[too-many-arguments] -- Assembles independent client components.
@@ -54,17 +58,35 @@ async def _build_client(  # ruff: ignore[too-many-arguments] -- Assembles indepe
         options=options,
         probe=ServerProbe(factory),
     )
-    selector = ServerSelector(discovery, options=options)
     pools = PoolRegistry(
         factory,
         max_pool_size=max_pool_size,
         connection_timeout=options.connect_timeout,
     )
-    executor = CommandExecutor(
-        selector=selector,
-        pools=pools,
-        default_preference=options.read_preference,
-    )
+    # Keep the composition seam usable with mocked discovery components. The
+    # concrete path always installs the live SDAM monitor.
+    if type(discovery) is ServerDiscovery:
+        monitor = TopologyMonitor(
+            seeds,
+            options,
+            factory,
+            clear_pool=pools.clear,
+        )
+        selector = ServerSelector(discovery, options=options, monitor=monitor)
+        executor = CommandExecutor(
+            selector=selector,
+            pools=pools,
+            default_preference=options.read_preference,
+            monitor=monitor,
+            pool_is_current=pools.is_current,
+        )
+    else:
+        selector = ServerSelector(discovery, options=options)
+        executor = CommandExecutor(
+            selector=selector,
+            pools=pools,
+            default_preference=options.read_preference,
+        )
     selected = False
     try:
         await selector.select(options.read_preference)
@@ -73,6 +95,7 @@ async def _build_client(  # ruff: ignore[too-many-arguments] -- Assembles indepe
         # Also clean up if initial selection is cancelled by the caller.
         if not selected:
             await executor.close()
+
     return Kover(executor, write_concern=write_concern)
 
 
@@ -93,6 +116,8 @@ async def make_client(  # ruff: ignore[too-many-arguments] -- Public connection 
     connect_timeout: float | None = 10.0,
     read_preference: ReadPreference | None = None,
     local_threshold: float = 0.015,
+    heartbeat_frequency: float = 10.0,
+    server_monitoring_mode: MonitoringMode = "auto",
     max_pool_size: int = 100,
     write_concern: WriteConcern | None = None,
     codec_options: CodecOptions | None = None,
@@ -115,6 +140,8 @@ async def make_client(  # ruff: ignore[too-many-arguments] -- Public connection 
             connect_timeout=connect_timeout,
             read_preference=read_preference or ReadPreference(),
             local_threshold=local_threshold,
+            heartbeat_frequency=heartbeat_frequency,
+            server_monitoring_mode=server_monitoring_mode,
         ),
         write_concern=write_concern or WriteConcern(w=w),
         credentials=credentials,
@@ -152,7 +179,7 @@ async def from_uri(
         options=DiscoveryOptions(
             replica_set=values.get("replicaSet"),
             direct_connection=values.get("directConnection", False),
-            # The URI parser normalizes these two timeouts to seconds.
+            # The URI parser normalizes timeouts and heartbeats to seconds.
             server_selection_timeout=values.get(
                 "serverSelectionTimeoutMS",
                 30.0,
@@ -168,6 +195,11 @@ async def from_uri(
                 max_staleness_seconds=values.get("maxStalenessSeconds", -1),
             ),
             local_threshold=values.get("localThresholdMS", 15) / 1000,
+            heartbeat_frequency=values.get("heartbeatFrequencyMS", 10.0),
+            server_monitoring_mode=cast(
+                "MonitoringMode",
+                values.get("serverMonitoringMode", "auto"),
+            ),
         ),
         write_concern=WriteConcern(
             w=values.get("w", "majority"),

@@ -1,7 +1,8 @@
 # Connections
 
 Use `make_client()` for explicit parameters or `from_uri()` for MongoDB URI
-configuration. Both are asynchronous and perform initial server selection.
+Both are asynchronous, perform initial server selection, and start the
+background SDAM monitor before returning the client.
 Keep clients alive across operations and always close them.
 
 ## Explicit configuration
@@ -39,8 +40,10 @@ asyncio.run(main())
 | `direct_connection` | `False` | Probe and use only the configured seed |
 | `read_preference` | `ReadPreference()` | Default read policy (`primary`) |
 | `server_selection_timeout` | `30.0` | Selection timeout in seconds |
-| `connect_timeout` | `10.0` | Per-probe/application connection setup limit in seconds; `None` disables the application setup limit |
+| `connect_timeout` | `10.0` | Connection setup and base heartbeat timeout in seconds |
 | `local_threshold` | `0.015` | RTT eligibility window in seconds |
+| `heartbeat_frequency` | `10.0` | SDAM heartbeat interval in seconds; minimum `0.5` |
+| `server_monitoring_mode` | `"auto"` | `"auto"`, `"poll"`, or `"stream"` |
 | `max_pool_size` | `100` | Maximum connections **per server**, including creation reservations |
 | `tls` | `False` | Use TLS with the default validating SSL context |
 | `compression` | `None` | Offered compressors, for example `("zlib",)` |
@@ -50,9 +53,10 @@ asyncio.run(main())
 | `write_concern` | `None` | Explicit `WriteConcern`, taking precedence over `w` |
 
 Selection timeout must be finite and nonnegative; connection timeout must be
-finite and positive or `None`. Discovery currently uses a 30-second per-probe
-fallback when `connect_timeout=None`, still bounded by the scan/selection
-deadline. Connection setup includes TCP/TLS, hello, and authentication.
+finite and positive or `None`. With `connect_timeout=None`, application
+connections have no separate setup timeout, but monitors use a 10-second base
+timeout. Awaitable `hello` adds the heartbeat interval to that base. Connection
+setup includes TCP/TLS, `hello`, and authentication for application connections.
 
 ## MongoDB URIs
 
@@ -81,7 +85,8 @@ mongodb://db1:27017,db2:27017/?replicaSet=rs0&serverSelectionTimeoutMS=5000
 The composition layer consumes seeds, credentials, `replicaSet`,
 `directConnection`, `readPreference`, repeated `readPreferenceTags`,
 `maxStalenessSeconds`, `serverSelectionTimeoutMS`, `connectTimeoutMS`,
-`localThresholdMS`, `maxPoolSize`, `tls`, `compressors`, `zlibCompressionLevel`, `appName`, `w`,
+`localThresholdMS`, `heartbeatFrequencyMS`, `serverMonitoringMode`,
+`maxPoolSize`, `tls`, `compressors`, `zlibCompressionLevel`, `appName`, `w`,
 `journal`, and `wTimeoutMS`. A parsed URI is **not** a promise that every
 recognized URI option is applied by Kover; inspect `bootstrap.from_uri()` for
 the supported mapping. `loadBalanced=true` is explicitly rejected.
@@ -157,6 +162,49 @@ different member. Eligible reads to a directly connected non-mongos server use
 reads from a secondary. This does **not** make secondary writes or transactions
 legal. Use normal replica-set discovery for primary routing and availability.
 
+## SDAM monitoring
+
+Kover maintains one dedicated monitor per known server. The monitor does not
+borrow connections from `PoolRegistry`, and it keeps monitoring an address
+after a temporary failure by publishing it as `Unknown` with `last_error`.
+When a server advertises new replica-set members, those addresses are added to
+the monitor set. A primary's updated member list can also remove addresses that
+are no longer members.
+
+### Monitoring modes
+
+`server_monitoring_mode="auto"` is the default. It uses awaitable/streaming
+`hello` outside FaaS environments and polling in FaaS environments. The
+streaming request includes the last `topologyVersion` and
+`maxAwaitTimeMS`; the server keeps the request open until a significant
+topology change or the await timeout. If `topologyVersion` is absent, Kover
+uses regular polling for that server.
+
+Use `server_monitoring_mode="poll"` to force regular heartbeats or
+`server_monitoring_mode="stream"` to prefer streaming monitoring. The stream
+mode still falls back to polling for servers that do not support awaitable
+hello. The equivalent URI option is `serverMonitoringMode=auto|poll|stream`.
+
+`heartbeat_frequency` is measured in seconds and defaults to `10.0`; the URI
+form is `heartbeatFrequencyMS`. Values below `0.5` seconds are rejected. This
+interval controls polling cadence, awaitable-hello waiting, and the heartbeat
+allowance in max-staleness calculations.
+
+### Errors, selection, and shutdown
+
+When a monitor check fails, the server remains known but becomes unavailable
+for selection. The monitor retries with bounded exponential backoff and wakes
+waiting server-selection operations immediately. A successful check restores
+the server's role and RTT.
+
+Heartbeat failures and applicable application transport failures retire the
+affected pool. Some role-change command errors only invalidate the server
+description and trigger a new check; see [SDAM pool retirement](sdam.md#failures-and-recovery).
+Kover does not retry or replay the failed command automatically.
+
+`await client.close()` stops all monitor tasks before closing application
+pools. The async context manager performs the same shutdown sequence.
+
 ## Pools and deadlines
 
 Application pools are created lazily per selected server. Every command checks
@@ -165,7 +213,7 @@ connections are discarded; a server command rejection alone does not make a
 healthy connection unusable.
 
 `max_pool_size` is not a global client limit. With multiple selected servers,
-each has its own pool, in addition to temporary discovery connections.
+each has its own pool. Monitoring connections do not count toward this limit.
 
 `client.command(..., deadline=...)` takes an **absolute event-loop clock**
 deadline, not seconds from now or a Unix timestamp:
@@ -191,15 +239,16 @@ operation. MongoDB `maxTimeMS` limits server work and is a separate mechanism.
 ## Errors and shutdown
 
 - `ServerSelectionError`: no eligible server before the selection deadline.
-- `PoolTimeoutError`: connection checkout/setup could not complete as allowed.
+- `PoolTimeoutError`: connection checkout/setup could not complete as allowed;
+  this does not by itself mark a server unavailable.
 - `PoolClosedError`: work was submitted to a closed pool/registry.
 - `OSError`, `NetworkError`, `TimeoutError`: transport/setup/exchange failures.
 - `ProtocolError`: malformed wire response.
 - `OperationFailure`: MongoDB rejected a command; inspect `code` and labels.
 
-The executor invalidates failed server descriptions for relevant network and
-topology failures but does not automatically retry a command. See
-[architecture](architecture.md) for snapshot refresh behavior.
+The monitor marks failed servers unavailable for selection, retains their
+addresses for retry, and does not automatically retry a command. See
+[architecture](architecture.md) and [SDAM](sdam.md) for topology behavior.
 
 Use `async with client` or `await client.close()`. Stop and await concurrent
 operations before closing. Idle connections close immediately; checked-out

@@ -3,9 +3,9 @@
 from .auth import Authenticator
 from .connection import Connection
 from .factory import ConnectionFactory
+from .hello import HelloResult
 from .lease import ConnectionLease
 from .pool import ConnectionPool
-from .probe import ServerProbe
 from .registry import PoolRegistry
 from .transport import Transport
 from .wire import (
@@ -25,8 +25,8 @@ __all__ = (
     "ConnectionPool",
     "ErrorMapper",
     "Handshake",
+    "HelloResult",
     "PoolRegistry",
-    "ServerProbe",
     "Transport",
     "get_context_by_id",
     "get_exception_type",

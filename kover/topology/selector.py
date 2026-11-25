@@ -7,7 +7,7 @@ from secrets import choice
 from typing import TYPE_CHECKING
 
 from ..exceptions import ServerSelectionError
-from ..models.topology import ServerType
+from .description import ServerType
 from .protocols import IServerSelector
 from .state import TopologyState
 
@@ -15,9 +15,10 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from ..models.address import Address
-    from ..models.options import DiscoveryOptions
     from ..models.read_preference import ReadPreference
-    from ..models.topology import ServerDescription
+    from .description import ServerDescription
+    from .monitor import TopologyMonitor
+    from .options import DiscoveryOptions
     from .protocols import IServerDiscovery
 
 
@@ -40,6 +41,7 @@ def _fresh_secondaries(
     secondaries: list[ServerDescription],
     primary: ServerDescription | None,
     maximum_staleness: int,
+    heartbeat_frequency: float,
 ) -> list[ServerDescription]:
     if maximum_staleness == -1:
         return secondaries
@@ -69,10 +71,12 @@ def _fresh_secondaries(
                 - primary.updated_at
                 + primary_write
                 - secondary_write
-                + 10.0
+                + heartbeat_frequency
             )
         else:
-            staleness = newest_secondary_write - secondary_write + 10.0
+            staleness = (
+                newest_secondary_write - secondary_write + heartbeat_frequency
+            )
 
         if staleness <= maximum_staleness:
             fresh.append(secondary)
@@ -96,6 +100,8 @@ def _by_tags(
 def eligible_servers(
     servers: Iterable[ServerDescription],
     preference: ReadPreference,
+    *,
+    heartbeat_frequency: float = 10.0,
 ) -> list[ServerDescription]:
     """Filter a topology snapshot using MongoDB read preference rules.
 
@@ -127,6 +133,7 @@ def eligible_servers(
         ],
         primary,
         preference.max_staleness_seconds,
+        heartbeat_frequency,
     )
 
     if preference.mode == "nearest":
@@ -159,14 +166,21 @@ class ServerSelector(IServerSelector):
 
     def __init__(
         self,
-        discovery: IServerDiscovery,
+        discovery: IServerDiscovery | None,
         options: DiscoveryOptions,
         initial_descriptions: Iterable[ServerDescription] = (),
         state: TopologyState | None = None,
+        *,
+        monitor: TopologyMonitor | None = None,
     ) -> None:
         self._discovery = discovery
         self._options = options
-        self._state = state or TopologyState(initial_descriptions)
+        self._monitor = monitor
+        self._state = (
+            monitor.state
+            if monitor is not None
+            else (state or TopologyState(initial_descriptions))
+        )
         self._lock = asyncio.Lock()
 
     @property
@@ -225,6 +239,8 @@ class ServerSelector(IServerSelector):
             ServerSelectionError: if description cannot be retrieved.
         """
         preference = preference or self._options.read_preference
+        if self._monitor is not None:
+            return await self._select_monitored(preference, deadline)
         if self._options.direct_connection:
             return await self._select_direct(
                 deadline=deadline,
@@ -256,6 +272,49 @@ class ServerSelector(IServerSelector):
                 msg,
             ) from exc
 
+    async def _select_monitored(
+        self,
+        preference: ReadPreference,
+        deadline: float | None,
+    ) -> Address:
+        monitor = self._monitor
+        assert monitor is not None
+        limit = (
+            asyncio.get_running_loop().time()
+            + self._options.server_selection_timeout
+        )
+        if deadline is not None:
+            limit = min(limit, deadline)
+        monitor.start()
+        try:
+            async with asyncio.timeout_at(limit):
+                return await self._wait_for_server(monitor, preference)
+        except TimeoutError as exc:
+            errors = "; ".join(
+                f"{s.address.host}:{s.address.port}: "
+                f"{s.last_error or s.server_type}"
+                for s in self.descriptions
+            )
+            msg = (
+                f"server selection deadline expired ({monitor.kind}): {errors}"
+            )
+            raise ServerSelectionError(msg) from exc
+
+    async def _wait_for_server(
+        self,
+        monitor: TopologyMonitor,
+        preference: ReadPreference,
+    ) -> Address:
+        while not monitor.closed:
+            changed = self._state.changed
+            selected = self._choose(preference)
+            if selected is not None:
+                return selected.address
+            monitor.request_refresh()
+            await changed.wait()
+        msg = "topology monitor is closed"
+        raise ServerSelectionError(msg)
+
     async def _select_direct(
         self,
         *,
@@ -282,6 +341,7 @@ class ServerSelector(IServerSelector):
         try:  # ruff: ignore[too-many-statements-in-try-clause]
             async with asyncio.timeout_at(selection_deadline), self._lock:
                 if not self.descriptions:
+                    assert self._discovery is not None
                     refreshed = await self._discovery.scan(
                         deadline=selection_deadline,
                     )
@@ -317,6 +377,7 @@ class ServerSelector(IServerSelector):
             TimeoutError: if deadline occur.
         """
         loop = asyncio.get_running_loop()
+        assert self._discovery is not None
         while True:
             refreshed = await self._discovery.scan(
                 deadline=deadline,
@@ -337,6 +398,15 @@ class ServerSelector(IServerSelector):
         preference: ReadPreference,
     ) -> ServerDescription | None:
         descriptions = self.descriptions
+        if self.direct_connection:
+            return next(
+                (
+                    s
+                    for s in descriptions
+                    if s.server_type is not ServerType.UNKNOWN
+                ),
+                None,
+            )
 
         routers = [
             server
@@ -351,7 +421,11 @@ class ServerSelector(IServerSelector):
                 for server in descriptions
                 if server.server_type is ServerType.STANDALONE
             ]
-            eligible = standalone or eligible_servers(descriptions, preference)
+            eligible = standalone or eligible_servers(
+                descriptions,
+                preference,
+                heartbeat_frequency=self._options.heartbeat_frequency,
+            )
 
         latency_window = _latency_candidates(
             eligible,

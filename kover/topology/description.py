@@ -6,15 +6,16 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from .address import Address  # ruff: ignore[typing-only-first-party-import]
-from .hello import HelloResult  # ruff: ignore[typing-only-first-party-import]
+from ..models.address import Address  # ruff: ignore[typing-only-first-party-import]
+from ..network.hello import HelloResult
 
 
 class ServerType(StrEnum):
     """Server roles relevant to initial discovery."""
 
+    UNKNOWN = "Unknown"
     STANDALONE = "Standalone"
     MONGOS = "Mongos"
     RS_PRIMARY = "RSPrimary"
@@ -24,18 +25,32 @@ class ServerType(StrEnum):
     RS_GHOST = "RSGhost"
 
 
+class TopologyType(StrEnum):
+    """The client's current view of a MongoDB deployment."""
+
+    UNKNOWN = "Unknown"
+    SINGLE = "Single"
+    SHARDED = "Sharded"
+    RS_NO_PRIMARY = "ReplicaSetNoPrimary"
+    RS_WITH_PRIMARY = "ReplicaSetWithPrimary"
+
+
 class ServerDescription(BaseModel):
     """An address and its most recently observed hello response."""
 
     address: Address
-    hello: HelloResult
+    hello: HelloResult = Field(default_factory=HelloResult)
     round_trip_time: float = 0.0
     updated_at: float = 0.0
+    unavailable: bool = False
+    last_error: str | None = None
 
     @property
     def server_type(self) -> ServerType:
         """Classify the server using hello role precedence."""
         hello = self.hello
+        if self.unavailable:
+            return ServerType.UNKNOWN
         if hello.msg == "isdbgrid":
             return ServerType.MONGOS
 

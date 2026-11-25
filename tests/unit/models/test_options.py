@@ -7,8 +7,8 @@ from pydantic import ValidationError
 import pytest
 
 from kover.models.concerns import ReadConcern, WriteConcern
-from kover.models.options import DiscoveryOptions
 from kover.models.read_preference import ReadPreference
+from kover.topology.options import DiscoveryOptions
 
 
 def test_concern_models_serialize_defaults_and_optional_fields() -> None:

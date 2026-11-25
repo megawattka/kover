@@ -8,11 +8,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from kover.models.address import Address
-from kover.models.hello import HelloResult
-from kover.models.options import DiscoveryOptions
 from kover.models.read_preference import ReadPreference
-from kover.models.topology import ServerDescription, ServerType
+from kover.network.hello import HelloResult
+from kover.topology.description import ServerDescription, ServerType
 from kover.topology.discovery import ServerDiscovery
+from kover.topology.options import DiscoveryOptions
 from kover.topology.protocols import IServerDiscovery
 from kover.topology.selector import (
     ServerSelectionError,

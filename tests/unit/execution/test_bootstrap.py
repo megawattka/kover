@@ -110,7 +110,8 @@ async def test_from_uri_preserves_all_seeds_and_normalized_options() -> None:
             "&localThresholdMS=20&maxPoolSize=7&w=2&journal=true"
             "&wTimeoutMS=125&readPreference=secondary"
             "&readPreferenceTags=region:eu&maxStalenessSeconds=120"
-            "&zlibCompressionLevel=0",
+            "&zlibCompressionLevel=0&heartbeatFrequencyMS=500"
+            "&serverMonitoringMode=poll",
             codec_options=codec_options,
         )
     assert client is build.return_value
@@ -124,6 +125,8 @@ async def test_from_uri_preserves_all_seeds_and_normalized_options() -> None:
     assert settings.server_selection_timeout == pytest.approx(2.5)
     assert settings.connect_timeout is None
     assert settings.local_threshold == pytest.approx(0.02)
+    assert settings.heartbeat_frequency == pytest.approx(0.5)
+    assert settings.server_monitoring_mode == "poll"
     assert settings.replica_set == "rs"
     assert settings.read_preference == ReadPreference(
         mode="secondary",
@@ -156,6 +159,8 @@ async def test_from_uri_defaults_and_explicit_auth_source() -> None:
     settings = build.call_args.kwargs["options"]
     assert settings.server_selection_timeout == 30
     assert settings.connect_timeout == 10
+    assert settings.heartbeat_frequency == 10
+    assert settings.server_monitoring_mode == "auto"
     assert settings.read_preference == ReadPreference()
     assert build.call_args.kwargs["credentials"].auth_database == "users"
     assert build.call_args.kwargs["zlib_compression_level"] == -1

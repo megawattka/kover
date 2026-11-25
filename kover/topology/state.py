@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from ..models.address import Address
-    from ..models.topology import ServerDescription
+    from .description import ServerDescription
 
 
 def _address_key(address: Address) -> tuple[str, int]:
@@ -26,6 +27,7 @@ class TopologyState:
             tuple[str, int],
             ServerDescription,
         ] = {}
+        self._changed = asyncio.Event()
         self.replace(descriptions)
 
     @property
@@ -39,6 +41,17 @@ class TopologyState:
             _address_key(description.address): description
             for description in descriptions
         }
+        self.notify()
+
+    @property
+    def changed(self) -> asyncio.Event:
+        """A signal for the next publication (capture before select)."""
+        return self._changed
+
+    def notify(self) -> None:
+        """Wake all current waiters without losing concurrent publications."""
+        previous, self._changed = self._changed, asyncio.Event()
+        previous.set()
 
     def get(self, address: Address) -> ServerDescription:
         """Return the latest description for an address."""
@@ -46,4 +59,5 @@ class TopologyState:
 
     def discard(self, address: Address) -> None:
         """Remove a server from the snapshot if it is present."""
-        self._descriptions.pop(_address_key(address), None)
+        if self._descriptions.pop(_address_key(address), None) is not None:
+            self.notify()

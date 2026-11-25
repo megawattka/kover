@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
     from ..models.address import Address
     from ..models.read_preference import ReadPreference
-    from ..models.topology import ServerDescription
+    from .description import ServerDescription
 
 
 class IServerDiscovery(Protocol):

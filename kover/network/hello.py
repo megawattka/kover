@@ -5,16 +5,27 @@ from __future__ import annotations
 from datetime import datetime  # ruff: ignore[typing-only-standard-library-import]
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from elune import ObjectId  # ruff: ignore[typing-only-third-party-import] -- Pydantic resolves this type at runtime.
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+
+from ..topology.version import TopologyVersion  # ruff: ignore[typing-only-first-party-import]
 
 
 class HelloResult(BaseModel):
     """Server capabilities and topology fields returned by ``hello``."""
 
-    model_config = ConfigDict(extra="allow", populate_by_name=True)
+    model_config = ConfigDict(
+        extra="allow",
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+    )
 
     msg: str | None = None
-    is_primary: bool = Field(default=False, alias="isWritablePrimary")
+    is_primary: bool = Field(
+        default=False,
+        alias="isWritablePrimary",
+        validation_alias=AliasChoices("isWritablePrimary", "ismaster"),
+    )
     is_replica_set: bool = Field(default=False, alias="isreplicaset")
     set_name: str | None = Field(default=None, alias="setName")
     secondary: bool = False
@@ -28,6 +39,14 @@ class HelloResult(BaseModel):
     arbiters: list[str] = Field(default_factory=list)
     me: str | None = None
     primary_node: str | None = Field(default=None, alias="primary")
+    topology_version: TopologyVersion | None = Field(
+        default=None,
+        alias="topologyVersion",
+    )
+    election_id: ObjectId | None = Field(default=None, alias="electionId")
+    set_version: int | None = Field(default=None, alias="setVersion")
+    min_wire_version: int = Field(default=0, alias="minWireVersion")
+    max_wire_version: int | None = Field(default=None, alias="maxWireVersion")
     compression: list[str] = Field(default_factory=list)
     sasl_supported_mechs: list[str] = Field(
         default_factory=list,

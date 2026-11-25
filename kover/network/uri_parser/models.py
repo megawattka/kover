@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from pydantic import BaseModel, Field, field_validator
 
-from .credentials import AuthCredentials
+from ...models.credentials import AuthCredentials
 
 if TYPE_CHECKING:
     from pydantic import ValidationInfo

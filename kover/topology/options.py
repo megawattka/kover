@@ -1,11 +1,14 @@
 """Options source file."""
 
 import math
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
 
-from .read_preference import ReadPreference
+from ..models.read_preference import ReadPreference
+
+MIN_HEARTBEAT_INTERVAL = 0.5
+type MonitoringMode = Literal["auto", "poll", "stream"]
 
 
 class DiscoveryOptions(BaseModel):
@@ -17,6 +20,12 @@ class DiscoveryOptions(BaseModel):
     connect_timeout: float | None = 10.0
     read_preference: ReadPreference = Field(default_factory=ReadPreference)
     local_threshold: float = 0.015
+    heartbeat_frequency: float = Field(
+        default=10.0,
+        ge=MIN_HEARTBEAT_INTERVAL,
+        allow_inf_nan=False,
+    )
+    server_monitoring_mode: MonitoringMode = "auto"
 
     @model_validator(mode="after")
     def _validate_options(self) -> Self:

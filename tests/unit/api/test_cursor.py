@@ -12,10 +12,10 @@ from kover.client import Kover
 from kover.cursor import Cursor
 from kover.execution.executor import CommandExecutor
 from kover.models.address import Address
-from kover.models.hello import HelloResult
 from kover.models.read_preference import ReadPreference
-from kover.models.topology import ServerDescription
+from kover.network.hello import HelloResult
 from kover.session import Session
+from kover.topology.description import ServerDescription
 
 
 def batch(

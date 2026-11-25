@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from ...models import ParsedUri
 from .hosts import decode_component, has_control_characters, parse_host
+from .models import ParsedUri
 from .srv import limit_srv_hosts, resolve_srv, validate_srv_host
 from .uri_options import parse_options, validate_options
 

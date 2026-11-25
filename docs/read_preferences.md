@@ -105,11 +105,11 @@ omit it to prohibit a generic fallback. Tags refer to replica-set member tags
 configured in MongoDB, not document fields.
 
 `max_staleness_seconds=-1` disables staleness filtering. An enabled value must
-be at least 90 seconds. Kover estimates secondary staleness from snapshot
-last-write/update times, including a 10-second heartbeat allowance. Without a
-primary it compares secondary last-write times. It excludes secondaries with
-missing required last-write information. This is an estimate, not a guarantee
-of application-visible freshness, especially without background monitoring.
+be at least 90 seconds. Kover estimates secondary staleness from the live
+monitor snapshot's last-write/update times, including the configured heartbeat
+allowance. Without a primary it compares secondary last-write times. It
+excludes secondaries with missing required last-write information. This is an
+estimate, not a guarantee of application-visible freshness.
 
 `primary` rejects nonempty `tag_sets` and enabled max staleness during model
 validation. `primaryPreferred` ignores tag/staleness constraints while a primary
@@ -142,10 +142,11 @@ Kover raises `ValueError` before dispatch. See [transactions](transactions.md).
 
 ## Availability and example
 
-Selection uses cached snapshots and refreshes discovery when no eligible cached
-server remains. There is no background monitor or automatic command retry.
-`ServerSelectionError` means selection exceeded its deadline; verify member
-addresses, replica-set name, available roles, tags, and staleness constraints.
+Selection uses the monitor's snapshots and waits for topology
+publications when no eligible server is currently available. There is no
+automatic command retry. `ServerSelectionError` means selection exceeded its
+deadline; verify member addresses, replica-set name, available roles, tags,
+staleness constraints, and monitor errors. See [SDAM](sdam.md).
 
 The read-only [example](../examples/read_preferences.py) demonstrates every
 mode, tags/staleness, and a command override:

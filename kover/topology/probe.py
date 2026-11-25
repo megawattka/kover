@@ -5,12 +5,12 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from ..models.topology import ServerDescription
+from .description import ServerDescription
 
 if TYPE_CHECKING:
     from ..models.address import Address
-    from ..models.hello import HelloResult
-    from .factory import ConnectionFactory
+    from ..network.factory import ConnectionFactory
+    from ..network.hello import HelloResult
 
 
 class ServerProbe:

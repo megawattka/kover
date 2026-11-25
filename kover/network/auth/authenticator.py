@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from ...models.credentials import AuthCredentials
-    from ...models.hello import HelloResult
+    from ..hello import HelloResult
 
 
 class Authenticator:

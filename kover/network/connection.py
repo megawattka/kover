@@ -8,19 +8,21 @@ import struct
 from typing import TYPE_CHECKING, Any
 import zlib
 
+from elune import Int64
 from elune.errors import InvalidBSON
 
 from .._utils.mappings import get_hello_payload
 from ..exceptions import NetworkError, ProtocolError
 from .auth import Authenticator
-from .wire.codec import CommandCodec
+from .hello import HelloResult
+from .wire.codec import EXHAUST_ALLOWED, CommandCodec
 from .wire.error_mapper import ErrorMapper
 from .wire.handshake import Handshake
 
 if TYPE_CHECKING:
     from ..models.address import Address
     from ..models.credentials import AuthCredentials
-    from ..models.hello import HelloResult
+    from .hello import TopologyVersion
     from .transport import Transport
 
 
@@ -48,6 +50,7 @@ class Connection:
         self._closed = False
         self._hello_result: HelloResult | None = None
         self._hello_round_trip_time = 0.0
+        self._stream_reply_to: int | None = None
 
     @property
     def hello_result(self) -> HelloResult | None:
@@ -145,6 +148,79 @@ class Connection:
         except asyncio.IncompleteReadError as exc:
             msg = "MongoDB response was truncated"
             raise NetworkError(msg) from exc
+
+    async def monitor_hello(
+        self,
+        *,
+        deadline: float,
+        topology_version: TopologyVersion | None = None,
+        max_await_time_ms: int = 0,
+    ) -> HelloResult:
+        """Check a dedicated monitor connection, continuing exhaust if active.
+
+        Returns:
+            The validated hello response.
+
+        Raises:
+            ProtocolError: If the monitor response cannot be decoded.
+        """
+        if topology_version is None and self._stream_reply_to is None:
+            return HelloResult.model_validate(
+                await self.command({"hello": 1}, deadline=deadline),
+            )
+
+        try:
+            message, request_id = await self._monitor_exchange(
+                deadline=deadline,
+                topology_version=topology_version,
+                max_await_time_ms=max_await_time_ms,
+            )
+            reply, message_id, more = self._codec.decode(
+                message,
+                request_id=request_id,
+                exhaustive=False,
+            )
+            await self._error_mapper.check_reply(reply)
+            self._stream_reply_to = message_id if more else None
+            return HelloResult.model_validate(reply)
+        except (
+            asyncio.IncompleteReadError,
+            InvalidBSON,
+            struct.error,
+            zlib.error,
+        ) as exc:
+            raise ProtocolError(str(exc)) from exc
+
+    async def _monitor_exchange(
+        self,
+        *,
+        deadline: float,
+        topology_version: TopologyVersion | None,
+        max_await_time_ms: int,
+    ) -> tuple[bytes, int]:
+        """Send a streamable hello when needed and read its next response.
+
+        Returns:
+            The response frame and request ID used for correlation.
+        """
+        request_id = self._stream_reply_to
+        async with asyncio.timeout_at(deadline):
+            if request_id is None:
+                assert topology_version is not None
+                request_id = next(self._request_ids) % (2**31)
+                await self._transport.send(
+                    self._codec.encode(
+                        {
+                            "hello": 1,
+                            "topologyVersion": topology_version.document(),
+                            "maxAwaitTimeMS": Int64(max_await_time_ms),
+                        },
+                        "admin",
+                        request_id=request_id,
+                        flags=EXHAUST_ALLOWED,
+                    ),
+                )
+            return await self._receive_message(), request_id
 
     async def _send_and_receive(self, request: bytes) -> bytes:
         """Send one encoded request and receive one encoded response.

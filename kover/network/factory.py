@@ -58,9 +58,29 @@ class ConnectionFactory:
         Returns:
             An open connection ready to send application commands.
 
-        Raises:
-            asyncio.CancelledError: If connection setup is cancelled.
         """
+        return await self._create(address, deadline, monitoring=False)
+
+    async def create_monitor(
+        self,
+        address: Address,
+        *,
+        deadline: float,
+    ) -> Connection:
+        """Open a dedicated monitoring connection.
+
+        Returns:
+            A connection initialized with hello.
+        """
+        return await self._create(address, deadline, monitoring=True)
+
+    async def _create(
+        self,
+        address: Address,
+        deadline: float | None,
+        *,
+        monitoring: bool,
+    ) -> Connection:
         transport = Transport(
             address.host,
             address.port,
@@ -72,7 +92,7 @@ class ConnectionFactory:
             transport,
             codec=CommandCodec(
                 zlib_compression_level=self._zlib_compression_level,
-                codec_options=self._codec_options,
+                codec_options=None if monitoring else self._codec_options,
             ),
         )
 

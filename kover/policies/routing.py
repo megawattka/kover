@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from ..models.read_preference import ReadPreference
-from ..models.topology import ServerType
 from ..models.tx_state import TxnState
+from ..topology.description import ServerType
 
 if TYPE_CHECKING:
     from ..models.address import Address

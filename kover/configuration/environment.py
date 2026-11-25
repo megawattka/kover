@@ -101,3 +101,20 @@ def get_runtime_environment() -> RuntimeEnvironment:
         },
         "platform": implementation.name + " " + version,
     }
+
+
+def is_faas() -> bool:
+    """Detect a serverless environment where polling is preferred.
+
+    Returns:
+        Whether the process appears to run in a FaaS environment.
+    """
+    env = os.environ
+    return bool(
+        env.get("AWS_EXECUTION_ENV", "").startswith("AWS_Lambda_")
+        or env.get("AWS_LAMBDA_RUNTIME_API")
+        or env.get("FUNCTIONS_WORKER_RUNTIME")
+        or env.get("K_SERVICE")
+        or env.get("FUNCTION_NAME")
+        or env.get("VERCEL"),
+    )

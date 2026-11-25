@@ -39,7 +39,7 @@ uv run pytest tests/unit tests/functional -q
 
 - `tests/unit/api`: API, cursor and session behavior with injected executors.
 - `tests/unit/execution`: composition, routing and command preparation.
-- `tests/unit/topology`: selection and discovery snapshots.
+- `tests/unit/topology`: server selection, read preferences, and one-shot discovery.
 - `tests/unit/network`: transport, codec, authentication and pool lifecycle.
 - `tests/unit/models`, `configuration`, `schema`: validation and pure helpers.
 - `tests/functional`: actual wire exchanges against local asyncio TCP servers.
@@ -83,7 +83,8 @@ uv run pytest tests/integration -v
 
 The suite reads `MONGO_HOST`, `MONGO_PORT`, and optional credentials via
 `AuthCredentials.from_environ()`. It does not consume `MONGODB_URI`; the new
-read-preference example does, separately.
+read-preference example does, separately. To use a sharded cluster, point
+`MONGO_HOST` and `MONGO_PORT` at a `mongos` router.
 
 Choose a deployment supporting the features under test. Transactions need a
 replica set or appropriate sharded cluster; the MongoDB `bulkWrite` command
@@ -147,9 +148,10 @@ short. Other examples may write or delete data: inspect them before running.
 ## Documentation changes
 
 Keep this directory, the [README](../README.md), and runnable examples aligned
-with the actual API. Document limitations as well as features: no background
-monitoring, no automatic command/transaction retries, fixed-server direct
-connections, and currently unapplied transaction options.
+with the actual API. Document limitations as well as features: SDAM does not
+retry or replay application commands, direct connections remain fixed to one
+server, and transaction options are currently stored locally but not applied
+to commands.
 
 Validate Python snippets for syntax, check relative Markdown links, and execute
 examples against a disposable deployment when available. Do not claim real

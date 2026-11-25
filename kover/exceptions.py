@@ -95,6 +95,7 @@ class OperationFailure(DriverError):
         return code in {
             91,  # ShutdownInProgress
             189,  # PrimarySteppedDown
+            10058,  # LegacyNotPrimary
             10107,  # NotWritablePrimary
             11600,  # InterruptedAtShutdown
             11602,  # InterruptedDueToReplStateChange

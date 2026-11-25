@@ -3,7 +3,7 @@ from typing import Any
 from pydantic import ValidationError
 import pytest
 
-from kover.models.parsed_uri import ParsedUri
+from kover.network.uri_parser import ParsedUri
 
 
 @pytest.mark.parametrize(

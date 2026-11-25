@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import struct
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Literal, overload
 
 from elune import decode, encode
 from elune.codec_options import DEFAULT_CODEC_OPTIONS
@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 
 OP_MSG: Final[int] = 2013
 OP_COMPRESSED: Final[int] = 2012
+EXHAUST_ALLOWED: Final[int] = 1 << 16
+MORE_TO_COME: Final[int] = 1 << 1
 MONGODB_MESSAGE_PREFIX_LEN: Final[int] = 4
 
 # https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/#standard-message-header
@@ -80,6 +82,7 @@ class CommandCodec:
         database: str,
         *,
         request_id: int,
+        flags: int = 0,
     ) -> bytes:
         """Build an OP_MSG command, optionally wrapped in OP_COMPRESSED.
 
@@ -87,6 +90,7 @@ class CommandCodec:
             command: Command fields to copy into a single kind-0 BSON body.
             database: Target database, overriding any existing $db field.
             request_id: Identifier used to correlate the server response.
+            flags: OP_MSG flags, including ``exhaustAllowed`` when streaming.
 
         Returns:
             The complete wire message, including its standard header. The
@@ -96,7 +100,7 @@ class CommandCodec:
 
         # https://www.mongodb.com/docs/manual/reference/mongodb-wire-protocol/#kind-0--body
         body_header = _MSG_BODY_HEADER.pack(
-            0,  # flags
+            flags,
             0,  # kind-0 section: a single BSON command document
         )
         body = body_header + encode(
@@ -178,12 +182,31 @@ class CommandCodec:
 
         return length
 
+    @overload
     def decode(
         self,
         message: bytes,
         *,
         request_id: int,
-    ) -> dict[str, Any]:
+        exhaustive: Literal[True] = True,
+    ) -> dict[str, Any]: ...
+
+    @overload
+    def decode(
+        self,
+        message: bytes,
+        *,
+        request_id: int,
+        exhaustive: Literal[False],
+    ) -> tuple[dict[str, Any], int, bool]: ...
+
+    def decode(
+        self,
+        message: bytes,
+        *,
+        request_id: int,
+        exhaustive: bool = True,
+    ) -> dict[str, Any] | tuple[dict[str, Any], int, bool]:
         """Validate response framing and decode a kind-0 BSON body.
 
         Accept an OP_MSG response or one wrapped in OP_COMPRESSED. The
@@ -193,9 +216,13 @@ class CommandCodec:
         Args:
             message: Complete wire response, including its standard header.
             request_id: Request ID the response must refer to.
+            exhaustive: If true, reject ``moreToCome`` responses and return
+                only the document. If false, return the document, message ID,
+                and ``moreToCome`` flag.
 
         Returns:
-            The decoded response document, preserving BSON binary values.
+            The decoded response document, or response metadata when
+            ``exhaustive`` is false.
 
         Raises:
             ValueError: If the header is truncated, the message length or
@@ -203,11 +230,38 @@ class CommandCodec:
 
         BSON decoding and decompression errors propagate to the caller.
         """
+        document, message_id, more = self._decode(
+            message,
+            request_id=request_id,
+        )
+        if exhaustive is False:
+            return document, message_id, more
+        if more:
+            msg = "unexpected OP_MSG moreToCome response"
+            raise ValueError(msg)
+        return document
+
+    def _decode(
+        self,
+        message: bytes,
+        *,
+        request_id: int,
+    ) -> tuple[dict[str, Any], int, bool]:
+        """Decode a reply and streaming metadata.
+
+        Returns:
+            The document, message ID, and ``moreToCome`` flag.
+
+        Raises:
+            ValueError: If framing, response correlation, or flags are invalid.
+        """
         if len(message) < _MESSAGE_HEADER.size:
             msg = "MongoDB response is shorter than its header"
             raise ValueError(msg)
 
-        length, _, response_to, opcode = _MESSAGE_HEADER.unpack_from(message)
+        length, message_id, response_to, opcode = _MESSAGE_HEADER.unpack_from(
+            message,
+        )
         if length != len(message):
             msg = "MongoDB response length does not match its payload"
             raise ValueError(
@@ -238,12 +292,13 @@ class CommandCodec:
             msg = "unsupported or invalid OP_MSG response"
             raise ValueError(msg)
 
-        _, section_kind = _MSG_BODY_HEADER.unpack_from(payload)
-        if section_kind != 0:
+        flags, section_kind = _MSG_BODY_HEADER.unpack_from(payload)
+        if section_kind != 0 or flags & (0xFFFF ^ MORE_TO_COME):
             msg = "unsupported or invalid OP_MSG response"
             raise ValueError(msg)
 
-        return decode(
+        document = decode(
             payload[_MSG_BODY_HEADER.size :],
             codec_options=self._codec_options,
         )
+        return document, message_id, bool(flags & MORE_TO_COME)

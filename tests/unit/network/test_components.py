@@ -11,11 +11,11 @@ import pytest
 
 from kover.exceptions import PoolClosedError
 from kover.models.address import Address
-from kover.models.hello import HelloResult
 from kover.network.factory import ConnectionFactory
+from kover.network.hello import HelloResult
 from kover.network.pool import ConnectionPool
-from kover.network.probe import ServerProbe
 from kover.network.registry import PoolRegistry
+from kover.topology.probe import ServerProbe
 
 
 def fake_connection(hello: HelloResult | None = None) -> MagicMock:

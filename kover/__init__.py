@@ -64,7 +64,6 @@ from .models import (
     Collation,
     CollationStrength,
     Delete,
-    HelloResult,
     Index,
     IndexDirection,
     IndexType,
@@ -73,8 +72,6 @@ from .models import (
     ReplicaSetConfig,
     ReplicaSetConfigSettings,
     ReplicaSetMember,
-    ServerDescription,
-    ServerType,
     TxnState,
     Update,
     ValidationLevel,
@@ -87,10 +84,18 @@ from .network import (
     ConnectionLease,
     ConnectionPool,
     Handshake,
+    HelloResult,
     Transport,
 )
 from .schema import Document, MongoDBSchemaGenerator
 from .session import Session
+from .topology import (
+    ServerDescription,
+    ServerType,
+    TopologyMonitor,
+    TopologyType,
+    TopologyVersion,
+)
 
 __all__ = (
     "Address",
@@ -142,6 +147,9 @@ __all__ = (
     "ServerSelectionError",
     "ServerType",
     "Session",
+    "TopologyMonitor",
+    "TopologyType",
+    "TopologyVersion",
     "Transport",
     "TxnState",
     "Update",

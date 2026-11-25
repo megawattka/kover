@@ -5,10 +5,10 @@ from unittest.mock import AsyncMock
 import pytest
 
 from kover.models.address import Address
-from kover.models.hello import HelloResult
-from kover.models.options import DiscoveryOptions
-from kover.models.topology import ServerDescription
+from kover.network.hello import HelloResult
+from kover.topology.description import ServerDescription
 from kover.topology.discovery import ServerDiscovery
+from kover.topology.options import DiscoveryOptions
 from kover.topology.protocols import IServerProbe
 
 
