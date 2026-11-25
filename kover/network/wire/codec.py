@@ -113,11 +113,7 @@ class CommandCodec:
             payload = body
             opcode = OP_MSG
         else:
-            compressor_id = {
-                "snappy": 1,
-                "zlib": 2,
-                "zstd": 3,
-            }[self._compressor]
+            compressor_id = self._get_compressor_id()
             context = (
                 self._zlib_context
                 if compressor_id == ZLIB_COMPRESSOR_ID
@@ -236,9 +232,11 @@ class CommandCodec:
         )
         if exhaustive is False:
             return document, message_id, more
+
         if more:
             msg = "unexpected OP_MSG moreToCome response"
             raise ValueError(msg)
+
         return document
 
     def _decode(

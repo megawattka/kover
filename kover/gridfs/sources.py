@@ -83,8 +83,10 @@ def _local_blocks(
 ) -> AsyncGenerator[bytes]:
     if isinstance(source, Path):
         return _async_path_blocks(source)
+
     if callable(getattr(source, "read", None)):
         return _file_blocks(source, encoding)
+
     msg = f"Unsupported GridFS upload source: {type(source).__name__}"
     raise IncorrectGridFSData(msg)
 
@@ -96,11 +98,13 @@ async def read_blocks(
     """Yield input blocks without reading the full file into memory."""
     if isinstance(source, bytes):
         yield source
+
     elif isinstance(source, str):
         encoder = getincrementalencoder(encoding)(errors="strict")
         for start in range(0, len(source), _READ_SIZE):
             yield encoder.encode(source[start : start + _READ_SIZE])
         yield encoder.encode("", final=True)
+
     elif isinstance(source, AsyncIterable):
         async for block in source:
             yield block
