@@ -4,6 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/megawattka/kover/actions/workflows/actions.yml"><img src="https://img.shields.io/github/actions/workflow/status/megawattka/kover/actions.yml?label=build" alt="Build status"></a>
+  <a href="#test-coverage"><img src="https://img.shields.io/badge/coverage-90.9%25-brightgreen" alt="Line coverage snapshot: 90.9%"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/megawattka/kover" alt="License"></a>
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12 or newer"></a>
   <a href="https://pypi.org/project/kover/"><img src="https://img.shields.io/pypi/v/kover" alt="PyPI version"></a>
@@ -627,6 +628,19 @@ The current test suite does not consume `MONGODB_URI`. Use a deployment
 supporting the tested features, including transactions and MongoDB 8.0+ bulk writes.
 To run against a sharded deployment, point `MONGO_HOST` and `MONGO_PORT`
 at a `mongos` router on a disposable cluster.
+
+### Test coverage
+
+The badge is a snapshot of **90.9% line coverage** for `kover` at `e2c16b3`,
+measured with the unit and functional suites and the GridFS integration tests.
+With MongoDB running, reproduce the measurement with:
+
+```bash
+KOVER_RUN_INTEGRATION=1 uv run --with coverage python -m coverage run \
+  --source=kover -m pytest tests/unit tests/functional \
+  tests/integration/test_gridfs.py -q
+uv run --with coverage python -m coverage report --precision=1
+```
 
 ## Documentation and examples
 
