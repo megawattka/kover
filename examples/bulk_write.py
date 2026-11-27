@@ -23,7 +23,7 @@ async def main() -> None:
     client = await make_client(credentials=credentials)
 
     builder = BulkWriteBuilder()
-    builder.add_insert([{"foo": "bar"}], ns="test.foos")
+    builder.add_insert({"foo": "bar"}, ns="test.foos")
     builder.add_update(
         Update({"foo": "bar"}, {"$set": {"foo": "baz"}}),
         ns="test.foos",
