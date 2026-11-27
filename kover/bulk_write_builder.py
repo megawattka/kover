@@ -25,25 +25,25 @@ class BulkWriteBuilder:
         cursor_batch_size: int | None = None,
         write_concern: str | int = "majority",
     ) -> None:
-        self.ordered = ordered
-        self.bypass_document_validation = bypass_document_validation
-        self.comment = comment
-        self.let = let
-        self.errors_only = errors_only
-        self.cursor = {"batchSize": cursor_batch_size or 101}
-        self.write_concern = write_concern
+        self._ordered = ordered
+        self._bypass_document_validation = bypass_document_validation
+        self._comment = comment
+        self._let = let
+        self._errors_only = errors_only
+        self._cursor = {"batchSize": cursor_batch_size or 101}
+        self._write_concern = write_concern
         self._operations: list[dict[str, Any]] = []
         self._namespaces: list[str] = []
 
     def _prepair_additional_params(self) -> dict[str, Any]:
         return filter_non_null({
-            "ordered": self.ordered,
-            "bypassDocumentValidation": self.bypass_document_validation,
-            "comment": self.comment,
-            "let": self.let,
-            "errorsOnly": self.errors_only,
-            "cursor": self.cursor,
-            "writeConcern": {"w": self.write_concern},
+            "ordered": self._ordered,
+            "bypassDocumentValidation": self._bypass_document_validation,
+            "comment": self._comment,
+            "let": self._let,
+            "errorsOnly": self._errors_only,
+            "cursor": self._cursor,
+            "writeConcern": {"w": self._write_concern},
         })
 
     def _get_ns_idx(self, namespace: str) -> int:
@@ -53,15 +53,14 @@ class BulkWriteBuilder:
 
     def add_insert(
         self,
-        documents: list[dict[str, Any]],
+        document: dict[str, Any],
         /,
         *,
         ns: str,
     ) -> None:
         """Adds an Insert operations into the builder."""
         idx = self._get_ns_idx(ns)
-        for document in documents:
-            self._operations.append({"insert": idx, "document": document})
+        self._operations.append({"insert": idx, "document": document})
 
     def add_update(
         self,

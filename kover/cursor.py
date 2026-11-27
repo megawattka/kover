@@ -130,7 +130,7 @@ class Cursor[T]:
     async def _command(self, command: dict[str, Any]) -> dict[str, Any]:
         response = await self._collection.database.client.command(
             command,
-            db_name=self._server_database,
+            database=self._server_database,
             session=self._session,
             server_address=self._server_address,
             read_preference=self._read_preference,

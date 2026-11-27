@@ -42,7 +42,7 @@ async def test_command_delegates_without_preparing_or_copying_document() -> (
     assert (
         await client.command(
             command,
-            db_name="shop",
+            database="shop",
             session=session,
             deadline=42,
             read_preference=preference,

@@ -11,7 +11,7 @@ class User(BaseModel):
 
     user_id: Binary = Field(repr=False)
     username: str = Field(alias="user")
-    db_name: str = Field(alias="db")
+    database: str = Field(alias="db")
     mechanisms: list[
         Literal["SCRAM-SHA-1", "SCRAM-SHA-256"]
     ] = Field(repr=False)

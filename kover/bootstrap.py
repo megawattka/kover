@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
+
+from elune import CodecOptions, UuidRepresentation
 
 from .client import Kover
 from .execution.executor import CommandExecutor
@@ -23,8 +25,6 @@ from .topology import (
 if TYPE_CHECKING:
     import asyncio
     from collections.abc import Sequence
-
-    from elune import CodecOptions
 
     from .models.credentials import AuthCredentials
     from .topology.options import MonitoringMode
@@ -127,6 +127,8 @@ async def make_client(  # ruff: ignore[too-many-arguments] -- Public connection 
     Timeout and latency values are seconds. An explicit ``write_concern``
     takes precedence over ``w``. The returned client owns its executor/pools.
     ``zlib_compression_level`` ranges from -1 (zlib default) to 9.
+    An explicit ``uuidRepresentation`` URI option overrides the UUID mode in
+    ``codec_options``, preserving its other settings and the original object.
 
     Returns:
         A client ready to execute commands against the selected deployment.
@@ -174,6 +176,19 @@ async def from_uri(
         msg = "loadBalanced=true is not supported"
         raise ValueError(msg)
 
+    raw_uuid_repr: str | None = values.get("uuidRepresentation")
+    if raw_uuid_repr is not None:
+        uuid_repr = {
+            "standard": UuidRepresentation.STANDARD,
+            "pythonLegacy": UuidRepresentation.PYTHON_LEGACY,
+            "javaLegacy": UuidRepresentation.JAVA_LEGACY,
+            "csharpLegacy": UuidRepresentation.CSHARP_LEGACY,
+            "unspecified": UuidRepresentation.UNSPECIFIED,
+        }[raw_uuid_repr]
+        codec_options = (codec_options or CodecOptions()).with_options(
+            uuid_representation=uuid_repr,
+        )
+
     return await _build_client(
         [Address(host=host, port=port) for host, port in parsed.node_list],
         options=DiscoveryOptions(
@@ -196,10 +211,7 @@ async def from_uri(
             ),
             local_threshold=values.get("localThresholdMS", 15) / 1000,
             heartbeat_frequency=values.get("heartbeatFrequencyMS", 10.0),
-            server_monitoring_mode=cast(
-                "MonitoringMode",
-                values.get("serverMonitoringMode", "auto"),
-            ),
+            server_monitoring_mode=values.get("serverMonitoringMode", "auto"),
         ),
         write_concern=WriteConcern(
             w=values.get("w", "majority"),

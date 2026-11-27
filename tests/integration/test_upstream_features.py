@@ -19,13 +19,11 @@ from tests.integration.base import MongoTestCase
 class UpstreamFeatureTests(MongoTestCase):
     async def test_bulk_sequences_exceed_one_bson_document(self) -> None:
         builder = BulkWriteBuilder()
-        builder.add_insert(
-            [
-                {"text": "x" * (9 * 1024 * 1024)},
-                {"text": "y" * (9 * 1024 * 1024)},
-            ],
-            ns=f"{self.database.name}.large_bulk",
-        )
+        for document in [
+            {"text": "x" * (9 * 1024 * 1024)},
+            {"text": "y" * (9 * 1024 * 1024)},
+        ]:
+            builder.add_insert(document, ns=f"{self.database.name}.large_bulk")
 
         reply = await self.client.bulk_write(builder.build()).to_list()
         assert len(reply) == 2
@@ -62,7 +60,8 @@ class UpstreamFeatureTests(MongoTestCase):
     async def test_bulk_multiple_result_batches_and_errors(self) -> None:
         namespace = f"{self.database.name}.bulk"
         builder = BulkWriteBuilder(cursor_batch_size=1)
-        builder.add_insert([{"value": n} for n in range(4)], ns=namespace)
+        for document in [{"value": n} for n in range(4)]:
+            builder.add_insert(document, ns=namespace)
         builder.add_update(
             Update({"value": 10}, {"$set": {"new": True}}, upsert=True),
             namespace,
@@ -76,10 +75,12 @@ class UpstreamFeatureTests(MongoTestCase):
             self.fail("Upserted document was not found")
         assert found["new"]
         builder = BulkWriteBuilder(ordered=False, cursor_batch_size=1)
-        builder.add_insert(
-            [{"_id": "duplicate"}, {"_id": "duplicate"}, {"_id": "after"}],
-            ns=namespace,
-        )
+        for document in [
+            {"_id": "duplicate"},
+            {"_id": "duplicate"},
+            {"_id": "after"},
+        ]:
+            builder.add_insert(document, ns=namespace)
 
         helper = ErrorMapper()
         reply = await self.client.bulk_write(builder.build()).to_list()
@@ -146,14 +147,12 @@ class UpstreamFeatureTests(MongoTestCase):
             name = "ordered" if ordered else "unordered"
             namespace = f"{self.database.name}.{name}"
             builder = BulkWriteBuilder(ordered=ordered, cursor_batch_size=1)
-            builder.add_insert(
-                [
-                    {"_id": "duplicate"},
-                    {"_id": "duplicate"},
-                    {"_id": "after"},
-                ],
-                ns=namespace,
-            )
+            for document in [
+                {"_id": "duplicate"},
+                {"_id": "duplicate"},
+                {"_id": "after"},
+            ]:
+                builder.add_insert(document, ns=namespace)
             results = await self.client.bulk_write(builder.build()).to_list()
             errors = [result for result in results if result["ok"] == 0]
             assert len(errors) == 1

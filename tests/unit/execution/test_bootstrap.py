@@ -232,3 +232,45 @@ async def test_invalid_zlib_level_is_rejected_before_selection(
     ):
         await make_client(zlib_compression_level=level)
     select.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("uri_value", "expected"),
+    [
+        ("standard", UuidRepresentation.STANDARD),
+        ("pythonLegacy", UuidRepresentation.PYTHON_LEGACY),
+        ("javaLegacy", UuidRepresentation.JAVA_LEGACY),
+        ("csharpLegacy", UuidRepresentation.CSHARP_LEGACY),
+        ("unspecified", UuidRepresentation.UNSPECIFIED),
+    ],
+)
+@pytest.mark.parametrize("with_codec_options", [False, True])
+async def test_from_uri_applies_uuid_representation(
+    uri_value: str,
+    expected: UuidRepresentation,
+    *,
+    with_codec_options: bool,
+) -> None:
+    original = (
+        CodecOptions(
+            uuid_representation=UuidRepresentation.STANDARD,
+            tz_aware=True,
+        )
+        if with_codec_options
+        else None
+    )
+    with patch(
+        "kover.bootstrap._build_client",
+        new_callable=AsyncMock,
+    ) as build:
+        await from_uri(
+            f"mongodb://db/?uuidRepresentation={uri_value}",
+            codec_options=original,
+        )
+
+    applied = build.call_args.kwargs["codec_options"]
+    assert applied.uuid_representation == expected
+    assert applied.tz_aware is with_codec_options
+    if original is not None:
+        assert applied is not original
+        assert original.uuid_representation == UuidRepresentation.STANDARD

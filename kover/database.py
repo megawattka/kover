@@ -322,7 +322,7 @@ class Database:
         return await self.client.command(
             doc=doc,
             session=session,
-            db_name=self.name,
+            database=self.name,
             write_concern=write_concern,
             read_preference=read_preference,
             server_address=server_address,

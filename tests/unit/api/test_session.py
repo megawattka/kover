@@ -84,7 +84,7 @@ async def test_failed_first_tx_command_retries_start_metadata() -> None:
     with pytest.raises(OSError, match="network unavailable") as caught:
         await session.client.command(
             {"insert": "items", "documents": [{"value": 1}]},
-            db_name="shop",
+            database="shop",
             session=session,
         )
 
@@ -92,7 +92,7 @@ async def test_failed_first_tx_command_retries_start_metadata() -> None:
     assert session.state is TxnState.STARTING
     await session.client.command(
         {"insert": "items", "documents": [{"value": 1}]},
-        db_name="shop",
+        database="shop",
         session=session,
     )
     assert pool.execute.await_args_list[0].args[0]["startTransaction"] is True

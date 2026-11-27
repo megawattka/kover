@@ -95,7 +95,7 @@ class Kover:
         self,
         doc: dict[str, Any],
         *,
-        db_name: str = "admin",
+        database: str = "admin",
         session: Session | None = None,
         write_concern: WriteConcern | None = None,
         deadline: float | None = None,
@@ -121,7 +121,7 @@ class Kover:
 
         return await self._executor.execute(
             doc,
-            database=db_name,
+            database=database,
             session=session,
             deadline=deadline,
             read_preference=read_preference,
@@ -230,7 +230,7 @@ class Kover:
         Parameters:
             name : The name of the database to drop.
         """
-        await self.command({"dropDatabase": 1.0}, db_name=name)
+        await self.command({"dropDatabase": 1.0}, database=name)
 
     # https://www.mongodb.com/docs/manual/reference/command/dropConnections
     async def drop_connections(

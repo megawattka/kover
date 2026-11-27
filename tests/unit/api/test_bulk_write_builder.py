@@ -16,8 +16,8 @@ def test_bulk_write_build_preserves_namespace_order_and_options() -> None:
         write_concern=2,
     )
     document = {"_id": 1}
-    builder.add_insert([document], ns="shop.items")
-    builder.add_insert([{"_id": 2}], ns="shop.items")
+    builder.add_insert(document, ns="shop.items")
+    builder.add_insert({"_id": 2}, ns="shop.items")
     builder.add_update(
         Update(
             {"_id": 1},

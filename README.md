@@ -239,7 +239,7 @@ async with client:
     documents = await cursor.to_list()
     reply = await client.command(
         {"count": "orders"},
-        db_name="shop",
+        database="shop",
         read_preference=ReadPreference("primary"),
     )
 ```
@@ -374,7 +374,6 @@ See [documents and serialization](docs/documents.md) for details.
 
 Use Python-mode dumps for BSON, not `model_dump(mode="json")`. Elune's native
 Pydantic integration preserves BSON instances in Python mode.
-Kover does not globally patch Elune's classes or `uuid.UUID`.
 
 ### Decimal values
 
@@ -598,7 +597,7 @@ complete data as a `BytesIO` buffer.
 - `GridFSFileNotFound` / `IncorrectGridFSData`: missing file, unsupported upload payload, or invalid download chunk. A checksum mismatch raises `RuntimeError`.
 - `ValueError` / `TypeError`: invalid configuration, session ownership, or operation use. BSON encoding errors are local errors, not MongoDB command failures.
 
-For raw operations use `await client.command(document, db_name="demo")` or
+For raw operations use `await client.command(document, database="demo")` or
 `await client.demo.command(document)`. There is no `client.request()` API.
 
 ## Development
@@ -609,8 +608,6 @@ uv run pytest tests/unit tests/functional -q
 KOVER_RUN_INTEGRATION=0 uv run pytest tests -q
 uv run ruff check kover tests examples
 uv run pyright kover tests examples
-uv run python -m compileall -q kover tests examples
-git diff --check
 ```
 
 Unit tests include local TCP protocol tests but do not require MongoDB.

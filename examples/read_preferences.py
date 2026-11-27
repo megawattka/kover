@@ -68,7 +68,7 @@ async def main() -> None:
         # first; only supported read commands use non-primary routing.
         result = await client.command(
             {"count": collection.name, "query": {}},
-            db_name=database.name,
+            database=database.name,
             read_preference=ReadPreference(mode="primary"),
         )
         log.info("Documents found in primary: %s", result["n"])

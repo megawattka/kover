@@ -73,7 +73,7 @@ async def report(client: Kover) -> list[dict[str, Any]]:
 async def count_on_primary(client: Kover) -> dict[str, Any]:
     return await client.command(
         {"count": "items", "query": {"active": True}},
-        db_name="shop",
+        database="shop",
         read_preference=ReadPreference(mode="primary"),
     )
 ```
